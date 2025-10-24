@@ -519,7 +519,11 @@ impl PrettySimple for StringPart {
     }
 
     fn is_simple(&self) -> bool {
-        matches!(self, StringPart::TextPart(_))
+        true
+    }
+
+    fn has_delimiters(&self) -> bool {
+        false
     }
 }
 

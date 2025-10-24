@@ -205,12 +205,27 @@ impl Lexer {
                 Ok(Token::TQuestion)
             }
             '.' => {
-                self.advance();
-                if self.peek() == Some('.') && self.peek_ahead(1) == Some('.') {
+                if self.peek_ahead(1) == Some('.') && self.peek_ahead(2) == Some('.') {
+                    self.advance();
                     self.advance();
                     self.advance();
                     Ok(Token::TEllipsis)
+                } else if self.peek_ahead(1).is_some_and(|c| c.is_ascii_digit()) {
+                    self.advance();
+                    let mut num = String::from(".");
+
+                    while let Some(ch) = self.peek() {
+                        if ch.is_ascii_digit() {
+                            num.push(ch);
+                            self.advance();
+                        } else {
+                            break;
+                        }
+                    }
+
+                    Ok(Token::Float(num))
                 } else {
+                    self.advance();
                     Ok(Token::TDot)
                 }
             }
@@ -374,7 +389,6 @@ impl Lexer {
             "in" => Token::KIn,
             "inherit" => Token::KInherit,
             "let" => Token::KLet,
-            "or" => Token::KOr,
             "rec" => Token::KRec,
             "then" => Token::KThen,
             "with" => Token::KWith,
@@ -439,37 +453,6 @@ impl Lexer {
                 } else {
                     break;
                 }
-            }
-        }
-
-        // Check for exponent (e or E)
-        if let Some('e') | Some('E') = self.peek() {
-            is_float = true;
-            num.push(self.peek().unwrap());
-            self.advance();
-
-            // Optional sign
-            if let Some('+') | Some('-') = self.peek() {
-                num.push(self.peek().unwrap());
-                self.advance();
-            }
-
-            // Exponent digits
-            let exp_start = num.len();
-            while let Some(ch) = self.peek() {
-                if ch.is_ascii_digit() {
-                    num.push(ch);
-                    self.advance();
-                } else {
-                    break;
-                }
-            }
-
-            if num.len() == exp_start {
-                return Err(crate::error::ParseError::new(
-                    self.current_pos(),
-                    "expected digits after exponent",
-                ));
             }
         }
 
@@ -987,8 +970,6 @@ mod tests {
 
         assert!(matches!(lexer.next_token(), Ok(Token::Integer(s)) if s == "42"));
         assert!(matches!(lexer.next_token(), Ok(Token::Float(s)) if s == "3.14"));
-        assert!(matches!(lexer.next_token(), Ok(Token::Float(s)) if s == "1.5e10"));
-        assert!(matches!(lexer.next_token(), Ok(Token::Float(s)) if s == "2e-5"));
     }
 
     #[test]

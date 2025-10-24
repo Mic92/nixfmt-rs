@@ -691,6 +691,7 @@ impl Parser {
                 | Token::TLessEqual
                 | Token::TGreaterEqual
                 | Token::TImplies
+                | Token::TPipeForward
         )
     }
 
@@ -711,8 +712,16 @@ impl Parser {
 
     /// Parse binary operation with precedence climbing
     fn parse_binary_operation(&mut self, mut left: Expression, min_prec: u8) -> Result<Expression> {
+        let mut last_was_comparison = false;
         while self.is_binary_op() && self.get_precedence() >= min_prec {
             let op_token = self.take_current();
+            let is_comparison = Self::is_comparison_operator(&op_token.value);
+            if last_was_comparison && is_comparison {
+                return Err(ParseError::new(
+                    op_token.source_line,
+                    "comparison operators cannot be chained",
+                ));
+            }
             let prec = self.get_precedence_for(&op_token.value);
             let is_right_assoc = self.is_right_associative(&op_token.value);
             self.advance()?;
@@ -729,6 +738,7 @@ impl Parser {
             }
 
             left = Expression::Operation(Box::new(left), op_token, Box::new(right));
+            last_was_comparison = is_comparison;
         }
 
         Ok(left)
@@ -809,9 +819,9 @@ impl Parser {
             None
         };
 
-        // Parse selectors (identifiers)
+        // Parse selectors (identifiers, strings, interpolations)
         let mut selectors = Vec::new();
-        while matches!(self.current.value, Token::Identifier(_)) {
+        while self.is_simple_selector_start() {
             let sel = self.parse_simple_selector()?;
             selectors.push(sel);
         }
@@ -861,15 +871,24 @@ impl Parser {
 
     /// Parse simple selector (identifier, string, or interpolation)
     fn parse_simple_selector(&mut self) -> Result<SimpleSelector> {
-        if matches!(self.current.value, Token::Identifier(_)) {
-            let ident = self.take_current();
-            self.advance()?;
-            Ok(SimpleSelector::IDSelector(ident))
-        } else {
-            Err(ParseError::new(
+        match &self.current.value {
+            Token::Identifier(_) => {
+                let ident = self.take_current();
+                self.advance()?;
+                Ok(SimpleSelector::IDSelector(ident))
+            }
+            Token::TDoubleQuote => {
+                let string = self.parse_simple_string_literal()?;
+                Ok(SimpleSelector::StringSelector(string))
+            }
+            Token::TInterOpen => {
+                let interpol = self.parse_selector_interpolation()?;
+                Ok(SimpleSelector::InterpolSelector(interpol))
+            }
+            _ => Err(ParseError::new(
                 self.current.source_line,
                 "expected selector",
-            ))
+            )),
         }
     }
 
@@ -1069,9 +1088,15 @@ impl Parser {
             });
         }
 
-        // Check for 'or' default
-        let or_default = if matches!(self.current.value, Token::KOr) {
-            let or_tok = self.take_current();
+        // Check for 'or' default (only valid if we have at least one selector)
+        let or_default = if !selectors.is_empty() && self.is_or_token() {
+            let mut or_tok = self.take_current();
+            if matches!(
+                &or_tok.value,
+                Token::Identifier(name) if name == "or"
+            ) {
+                or_tok.value = Token::KOr;
+            }
             self.advance()?;
             let default_term = self.parse_term()?;
             Some((or_tok, Box::new(default_term)))
@@ -1079,8 +1104,7 @@ impl Parser {
             None
         };
 
-        // If we have selectors or or-default, wrap in Selection
-        if !selectors.is_empty() || or_default.is_some() {
+        if !selectors.is_empty() {
             Ok(Term::Selection(Box::new(base_term), selectors, or_default))
         } else {
             Ok(base_term)
@@ -1094,9 +1118,8 @@ impl Parser {
         Ok(Term::Token(token_ann))
     }
 
-    /// Parse simple string: "..."
-    /// Parses string content directly from source (not tokens!)
-    fn parse_simple_string(&mut self) -> Result<Term> {
+    /// Parse simple string literal and return annotated string structure
+    fn parse_simple_string_literal(&mut self) -> Result<Ann<Vec<Vec<StringPart>>>> {
         let open_quote_pos = self.current.source_line;
         let pre_trivia = self.current.pre_trivia.clone();
 
@@ -1146,13 +1169,18 @@ impl Parser {
 
         let lines = fix_simple_string(parts);
 
-        let ann = Ann {
+        Ok(Ann {
             pre_trivia,
             source_line: open_quote_pos,
             value: lines,
             trail_comment: None,
-        };
+        })
+    }
 
+    /// Parse simple string: "..."
+    /// Parses string content directly from source (not tokens!)
+    fn parse_simple_string(&mut self) -> Result<Term> {
+        let ann = self.parse_simple_string_literal()?;
         Ok(Term::SimpleString(ann))
     }
 
@@ -1560,6 +1588,55 @@ impl Parser {
                 format!("expected end of file, found: {:?}", self.current.value),
             ))
         }
+    }
+
+    /// Check if the current token can begin a simple selector
+    fn is_simple_selector_start(&self) -> bool {
+        matches!(
+            self.current.value,
+            Token::Identifier(_) | Token::TDoubleQuote | Token::TInterOpen
+        )
+    }
+
+    /// Parse ${expr} interpolation used in selectors
+    fn parse_selector_interpolation(&mut self) -> Result<Ann<StringPart>> {
+        let open = self.take_current();
+        debug_assert!(matches!(open.value, Token::TInterOpen));
+        self.advance()?;
+
+        let expr = self.parse_expression()?;
+        let close = self.expect_token_match(|t| matches!(t, Token::TBraceClose))?;
+
+        Ok(Ann {
+            pre_trivia: open.pre_trivia,
+            source_line: open.source_line,
+            value: StringPart::Interpolation(Box::new(Whole {
+                value: expr,
+                trailing_trivia: close.pre_trivia.clone(),
+            })),
+            trail_comment: close.trail_comment,
+        })
+    }
+
+    /// Check if the current token represents the `or` keyword (identifier or actual keyword)
+    fn is_or_token(&self) -> bool {
+        matches!(self.current.value, Token::KOr)
+            || matches!(
+                &self.current.value,
+                Token::Identifier(name) if name == "or"
+            )
+    }
+
+    fn is_comparison_operator(token: &Token) -> bool {
+        matches!(
+            token,
+            Token::TEqual
+                | Token::TUnequal
+                | Token::TLess
+                | Token::TGreater
+                | Token::TLessEqual
+                | Token::TGreaterEqual
+        )
     }
 }
 
