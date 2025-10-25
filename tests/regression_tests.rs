@@ -102,3 +102,8 @@ fn regression_attrset_trailing_empty_line() {
 fn regression_multiline_string_indentation() {
     test_ast_format("multiline_string_indentation", "''\n  case\n    ;;\n''\n");
 }
+
+#[test]
+fn regression_trailing_comment() {
+    test_ast_format("trailing_comment", "{ test = foo; # trailing comment\n}");
+}

@@ -118,12 +118,11 @@ impl PrettySimple for bool {
 ///                  else nest indentAmount $ line' <> doc  -- newline before complex
 fn sub_expr<T: PrettySimple, W: Writer>(w: &mut W, arg: &T) {
     if arg.is_simple() {
-        // Simple: nest 2 doc (space before)
+        // Simple (with or without delimiters): space before
         w.write_plain(" ");
         arg.format(w);
     } else if arg.has_delimiters() {
-        // Complex with delimiters: newline, then let the type handle its own depth
-        // The delimited type is responsible for incrementing depth and capturing color
+        // Complex with delimiters: newline before
         w.newline();
         arg.format(w);
     } else {
@@ -158,14 +157,32 @@ fn list_elem<T: PrettySimple, W: Writer>(w: &mut W, elem: &T) {
     }
 }
 
-/// Helper for record values - lists and other delimited types go on a new line
+/// Helper for record values - just format the value directly as part of the row
+/// In Haskell's pShow, record field values are not wrapped by subExpr
 fn format_record_value<T: PrettySimple, W: Writer>(w: &mut W, value: &T) {
     if value.has_delimiters() && !value.is_empty() {
+        // Non-empty delimited values get a newline before them
         w.newline();
         value.format(w);
     } else {
-        sub_expr(w, value);
+        // Everything else: just add a space and format inline
+        w.write_plain(" ");
+        value.format(w);
     }
+}
+
+/// Helper for inline delimiters - writes colored delimiters with content on single line
+/// Format: <open> <content> <close>
+/// Caller is responsible for color/depth context
+fn write_delimited<W: Writer, F>(w: &mut W, color: &str, open: &str, close: &str, f: F)
+where
+    F: FnOnce(&mut W),
+{
+    w.write_colored(open, color);
+    w.write_plain(" ");
+    f(w);
+    w.write_plain(" ");
+    w.write_colored(close, color);
 }
 
 /// Macro to format constructor applications
@@ -424,12 +441,10 @@ impl PrettySimple for Trivia {
             if inline {
                 w.with_color(|w_color| {
                     let bracket_color = w_color.current_color();
-                    w_color.with_depth(|w_depth| {
-                        w_depth.write_colored("[", bracket_color);
-                        w_depth.write_plain(" ");
-                        first.format(w_depth);
-                        w_depth.write_plain(" ");
-                        w_depth.write_colored("]", bracket_color);
+                    w_color.with_depth(|w| {
+                        write_delimited(w, bracket_color, "[", "]", |w| {
+                            first.format(w);
+                        });
                     });
                 });
                 return;
@@ -562,16 +577,27 @@ impl PrettySimple for PosWrapper {
     }
 }
 
-/// Helper wrapper for Option formatting with Nothing
-struct MaybeNothing;
-
-impl PrettySimple for MaybeNothing {
+/// PrettySimple for TrailingComment - constructor with comment contents
+/// In Haskell's Show output, this becomes a Parens with simple elements,
+/// so it formats inline as: ( TrailingComment "text" )
+impl PrettySimple for TrailingComment {
     fn format<W: Writer>(&self, w: &mut W) {
-        w.write_plain("Nothing");
+        w.with_color(|w_color| {
+            let paren_color = w_color.current_color();
+            w_color.with_depth(|w| {
+                write_delimited(w, paren_color, "(", ")", |w| {
+                    format_constructor!(w, "TrailingComment", [&self.0]);
+                });
+            });
+        });
     }
 
     fn is_simple(&self) -> bool {
-        true
+        false // Constructor with argument = 2 elements in row, thus complex
+    }
+
+    fn has_delimiters(&self) -> bool {
+        true // Has parens
     }
 }
 
@@ -585,7 +611,7 @@ impl<T: PrettySimple> PrettySimple for Ann<T> {
                 ("preTrivia", &self.pre_trivia),
                 ("sourceLine", &PosWrapper(self.source_line.0)),
                 ("value", &self.value),
-                ("trailComment", &MaybeNothing), // TODO: handle Some case
+                ("trailComment", &self.trail_comment),
             ]
         );
     }
@@ -615,11 +641,9 @@ impl<T: PrettySimple> PrettySimple for Vec<T> {
             let bracket_color = w_color.current_color();
             w_color.with_depth(|w_inner| {
                 if self.len() == 1 && !self[0].has_delimiters() && self[0].is_simple() {
-                    w_inner.write_colored("[", bracket_color);
-                    w_inner.write_plain(" ");
-                    self[0].format(w_inner);
-                    w_inner.write_plain(" ");
-                    w_inner.write_colored("]", bracket_color);
+                    write_delimited(w_inner, bracket_color, "[", "]", |w| {
+                        self[0].format(w);
+                    });
                 } else {
                     // Multiline with comma-first
                     w_inner.write_colored("[", bracket_color);
