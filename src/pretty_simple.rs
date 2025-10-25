@@ -9,6 +9,7 @@
 //! - Otherwise: multiline with comma-first
 
 use crate::types::*;
+use std::fmt::Debug;
 
 /// Writer interface - handles output, colors, and indentation
 pub trait Writer {
@@ -41,7 +42,7 @@ const STRING_QUOTE_COLOR: &str = "\x1b[0;97;1m";
 const STRING_CONTENT_COLOR: &str = "\x1b[0;94;1m";
 
 /// Trait for types that can be formatted as Haskell-style output
-pub trait PrettySimple {
+pub trait PrettySimple : Debug {
     fn format<W: Writer>(&self, w: &mut W);
 
     /// Check if this value is "simple" (can be formatted inline)
@@ -564,6 +565,7 @@ impl PrettySimple for Token {
 
 // Generic Ann<T> implementation for all T that implement PrettySimple
 /// Helper wrapper for formatting "Pos N" inline
+#[derive(Debug)]
 struct PosWrapper(usize);
 
 impl PrettySimple for PosWrapper {
