@@ -173,6 +173,12 @@ fn regression_mixed_add_sub_associativity() {
 }
 
 #[test]
+fn regression_empty_set_with_comment() {
+    // Comments inside empty sets should be separate Comments items, not in preTrivia
+    test_ast_format("empty_set_comment", "{\n  # comment\n}");
+}
+
+#[test]
 fn regression_path_trailing_slash_current() {
     // nixfmt rejects `./` but we accept it
     assert!(
@@ -180,4 +186,3 @@ fn regression_path_trailing_slash_current() {
         "expected path with trailing slash to be rejected"
     );
 }
-

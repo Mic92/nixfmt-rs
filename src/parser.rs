@@ -133,12 +133,21 @@ impl Parser {
         match &self.current.value {
             Token::TBraceClose => {
                 // Empty set: {} - could be parameter or literal
-                // Check if followed by :
-                let close_brace = self.take_current();
+                // But first check if there are comments in the pre_trivia of the close brace
+                let mut close_brace = self.take_current();
+                let items = if !close_brace.pre_trivia.is_empty() {
+                    // There are comments inside the empty set, extract them as a Comments item
+                    let comments = std::mem::take(&mut close_brace.pre_trivia);
+                    vec![Item::Comments(comments)]
+                } else {
+                    Vec::new()
+                };
+
                 self.advance()?;
 
                 if matches!(self.current.value, Token::TColon) {
                     // Empty set parameter: {}: body
+                    // Note: parameters can't have Comments items, so this should be empty
                     let colon = self.take_current();
                     self.advance()?;
                     let body = self.parse_expression()?;
@@ -148,8 +157,8 @@ impl Parser {
                         Box::new(body),
                     ))
                 } else {
-                    // Empty set literal
-                    let set_term = Term::Set(None, open_brace, Items(Vec::new()), close_brace);
+                    // Empty set literal (possibly with comments)
+                    let set_term = Term::Set(None, open_brace, Items(items), close_brace);
                     self.continue_operation_from(Expression::Term(set_term))
                 }
             }
