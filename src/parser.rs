@@ -287,7 +287,7 @@ impl Parser {
     /// Parse operation or lambda (needs lookahead for :)
     fn parse_operation_or_lambda(&mut self) -> Result<Expression> {
         // Try to parse initial term/application
-        let mut expr = self.parse_application()?;
+        let expr = self.parse_application()?;
 
         // Check for @ (context parameter) - special case
         if matches!(self.current.value, Token::TAt) {
@@ -317,16 +317,8 @@ impl Parser {
             }
         }
 
-        // Check for member check (? operator) - postfix
-        if matches!(self.current.value, Token::TQuestion) {
-            let question = self.take_current();
-            self.advance()?;
-
-            // Parse selector path
-            let selectors = self.parse_selector_path()?;
-
-            expr = Expression::MemberCheck(Box::new(expr), question, selectors);
-        }
+        // NOTE: Member check (? operator) is now handled in parse_application
+        // This ensures correct precedence: ? has higher precedence than prefix ! and -
 
         // Check if there's a colon (lambda)
         if matches!(self.current.value, Token::TColon) {
@@ -624,19 +616,23 @@ impl Parser {
     /// Parse function application (left-associative)
     /// Application only consumes TERMS, not unary expressions
     fn parse_application(&mut self) -> Result<Expression> {
-        // Check for prefix unary operators BEFORE parsing application
+        // Check for prefix unary operators
+        // For chained unary operators (like --5), we need to recurse
+        // But we need to parse ? (postfix) before applying ! or - (prefix) due to precedence
         match &self.current.value {
             Token::TMinus => {
                 let op = self.take_current();
                 self.advance()?;
-                let expr = self.parse_application()?; // Right-associative
-                return Ok(Expression::Negation(op, Box::new(expr)));
+                // Recursively parse to handle chained unary operators
+                let inner = self.parse_application()?;
+                return Ok(Expression::Negation(op, Box::new(inner)));
             }
             Token::TNot => {
                 let op = self.take_current();
                 self.advance()?;
-                let expr = self.parse_application()?; // Right-associative
-                return Ok(Expression::Inversion(op, Box::new(expr)));
+                // Recursively parse to handle chained unary operators
+                let inner = self.parse_application()?;
+                return Ok(Expression::Inversion(op, Box::new(inner)));
             }
             _ => {}
         }
@@ -649,6 +645,16 @@ impl Parser {
         while self.is_term_start() && !self.is_binary_op() && !self.is_expression_end() {
             let arg = self.parse_term_expr()?;
             expr = Expression::Application(Box::new(expr), Box::new(arg));
+        }
+
+        // Check for member check (? operator) - postfix, higher precedence than prefix !/-
+        // This is the KEY fix: we check for ? here, AFTER application but within the recursive call
+        // This ensures: !a ? b parses as !(a ? b), not (!a) ? b
+        if matches!(self.current.value, Token::TQuestion) {
+            let question = self.take_current();
+            self.advance()?;
+            let selectors = self.parse_selector_path()?;
+            expr = Expression::MemberCheck(Box::new(expr), question, selectors);
         }
 
         Ok(expr)
@@ -760,29 +766,43 @@ impl Parser {
     }
 
     /// Get precedence for a token (higher = tighter binding)
+    /// Precedence follows nixfmt's operator table (Types.hs:570-597)
+    /// Note: Operators later in nixfmt's list have LOWER precedence
     fn get_precedence_for(&self, token: &Token) -> u8 {
         match token {
-            Token::TOr => 1,
-            Token::TAnd => 2,
-            Token::TEqual | Token::TUnequal => 3,
-            Token::TLess | Token::TGreater | Token::TLessEqual | Token::TGreaterEqual => 4,
-            Token::TUpdate => 5,
-            Token::TPlus | Token::TMinus => 6,
-            Token::TMul | Token::TDiv => 7,
-            Token::TConcat => 8,
-            Token::TImplies => 9,
-            _ => 0,
+            // Highest precedence (tightest binding)
+            Token::TConcat => 14,                   // ++ (line 575 in nixfmt)
+            Token::TMul | Token::TDiv => 13,        // * / (lines 576-577)
+            Token::TPlus | Token::TMinus => 12,     // + - (lines 579-580)
+            // Note: Prefix TNot would be at precedence 11 (line 582) but it's handled separately
+            Token::TUpdate => 10,                   // // (line 583)
+            Token::TLess | Token::TGreater | Token::TLessEqual | Token::TGreaterEqual => 9, // comparisons (lines 584-587)
+            Token::TEqual | Token::TUnequal => 8,   // == != (lines 589-590)
+            Token::TAnd => 7,                       // && (line 592)
+            Token::TOr => 6,                        // || (line 593)
+            Token::TImplies => 5,                   // -> (line 594)
+            Token::TPipeForward => 4,               // |> (line 595)
+            Token::TPipeBackward => 3,              // <| (line 596) - lowest!
+            _ => 0,                                 // Unknown/not a binary operator
         }
     }
 
     /// Check if an operator is right-associative
     ///
-    /// Right-associative operators: ++, //, +
+    /// Right-associative operators per nixfmt Types.hs:
+    /// - TConcat (++) - line 575: InfixR
+    /// - TUpdate (//) - line 583: InfixR
+    /// - TPipeBackward (<|) - line 596: InfixR
+    /// - TPlus (+) - line 579: InfixL in spec, but nixfmt uses a HACK to convert to right-assoc in AST
+    ///
     /// (Note: + follows nixfmt's AST conversion hack where it's
     /// parsed as right-associative for formatting purposes, even though
     /// it's defined as InfixL in nixfmt's Types.hs)
     fn is_right_associative(&self, token: &Token) -> bool {
-        matches!(token, Token::TConcat | Token::TUpdate | Token::TPlus)
+        matches!(
+            token,
+            Token::TConcat | Token::TUpdate | Token::TPipeBackward | Token::TPlus
+        )
     }
 
     /// Parse binders (for let and attribute sets)

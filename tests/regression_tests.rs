@@ -150,3 +150,17 @@ fn regression_emptyline_pretrivia_inline() {
     // nixfmt:     { preTrivia = [ EmptyLine ], ...
     test_ast_format("emptyline_pretrivia", "\n\nlet x = 1; in x");
 }
+
+#[test]
+fn regression_not_member_check() {
+    // FIXED: ? operator now has higher precedence than ! operator
+    // Correct AST: Inversion(MemberCheck(a)...)
+    test_ast_format("not_member_check", "!a ? b");
+}
+
+#[test]
+fn regression_implies_precedence() {
+    // FIXED: -> operator has lower precedence than ||
+    // Should parse as: (a || b) -> c, not a || (b -> c)
+    test_ast_format("implies_precedence", "a || b -> c");
+}
