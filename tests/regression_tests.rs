@@ -74,9 +74,23 @@ fn regression_import_path_application() {
 }
 
 #[test]
-#[ignore = "BUG #8: Trailing-dot float (`5.`) rejected"]
 fn regression_float_trailing_dot() {
     test_ast_format("float_trailing_dot", "5.");
+}
+
+#[test]
+fn regression_float_with_exponent() {
+    test_ast_format("float_with_exponent", "1.0e2");
+}
+
+#[test]
+fn regression_float_leading_dot_exponent() {
+    test_ast_format("float_leading_dot_exponent", ".5e2");
+}
+
+#[test]
+fn regression_float_double_zero_prefix() {
+    test_ast_format("float_double_zero_prefix", "00.5");
 }
 
 #[test]

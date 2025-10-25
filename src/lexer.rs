@@ -223,6 +223,10 @@ impl Lexer {
                         }
                     }
 
+                    if let Some(exp) = self.parse_exponent() {
+                        num.push_str(&exp);
+                    }
+
                     Ok(Token::Float(num))
                 } else {
                     self.advance();
@@ -440,26 +444,70 @@ impl Lexer {
         }
 
         // Check for decimal point
-        if self.peek() == Some('.') && self.peek_ahead(1).is_some_and(|c| c.is_ascii_digit()) {
-            is_float = true;
-            num.push('.');
-            self.advance();
+        if self.peek() == Some('.') {
+            let next = self.peek_ahead(1);
+            let has_leading_zero = num.starts_with('0');
+            let has_multiple_leading_zeroes = has_leading_zero && num.len() > 1;
 
-            // Parse fractional part
-            while let Some(ch) = self.peek() {
-                if ch.is_ascii_digit() {
-                    num.push(ch);
-                    self.advance();
-                } else {
-                    break;
+            if next.is_some_and(|c| c.is_ascii_digit()) && !has_multiple_leading_zeroes {
+                is_float = true;
+                num.push('.');
+                self.advance();
+
+                // Parse fractional part
+                while let Some(ch) = self.peek() {
+                    if ch.is_ascii_digit() {
+                        num.push(ch);
+                        self.advance();
+                    } else {
+                        break;
+                    }
                 }
+            } else if next.is_none_or(|c| !c.is_ascii_digit()) && !num.is_empty() && num != "0" {
+                // Allow trailing '.' for numbers starting with non-zero digit (e.g., 1.)
+                is_float = true;
+                num.push('.');
+                self.advance();
             }
         }
 
         if is_float {
-            Ok(Token::Float(num))
-        } else {
-            Ok(Token::Integer(num))
+            if let Some(exp) = self.parse_exponent() {
+                num.push_str(&exp);
+            }
+            return Ok(Token::Float(num));
+        }
+
+        Ok(Token::Integer(num))
+    }
+
+    fn parse_exponent(&mut self) -> Option<String> {
+        match self.peek() {
+            Some('e') | Some('E') => {
+                let saved_state = self.save_state();
+                let mut exponent = String::new();
+                exponent.push(self.advance().unwrap());
+
+                if matches!(self.peek(), Some('+') | Some('-')) {
+                    exponent.push(self.advance().unwrap());
+                }
+
+                if self.peek().is_some_and(|c| c.is_ascii_digit()) {
+                    while let Some(ch) = self.peek() {
+                        if ch.is_ascii_digit() {
+                            exponent.push(ch);
+                            self.advance();
+                        } else {
+                            break;
+                        }
+                    }
+                    Some(exponent)
+                } else {
+                    self.restore_state(saved_state);
+                    None
+                }
+            }
+            _ => None,
         }
     }
 
