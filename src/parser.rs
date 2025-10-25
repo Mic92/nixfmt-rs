@@ -85,6 +85,15 @@ impl Parser {
                     let at_tok = self.take_current();
                     self.advance()?;
                     let second_param = self.parse_full_parameter()?;
+
+                    // Check for colon - if not present, give helpful error
+                    if !matches!(self.current.value, Token::TColon) {
+                        return Err(ParseError::new(
+                            at_tok.source_line,
+                            "@ is only valid in lambda parameters",
+                        ));
+                    }
+
                     let colon = self.expect_token_match(|t| matches!(t, Token::TColon))?;
                     let body = self.parse_expression()?;
                     Ok(Expression::Abstraction(
@@ -692,6 +701,7 @@ impl Parser {
                 | Token::TGreaterEqual
                 | Token::TImplies
                 | Token::TPipeForward
+                | Token::TPipeBackward
         )
     }
 
