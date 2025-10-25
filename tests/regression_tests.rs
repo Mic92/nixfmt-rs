@@ -142,3 +142,11 @@ fn regression_comment_before_and_with_selectors() {
 }"#,
     );
 }
+
+#[test]
+fn regression_emptyline_pretrivia_inline() {
+    // EmptyLine in preTrivia should be formatted inline in AST output
+    // Our output: { preTrivia =\n    [ EmptyLine ]\n, ...
+    // nixfmt:     { preTrivia = [ EmptyLine ], ...
+    test_ast_format("emptyline_pretrivia", "\n\nlet x = 1; in x");
+}

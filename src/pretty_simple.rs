@@ -61,6 +61,17 @@ pub trait PrettySimple : Debug {
     fn is_empty(&self) -> bool {
         false
     }
+
+    /// Check if this represents a single atomic element in Haskell's parsed form
+    /// True for: primitives (String/usize/bool), nullary constructors (EmptyLine)
+    /// False for: constructor applications (TextPart/LineComment), delimited types (Vec/Ann)
+    ///
+    /// This is used by Vec::is_simple() to determine if a single-element Vec is structurally simple.
+    /// In Haskell, "TextPart \"hello\"" parses to [Other "TextPart ", StringLit "hello"] (2 elements),
+    /// so Vec<StringPart> with [TextPart] is NOT structurally simple, even though TextPart is simple for rendering.
+    fn is_atomic(&self) -> bool {
+        false // Most things are not atomic by default
+    }
 }
 
 /// PrettySimple for &str - quoted string literals
@@ -75,6 +86,10 @@ impl PrettySimple for &str {
     fn is_simple(&self) -> bool {
         true
     }
+
+    fn is_atomic(&self) -> bool {
+        true // Primitives are atomic
+    }
 }
 
 /// PrettySimple for String - delegates to &str
@@ -85,6 +100,10 @@ impl PrettySimple for String {
 
     fn is_simple(&self) -> bool {
         true
+    }
+
+    fn is_atomic(&self) -> bool {
+        true // Primitives are atomic
     }
 }
 
@@ -98,6 +117,10 @@ impl PrettySimple for usize {
     fn is_simple(&self) -> bool {
         true
     }
+
+    fn is_atomic(&self) -> bool {
+        true // Primitives are atomic
+    }
 }
 
 /// PrettySimple for bool - Haskell Bool values
@@ -108,6 +131,10 @@ impl PrettySimple for bool {
 
     fn is_simple(&self) -> bool {
         true
+    }
+
+    fn is_atomic(&self) -> bool {
+        true // Primitives are atomic
     }
 }
 
@@ -142,31 +169,20 @@ fn sub_expr<T: PrettySimple, W: Writer>(w: &mut W, arg: &T) {
     }
 }
 
-/// Helper for list elements - handles spacing for simple vs delimited entries
-fn list_elem<T: PrettySimple, W: Writer>(w: &mut W, elem: &T) {
-    if elem.has_delimiters() {
-        if elem.is_empty() {
-            w.write_plain(" ");
-            elem.format(w);
-        } else {
-            w.newline();
-            elem.format(w);
-        }
-    } else {
-        w.write_plain(" ");
-        elem.format(w);
-    }
-}
-
-/// Helper for record values - just format the value directly as part of the row
-/// In Haskell's pShow, record field values are not wrapped by subExpr
-fn format_record_value<T: PrettySimple, W: Writer>(w: &mut W, value: &T) {
-    if value.has_delimiters() && !value.is_empty() {
-        // Non-empty delimited values get a newline before them
+/// Helper for formatting delimited values in lists and records
+/// Handles spacing for simple vs delimited entries
+///
+/// Logic (unified from list_elem and format_record_value):
+/// - Non-empty, complex delimited values get a newline before them
+/// - Simple delimited values (like [ EmptyLine ]) stay inline
+/// - Everything else: space before
+fn format_delimited_value<T: PrettySimple, W: Writer>(w: &mut W, value: &T) {
+    if value.has_delimiters() && !value.is_empty() && !value.is_simple() {
+        // Non-empty, complex delimited values get a newline
         w.newline();
         value.format(w);
     } else {
-        // Everything else: just add a space and format inline
+        // Everything else (including simple delimited values): space before
         w.write_plain(" ");
         value.format(w);
     }
@@ -230,7 +246,7 @@ macro_rules! format_record {
         $w.write_plain(" ");
         $w.write_plain($name);
         $w.write_plain(" =");
-        format_record_value($w, $value);
+        format_delimited_value($w, $value);
         $(
             format_record!(@fields $w, $brace_color; comma; ($rest_name, $rest_value));
         )*
@@ -243,7 +259,7 @@ macro_rules! format_record {
         $w.write_plain(" ");
         $w.write_plain($name);
         $w.write_plain(" =");
-        format_record_value($w, $value);
+        format_delimited_value($w, $value);
     };
 }
 
@@ -411,85 +427,47 @@ impl PrettySimple for Trivium {
     }
 
     fn is_simple(&self) -> bool {
-        true
+        // In Haskell: constructor applications with simple args can be simple
+        // BlockComment True ["doc"] → all arguments simple → renders inline
+        // BlockComment True ["a","b","c"] → Vec with 3 elements NOT simple → renders multiline
+        match self {
+            Trivium::EmptyLine() => true,  // Nullary constructor
+            Trivium::LineComment(_) => true,  // String arg is simple
+            Trivium::BlockComment(_is_doc, lines) => {
+                // Simple if the Vec is simple (empty or single simple element)
+                lines.is_simple()
+            }
+            Trivium::LanguageAnnotation(_) => true,  // String arg is simple
+        }
+    }
+
+    fn is_atomic(&self) -> bool {
+        // Only nullary constructors are atomic (single element in parsed form)
+        // EmptyLine → Other "EmptyLine" → atomic
+        // LineComment "x" → Other "LineComment " + StringLit → not atomic
+        matches!(self, Trivium::EmptyLine())
     }
 }
 
 impl PrettySimple for Trivia {
     fn format<W: Writer>(&self, w: &mut W) {
-        if self.0.is_empty() {
-            w.with_color(|w_color| {
-                let bracket_color = w_color.current_color();
-                w_color.write_colored("[", bracket_color);
-                w_color.write_colored("]", bracket_color);
-            });
-            return;
-        }
-
+        // Special case: LanguageAnnotation renders without brackets
         if self.0.len() == 1 && matches!(self.0[0], Trivium::LanguageAnnotation(_)) {
             self.0[0].format(w);
             return;
         }
 
-        if self.0.len() == 1 {
-            let first = &self.0[0];
-            let inline = match first {
-                Trivium::LineComment(_) => true,
-                Trivium::EmptyLine() => true,
-                Trivium::BlockComment(_, lines) => lines.len() <= 1,
-                _ => false,
-            };
-            if inline {
-                w.with_color(|w_color| {
-                    let bracket_color = w_color.current_color();
-                    w_color.with_depth(|w| {
-                        write_delimited(w, bracket_color, "[", "]", |w| {
-                            first.format(w);
-                        });
-                    });
-                });
-                return;
-            }
-        }
-
-        w.with_color(|w_color| {
-            let bracket_color = w_color.current_color();
-            w_color.with_depth(|w_depth| {
-                w_depth.write_colored("[", bracket_color);
-                if let Some((first, rest)) = self.0.split_first() {
-                    w_depth.write_plain(" ");
-                    first.format(w_depth);
-                    for trivium in rest {
-                        w_depth.newline();
-                        w_depth.write_colored(",", bracket_color);
-                        w_depth.write_plain(" ");
-                        trivium.format(w_depth);
-                    }
-                    let inline_close = rest.is_empty()
-                        && match first {
-                            Trivium::LineComment(_) => true,
-                            Trivium::EmptyLine() => true,
-                            Trivium::BlockComment(_, lines) => lines.len() <= 1,
-                            _ => false,
-                        };
-                    if inline_close {
-                        w_depth.write_plain(" ");
-                        w_depth.write_colored("]", bracket_color);
-                    } else {
-                        w_depth.newline();
-                        w_depth.write_colored("]", bracket_color);
-                    }
-                } else {
-                    w_depth.write_colored("]", bracket_color);
-                }
-            });
-        });
+        // Otherwise, delegate to standard Vec formatting
+        self.0.format(w);
     }
 
     fn is_simple(&self) -> bool {
-        self.0.is_empty()
-            || (self.0.len() == 1 && matches!(self.0[0], Trivium::LanguageAnnotation(_)))
-            || (self.0.len() == 1 && matches!(self.0[0], Trivium::EmptyLine()))
+        // Special case: LanguageAnnotation without brackets is simple
+        if self.0.len() == 1 && matches!(self.0[0], Trivium::LanguageAnnotation(_)) {
+            return true;
+        }
+        // Otherwise delegate to Vec's is_simple logic
+        self.0.is_simple()
     }
 
     fn has_delimiters(&self) -> bool {
@@ -535,7 +513,16 @@ impl PrettySimple for StringPart {
     }
 
     fn is_simple(&self) -> bool {
-        true
+        // For Vec inline rendering: constructor applications with simple args behave as simple
+        // In Haskell: the row [Other "TextPart ", StringLit "hello"] passes `all isSimple`
+        // So [TextPart "hello"] can be rendered inline
+        //
+        // However, for structural simplicity (Vec::is_simple), this creates a multi-element row,
+        // so the Brackets itself is NOT simple. That's handled by Vec::is_simple logic.
+        match self {
+            StringPart::TextPart(_) => true,  // Simple argument
+            StringPart::Interpolation(_) => false,  // Complex argument
+        }
     }
 
     fn has_delimiters(&self) -> bool {
@@ -639,22 +626,37 @@ impl<T: PrettySimple> PrettySimple for Vec<T> {
         }
 
         // Non-empty: increment depth first, then capture color (matching Open annotation)
+        // EXACT Haskell logic from list function (Printer.hs:252-254):
+        //   [xs] | all isSimple xs -> space <> hcat (map (prettyExpr opts) xs) <> space
+        //   _ -> concatWith lineAndCommaSep ...
         w.with_color(|w_color| {
             let bracket_color = w_color.current_color();
             w_color.with_depth(|w_inner| {
-                if self.len() == 1 && !self[0].has_delimiters() && self[0].is_simple() {
-                    write_delimited(w_inner, bracket_color, "[", "]", |w| {
-                        self[0].format(w);
-                    });
+                // EXACT Haskell logic: [xs] | all isSimple xs
+                // This matches when there is ONE row (single element in Vec) with all simple elements
+                // Multiple elements in Vec → multiple rows → takes else branch (multiline)
+                if self.len() == 1 && self[0].is_simple() {
+                    // Case: [xs] | all isSimple xs (ONE row, all elements simple)
+                    // Inline format: [ elem1 elem2 ... ]
+                    w_inner.write_colored("[", bracket_color);
+                    w_inner.write_plain(" ");
+                    for (i, item) in self.iter().enumerate() {
+                        if i > 0 {
+                            w_inner.write_plain(" ");
+                        }
+                        item.format(w_inner);
+                    }
+                    w_inner.write_plain(" ");
+                    w_inner.write_colored("]", bracket_color);
                 } else {
-                    // Multiline with comma-first
+                    // Case: _ (multiline with comma-first)
                     w_inner.write_colored("[", bracket_color);
                     for (i, item) in self.iter().enumerate() {
                         if i > 0 {
                             w_inner.newline();
                             w_inner.write_colored(",", bracket_color);
                         }
-                        list_elem(w_inner, item);
+                        format_delimited_value(w_inner, item);
                     }
                     w_inner.newline();
                     w_inner.write_colored("]", bracket_color);
@@ -664,15 +666,23 @@ impl<T: PrettySimple> PrettySimple for Vec<T> {
     }
 
     fn is_simple(&self) -> bool {
-        // Mirrors pretty-simple's list simplicity heuristic:
-        // - Empty list is simple
-        // - Single simple element without its own delimiters stays inline
+        // Mirrors pretty-simple's isListSimple:
+        // isListSimple [[e]] = isSimple e && case e of Other s -> not $ any isSpace s ; _ -> True
+        // isListSimple _:_ = False
+        // isListSimple [] = True
+        //
+        // Empty list is simple
         if self.is_empty() {
             return true;
         }
+        // Single element: simple if it's atomic OR (simple AND has delimiters)
+        // In Haskell: [[e]] matches only when the row has ONE element
+        // - [EmptyLine] → row: [Other "EmptyLine"] → 1 element → atomic → simple
+        // - [TextPart "x"] → row: [Other, StringLit] → 2 elements → NOT simple
+        // - [[]] → row: [Brackets []] → 1 element, simple delimited → simple
         if self.len() == 1 {
             let item = &self[0];
-            return item.is_simple() && !item.has_delimiters();
+            return item.is_atomic() || (item.is_simple() && item.has_delimiters());
         }
         false
     }
