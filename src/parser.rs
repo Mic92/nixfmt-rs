@@ -746,9 +746,11 @@ impl Parser {
 
             // For right-associative operators, use >= to allow same-precedence operators to bind right
             // For left-associative operators, use > to make them bind left
+            // IMPORTANT: For TPlus, only allow right-associativity when the next operator is also TPlus
+            // This matches nixfmt's behavior where `1 + 2 + 3` is right-assoc but `1 + 2 - 3` is left-assoc
             while self.is_binary_op()
                 && (self.get_precedence() > prec
-                    || (self.get_precedence() == prec && is_right_assoc))
+                    || (self.get_precedence() == prec && is_right_assoc && self.same_operator(&op_token.value)))
             {
                 right = self.parse_binary_operation(right, self.get_precedence())?;
             }
@@ -803,6 +805,13 @@ impl Parser {
             token,
             Token::TConcat | Token::TUpdate | Token::TPipeBackward | Token::TPlus
         )
+    }
+
+    /// Check if the current operator is the same as the given operator
+    /// This is used to implement nixfmt's hack where TPlus is only right-associative
+    /// when chained with itself (not with TMinus)
+    fn same_operator(&self, token: &Token) -> bool {
+        std::mem::discriminant(&self.current.value) == std::mem::discriminant(token)
     }
 
     /// Parse binders (for let and attribute sets)

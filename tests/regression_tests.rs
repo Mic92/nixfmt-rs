@@ -164,3 +164,10 @@ fn regression_implies_precedence() {
     // Should parse as: (a || b) -> c, not a || (b -> c)
     test_ast_format("implies_precedence", "a || b -> c");
 }
+
+#[test]
+fn regression_mixed_add_sub_associativity() {
+    // Our AST: (1 + (2 - 3)), nixfmt AST: ((1 + 2) - 3)
+    // Right-associative handling for + diverges when - appears
+    test_ast_format("mixed_add_sub", "1 + 2 - 3");
+}
