@@ -1076,6 +1076,17 @@ impl Parser {
             }
         }
 
+        // Validate: paths cannot end with a trailing slash
+        // This matches nixfmt's requirement that pathTraversal must have content after the slash
+        if let Some(StringPart::TextPart(text)) = parts.last() {
+            if text.ends_with('/') {
+                return Err(ParseError::new(
+                    start_pos,
+                    "path cannot end with a trailing slash",
+                ));
+            }
+        }
+
         // Re-sync parser
         self.current = self.lexer.lexeme()?;
 

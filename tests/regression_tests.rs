@@ -171,3 +171,13 @@ fn regression_mixed_add_sub_associativity() {
     // Right-associative handling for + diverges when - appears
     test_ast_format("mixed_add_sub", "1 + 2 - 3");
 }
+
+#[test]
+fn regression_path_trailing_slash_current() {
+    // nixfmt rejects `./` but we accept it
+    assert!(
+        nixfmt_rs::parse("./").is_err(),
+        "expected path with trailing slash to be rejected"
+    );
+}
+
