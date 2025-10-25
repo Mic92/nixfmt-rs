@@ -80,11 +80,12 @@ impl Lexer {
         // Take accumulated leading trivia
         let leading_trivia = std::mem::take(&mut self.trivia_buffer);
 
-        // Record position before token
-        let token_pos = self.current_pos();
-
-        // Parse the token
+        // Parse the token - note that next_token() may consume leading trivia internally
         let token = self.next_token()?;
+
+        // Record position AFTER next_token() has consumed any leading trivia
+        // This ensures sourceLine reflects where the token actually appears
+        let token_pos = self.current_pos();
 
         // For string/path delimiters, don't parse trivia immediately
         // The parser needs to access raw source content

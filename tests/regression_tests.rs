@@ -107,3 +107,12 @@ fn regression_multiline_string_indentation() {
 fn regression_trailing_comment() {
     test_ast_format("trailing_comment", "{ test = foo; # trailing comment\n}");
 }
+
+#[test]
+fn test_sourceline_multiline_list() {
+    // Regression test: closing bracket should be on line 3, not line 2
+    test_ast_format(
+        "sourceline_multiline_list",
+        "[\n  \"foo\"\n]",
+    );
+}
