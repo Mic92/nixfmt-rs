@@ -1088,12 +1088,24 @@ impl Parser {
 
         // Parse .attr chains
         while matches!(self.current.value, Token::TDot) {
-            let dot = self.take_current();
+            let dot_token = self.current.clone();
+            let saved_state = self.lexer.save_state();
+
             self.advance()?;
+            let is_selector_start = matches!(
+                self.current.value,
+                Token::Identifier(_) | Token::TDoubleQuote | Token::TInterOpen
+            );
+
+            if !is_selector_start {
+                self.lexer.restore_state(saved_state);
+                self.current = dot_token;
+                break;
+            }
 
             let simple_sel = self.parse_simple_selector()?;
             selectors.push(Selector {
-                dot: Some(dot),
+                dot: Some(dot_token),
                 selector: simple_sel,
             });
         }

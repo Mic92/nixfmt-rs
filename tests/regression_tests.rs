@@ -68,7 +68,6 @@ fn regression_comparison_chain_should_fail() {
 }
 
 #[test]
-#[ignore = "BUG #14: Path function application rejects (`import ./foo.nix self`)"]
 fn regression_import_path_application() {
     // `import ./foo.nix self` should parse and match nixfmt
     test_ast_format("import_path_application", "import ./foo.nix self");
