@@ -443,3 +443,21 @@ fn test_realistic_package() {
 }"#,
     );
 }
+
+// String Literal Comment Handling
+// Regression test: # should be treated as literal text in strings, not comments
+
+#[test]
+fn test_string_hash_not_comment() {
+    // Inside multi-line strings, # starts literal text, not a comment
+    // The hash and text should be a TextPart, not LineComment trivia
+    test_ast_format(
+        "string_hash_not_comment",
+        r#"''
+foo ${bar}
+
+# TODO: comment
+badFiles=$(find ${filteredHead})
+''"#,
+    );
+}

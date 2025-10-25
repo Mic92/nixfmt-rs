@@ -37,6 +37,10 @@ pub(crate) struct Lexer {
     trivia_buffer: Trivia,
     recent_newlines: usize,
     recent_hspace: usize,
+    /// Position before last parse_trivia() call, for rewinding
+    trivia_start_pos: Option<usize>,
+    trivia_start_line: Option<usize>,
+    trivia_start_column: Option<usize>,
 }
 
 impl Lexer {
@@ -49,6 +53,9 @@ impl Lexer {
             trivia_buffer: Trivia::new(),
             recent_newlines: 0,
             recent_hspace: 0,
+            trivia_start_pos: None,
+            trivia_start_line: None,
+            trivia_start_column: None,
         }
     }
 
@@ -566,6 +573,11 @@ impl Lexer {
 
     /// Parse trivia (comments and whitespace)
     pub(crate) fn parse_trivia(&mut self) -> Vec<ParseTrivium> {
+        // Save position before parsing trivia, so we can rewind if needed
+        self.trivia_start_pos = Some(self.pos);
+        self.trivia_start_line = Some(self.line);
+        self.trivia_start_column = Some(self.column);
+
         let mut trivia = Vec::new();
         self.recent_newlines = 0;
         self.recent_hspace = 0;
@@ -630,57 +642,25 @@ impl Lexer {
         count
     }
 
-    /// Rewind the last trivia consumed (horizontal spaces and newlines)
+    /// Rewind the last trivia consumed (horizontal spaces, newlines, and comments)
+    /// Also clears the trivia buffer since rewound trivia should not be attached to next token
     pub(crate) fn rewind_trivia(&mut self) {
-        // Rewind horizontal whitespace
-        for _ in 0..self.recent_hspace {
-            if self.pos == 0 {
-                break;
-            }
-            self.pos -= 1;
-            self.column = self.column.saturating_sub(1);
-        }
-
-        // Rewind newlines (handle Unix and Windows line endings)
-        let mut remaining_newlines = self.recent_newlines;
-        while remaining_newlines > 0 && self.pos > 0 {
-            let mut idx = self.pos;
-            idx -= 1;
-            let ch = self.input[idx];
-
-            if ch == '\n' {
-                // Move position to the newline character so it can be consumed again
-                self.pos = idx;
-                // If CR precedes LF, include it as part of the newline sequence
-                if self.pos > 0 && self.input[self.pos - 1] == '\r' {
-                    self.pos -= 1;
-                }
-            } else if ch == '\r' {
-                self.pos = idx;
-            } else {
-                break;
-            }
-
-            self.line = self.line.saturating_sub(1);
-
-            // Recompute column as distance to previous newline
-            let mut col_idx = self.pos;
-            let mut col = 0;
-            while col_idx > 0 {
-                let prev = self.input[col_idx - 1];
-                if prev == '\n' || prev == '\r' {
-                    break;
-                }
-                col += 1;
-                col_idx -= 1;
-            }
-            self.column = col;
-
-            remaining_newlines -= 1;
+        // Rewind to the position before parse_trivia() was called
+        if let (Some(pos), Some(line), Some(column)) = (
+            self.trivia_start_pos,
+            self.trivia_start_line,
+            self.trivia_start_column,
+        ) {
+            self.pos = pos;
+            self.line = line;
+            self.column = column;
         }
 
         self.recent_hspace = 0;
         self.recent_newlines = 0;
+
+        // Clear trivia buffer since rewound trivia should not be attached to next token
+        self.trivia_buffer.clear();
     }
 
     /// Parse line comment starting with #
