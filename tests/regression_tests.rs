@@ -94,10 +94,11 @@ fn regression_float_double_zero_prefix() {
 }
 
 #[test]
-#[ignore = "BUG #13: Attrset trailing trivia diverges from nixfmt"]
 fn regression_attrset_trailing_empty_line() {
-    test_ast_format(
-        "attrset_trailing_empty_line",
-        "{\n  foo = 1;\n\n}\n",
-    );
+    test_ast_format("attrset_trailing_empty_line", "{\n  foo = 1;\n\n}\n");
+}
+
+#[test]
+fn regression_multiline_string_indentation() {
+    test_ast_format("multiline_string_indentation", "''\n  case\n    ;;\n''\n");
 }

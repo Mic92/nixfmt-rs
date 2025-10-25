@@ -24,6 +24,8 @@ pub(crate) struct LexerState {
     pub(crate) line: usize,
     pub(crate) column: usize,
     pub(crate) trivia_buffer: Trivia,
+    pub(crate) recent_newlines: usize,
+    pub(crate) recent_hspace: usize,
 }
 
 pub(crate) struct Lexer {
@@ -33,6 +35,8 @@ pub(crate) struct Lexer {
     pub(crate) column: usize,
     /// Accumulated leading trivia for next token
     trivia_buffer: Trivia,
+    recent_newlines: usize,
+    recent_hspace: usize,
 }
 
 impl Lexer {
@@ -43,6 +47,8 @@ impl Lexer {
             line: 1,
             column: 0,
             trivia_buffer: Trivia::new(),
+            recent_newlines: 0,
+            recent_hspace: 0,
         }
     }
 
@@ -53,6 +59,8 @@ impl Lexer {
             line: self.line,
             column: self.column,
             trivia_buffer: self.trivia_buffer.clone(),
+            recent_newlines: self.recent_newlines,
+            recent_hspace: self.recent_hspace,
         }
     }
 
@@ -62,6 +70,8 @@ impl Lexer {
         self.line = state.line;
         self.column = state.column;
         self.trivia_buffer = state.trivia_buffer;
+        self.recent_newlines = state.recent_newlines;
+        self.recent_hspace = state.recent_hspace;
     }
 
     /// Parse a lexeme (token with trivia annotations)
@@ -126,7 +136,7 @@ impl Lexer {
 
     /// Parse next token
     pub(crate) fn next_token(&mut self) -> crate::error::Result<Token> {
-        self.skip_hspace();
+        let _ = self.skip_hspace();
 
         if self.is_eof() {
             return Ok(Token::SOF); // Use SOF as EOF token
@@ -140,7 +150,7 @@ impl Lexer {
             self.trivia_buffer.extend(convert_leading(&trivia));
 
             // Skip hspace again
-            self.skip_hspace();
+            let _ = self.skip_hspace();
 
             if self.is_eof() {
                 return Ok(Token::SOF);
@@ -540,22 +550,28 @@ impl Lexer {
     }
 
     /// Skip horizontal whitespace (spaces and tabs, but not newlines)
-    fn skip_hspace(&mut self) {
+    fn skip_hspace(&mut self) -> usize {
+        let mut count = 0;
         while let Some(ch) = self.peek() {
             if ch == ' ' || ch == '\t' {
                 self.advance();
+                count += 1;
             } else {
                 break;
             }
         }
+        count
     }
 
     /// Parse trivia (comments and whitespace)
     pub(crate) fn parse_trivia(&mut self) -> Vec<ParseTrivium> {
         let mut trivia = Vec::new();
+        self.recent_newlines = 0;
+        self.recent_hspace = 0;
 
         loop {
-            self.skip_hspace();
+            let hspace = self.skip_hspace();
+            self.recent_hspace = hspace;
 
             if self.is_eof() {
                 break;
@@ -564,6 +580,7 @@ impl Lexer {
             match self.peek() {
                 Some('\n') | Some('\r') => {
                     let count = self.parse_newlines();
+                    self.recent_newlines = count;
                     trivia.push(ParseTrivium::Newlines(count));
                 }
                 Some('#') => {
@@ -610,6 +627,59 @@ impl Lexer {
             }
         }
         count
+    }
+
+    /// Rewind the last trivia consumed (horizontal spaces and newlines)
+    pub(crate) fn rewind_trivia(&mut self) {
+        // Rewind horizontal whitespace
+        for _ in 0..self.recent_hspace {
+            if self.pos == 0 {
+                break;
+            }
+            self.pos -= 1;
+            self.column = self.column.saturating_sub(1);
+        }
+
+        // Rewind newlines (handle Unix and Windows line endings)
+        let mut remaining_newlines = self.recent_newlines;
+        while remaining_newlines > 0 && self.pos > 0 {
+            let mut idx = self.pos;
+            idx -= 1;
+            let ch = self.input[idx];
+
+            if ch == '\n' {
+                // Move position to the newline character so it can be consumed again
+                self.pos = idx;
+                // If CR precedes LF, include it as part of the newline sequence
+                if self.pos > 0 && self.input[self.pos - 1] == '\r' {
+                    self.pos -= 1;
+                }
+            } else if ch == '\r' {
+                self.pos = idx;
+            } else {
+                break;
+            }
+
+            self.line = self.line.saturating_sub(1);
+
+            // Recompute column as distance to previous newline
+            let mut col_idx = self.pos;
+            let mut col = 0;
+            while col_idx > 0 {
+                let prev = self.input[col_idx - 1];
+                if prev == '\n' || prev == '\r' {
+                    break;
+                }
+                col += 1;
+                col_idx -= 1;
+            }
+            self.column = col;
+
+            remaining_newlines -= 1;
+        }
+
+        self.recent_hspace = 0;
+        self.recent_newlines = 0;
     }
 
     /// Parse line comment starting with #
@@ -714,12 +784,12 @@ impl Lexer {
         let saved_line = self.line;
         let saved_column = self.column;
 
-        self.skip_hspace();
+        let _ = self.skip_hspace();
 
         // Optionally consume one newline
         if self.peek() == Some('\n') || self.peek() == Some('\r') {
             self.parse_newlines();
-            self.skip_hspace();
+            let _ = self.skip_hspace();
         }
 
         let result = matches!(

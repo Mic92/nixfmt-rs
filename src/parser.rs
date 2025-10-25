@@ -1019,13 +1019,8 @@ impl Parser {
             match self.lexer.peek() {
                 Some('$') if self.lexer.peek_ahead(1) == Some('{') => {
                     // Interpolation in path
-                    let (interp, trailing_ws) = self.parse_string_interpolation()?;
+                    let interp = self.parse_string_interpolation()?;
                     parts.push(interp);
-                    if let Some(ws) = trailing_ws {
-                        if !ws.is_empty() {
-                            parts.push(StringPart::TextPart(ws));
-                        }
-                    }
                 }
                 Some(ch) if ch.is_alphanumeric() || "._-+".contains(ch) => {
                     // Path text (not / here, that's handled specially)
@@ -1173,13 +1168,8 @@ impl Parser {
                 }
                 Some('$') if self.lexer.peek_ahead(1) == Some('{') => {
                     // Interpolation
-                    let (interp, trailing_ws) = self.parse_string_interpolation()?;
+                    let interp = self.parse_string_interpolation()?;
                     parts.push(interp);
-                    if let Some(ws) = trailing_ws {
-                        if !ws.is_empty() {
-                            parts.push(StringPart::TextPart(ws));
-                        }
-                    }
                 }
                 _ => {
                     // Text part
@@ -1268,7 +1258,7 @@ impl Parser {
     }
 
     /// Parse string interpolation: ${expr}
-    fn parse_string_interpolation(&mut self) -> Result<(StringPart, Option<String>)> {
+    fn parse_string_interpolation(&mut self) -> Result<StringPart> {
         // Consume ${
         self.lexer.advance(); // $
         self.lexer.advance(); // {
@@ -1297,32 +1287,11 @@ impl Parser {
         // Now lexer.pos is right after }, and we can continue parsing string content
         // DON'T resync current - we'll continue with raw parsing
 
-        let mut back = self.lexer.pos;
-        while back > 0 {
-            let ch = self.lexer.input[back - 1];
-            if ch == ' ' || ch == '\t' {
-                back -= 1;
-            } else {
-                break;
-            }
-        }
-        let trailing_ws = if back < self.lexer.pos {
-            Some(
-                self.lexer.input[back..self.lexer.pos]
-                    .iter()
-                    .collect::<String>(),
-            )
-        } else {
-            None
-        };
-
-        Ok((
-            StringPart::Interpolation(Box::new(Whole {
-                value: expr,
-                trailing_trivia: Trivia::new(),
-            })),
-            trailing_ws,
-        ))
+        self.lexer.rewind_trivia();
+        Ok(StringPart::Interpolation(Box::new(Whole {
+            value: expr,
+            trailing_trivia: Trivia::new(),
+        })))
     }
 
     /// Parse indented string: ''...''
@@ -1392,13 +1361,8 @@ impl Parser {
                 }
                 Some('$') if self.lexer.peek_ahead(1) == Some('{') => {
                     // Interpolation
-                    let (interp, trailing_ws) = self.parse_string_interpolation()?;
+                    let interp = self.parse_string_interpolation()?;
                     parts.push(interp);
-                    if let Some(ws) = trailing_ws {
-                        if !ws.is_empty() {
-                            parts.push(StringPart::TextPart(ws));
-                        }
-                    }
                 }
                 Some('\n') | None => {
                     // End of line
