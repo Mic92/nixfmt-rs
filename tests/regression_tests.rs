@@ -116,3 +116,29 @@ fn test_sourceline_multiline_list() {
         "[\n  \"foo\"\n]",
     );
 }
+
+#[test]
+fn regression_comment_before_and_with_selectors() {
+    // Comments before && operators are dropped when expressions contain
+    // interpolation selectors like self.packages.${system}.isLinux
+    // The third && operator is missing its preTrivia comment
+    test_ast_format(
+        "comment_before_and_selectors",
+        r#"{
+  x =
+    lib.optionalAttrs
+      (
+        self.packages.${system}.isLinux
+        # comment 1
+        && self.packages.${system}.isPower64
+        # comment 2
+        && system != "armv6l-linux"
+        # comment 3
+        && system != "riscv64-linux"
+      )
+      {
+        tests = {};
+      };
+}"#,
+    );
+}

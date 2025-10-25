@@ -84,10 +84,19 @@ impl Lexer {
     /// Parse a lexeme (token with trivia annotations)
     /// This is the main entry point for the parser
     pub(crate) fn lexeme(&mut self) -> crate::error::Result<crate::types::Ann<Token>> {
-        // Take accumulated leading trivia
-        let leading_trivia = std::mem::take(&mut self.trivia_buffer);
+        // Take accumulated leading trivia from buffer
+        let mut leading_trivia = std::mem::take(&mut self.trivia_buffer);
 
-        // Parse the token - note that next_token() may consume leading trivia internally
+        // Check for newlines/trivia at current position (can happen after string parsing + rewind)
+        // Parse them NOW as leading trivia for THIS token, not for the next token
+        if matches!(self.peek(), Some('\n') | Some('\r') | Some('#') | Some('/')) {
+            let extra_trivia = self.parse_trivia();
+            leading_trivia.extend(convert_leading(&extra_trivia));
+            // Skip hspace after trivia
+            let _ = self.skip_hspace();
+        }
+
+        // Parse the token
         let token = self.next_token()?;
 
         // Record position AFTER next_token() has consumed any leading trivia
@@ -142,27 +151,14 @@ impl Lexer {
         crate::types::Pos(self.line)
     }
 
-    /// Parse next token
+    /// Parse next token (without trivia handling)
+    /// Trivia should ONLY be managed by lexeme(), not by this function.
+    /// This matches Haskell nixfmt's `rawSymbol` which parses tokens without trivia.
     pub(crate) fn next_token(&mut self) -> crate::error::Result<Token> {
         let _ = self.skip_hspace();
 
         if self.is_eof() {
             return Ok(Token::SOF); // Use SOF as EOF token
-        }
-
-        // Check for newlines/trivia that weren't parsed
-        // This can happen after string parsing
-        if matches!(self.peek(), Some('\n') | Some('\r') | Some('#') | Some('/')) {
-            // Force trivia parsing
-            let trivia = self.parse_trivia();
-            self.trivia_buffer.extend(convert_leading(&trivia));
-
-            // Skip hspace again
-            let _ = self.skip_hspace();
-
-            if self.is_eof() {
-                return Ok(Token::SOF);
-            }
         }
 
         let ch = self.peek().unwrap();
