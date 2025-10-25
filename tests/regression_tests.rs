@@ -111,10 +111,7 @@ fn regression_trailing_comment() {
 #[test]
 fn test_sourceline_multiline_list() {
     // Regression test: closing bracket should be on line 3, not line 2
-    test_ast_format(
-        "sourceline_multiline_list",
-        "[\n  \"foo\"\n]",
-    );
+    test_ast_format("sourceline_multiline_list", "[\n  \"foo\"\n]");
 }
 
 #[test]

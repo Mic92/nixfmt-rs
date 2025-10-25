@@ -759,7 +759,9 @@ impl Parser {
             // This matches nixfmt's behavior where `1 + 2 + 3` is right-assoc but `1 + 2 - 3` is left-assoc
             while self.is_binary_op()
                 && (self.get_precedence() > prec
-                    || (self.get_precedence() == prec && is_right_assoc && self.same_operator(&op_token.value)))
+                    || (self.get_precedence() == prec
+                        && is_right_assoc
+                        && self.same_operator(&op_token.value)))
             {
                 right = self.parse_binary_operation(right, self.get_precedence())?;
             }
@@ -782,19 +784,19 @@ impl Parser {
     fn get_precedence_for(&self, token: &Token) -> u8 {
         match token {
             // Highest precedence (tightest binding)
-            Token::TConcat => 14,                   // ++ (line 575 in nixfmt)
-            Token::TMul | Token::TDiv => 13,        // * / (lines 576-577)
-            Token::TPlus | Token::TMinus => 12,     // + - (lines 579-580)
+            Token::TConcat => 14,               // ++ (line 575 in nixfmt)
+            Token::TMul | Token::TDiv => 13,    // * / (lines 576-577)
+            Token::TPlus | Token::TMinus => 12, // + - (lines 579-580)
             // Note: Prefix TNot would be at precedence 11 (line 582) but it's handled separately
-            Token::TUpdate => 10,                   // // (line 583)
+            Token::TUpdate => 10, // // (line 583)
             Token::TLess | Token::TGreater | Token::TLessEqual | Token::TGreaterEqual => 9, // comparisons (lines 584-587)
-            Token::TEqual | Token::TUnequal => 8,   // == != (lines 589-590)
-            Token::TAnd => 7,                       // && (line 592)
-            Token::TOr => 6,                        // || (line 593)
-            Token::TImplies => 5,                   // -> (line 594)
-            Token::TPipeForward => 4,               // |> (line 595)
-            Token::TPipeBackward => 3,              // <| (line 596) - lowest!
-            _ => 0,                                 // Unknown/not a binary operator
+            Token::TEqual | Token::TUnequal => 8, // == != (lines 589-590)
+            Token::TAnd => 7,                     // && (line 592)
+            Token::TOr => 6,                      // || (line 593)
+            Token::TImplies => 5,                 // -> (line 594)
+            Token::TPipeForward => 4,             // |> (line 595)
+            Token::TPipeBackward => 3,            // <| (line 596) - lowest!
+            _ => 0,                               // Unknown/not a binary operator
         }
     }
 

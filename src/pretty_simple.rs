@@ -42,7 +42,7 @@ const STRING_QUOTE_COLOR: &str = "\x1b[0;97;1m";
 const STRING_CONTENT_COLOR: &str = "\x1b[0;94;1m";
 
 /// Trait for types that can be formatted as Haskell-style output
-pub trait PrettySimple : Debug {
+pub trait PrettySimple: Debug {
     fn format<W: Writer>(&self, w: &mut W);
 
     /// Check if this value is "simple" (can be formatted inline)
@@ -431,13 +431,13 @@ impl PrettySimple for Trivium {
         // BlockComment True ["doc"] → all arguments simple → renders inline
         // BlockComment True ["a","b","c"] → Vec with 3 elements NOT simple → renders multiline
         match self {
-            Trivium::EmptyLine() => true,  // Nullary constructor
-            Trivium::LineComment(_) => true,  // String arg is simple
+            Trivium::EmptyLine() => true,    // Nullary constructor
+            Trivium::LineComment(_) => true, // String arg is simple
             Trivium::BlockComment(_is_doc, lines) => {
                 // Simple if the Vec is simple (empty or single simple element)
                 lines.is_simple()
             }
-            Trivium::LanguageAnnotation(_) => true,  // String arg is simple
+            Trivium::LanguageAnnotation(_) => true, // String arg is simple
         }
     }
 
@@ -520,8 +520,8 @@ impl PrettySimple for StringPart {
         // However, for structural simplicity (Vec::is_simple), this creates a multi-element row,
         // so the Brackets itself is NOT simple. That's handled by Vec::is_simple logic.
         match self {
-            StringPart::TextPart(_) => true,  // Simple argument
-            StringPart::Interpolation(_) => false,  // Complex argument
+            StringPart::TextPart(_) => true,       // Simple argument
+            StringPart::Interpolation(_) => false, // Complex argument
         }
     }
 
