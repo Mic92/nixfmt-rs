@@ -802,6 +802,12 @@ impl Parser {
             items.push(Item::Item(binder));
         }
 
+        if matches!(self.current.value, Token::KIn | Token::TBraceClose)
+            && !self.current.pre_trivia.is_empty()
+        {
+            items.push(Item::Comments(std::mem::take(&mut self.current.pre_trivia)));
+        }
+
         Ok(Items(items))
     }
 
@@ -1547,6 +1553,10 @@ impl Parser {
             // Parse a term
             let term = self.parse_term()?;
             items.push(Item::Item(term));
+        }
+
+        if matches!(self.current.value, Token::TBrackClose) && !self.current.pre_trivia.is_empty() {
+            items.push(Item::Comments(std::mem::take(&mut self.current.pre_trivia)));
         }
 
         Ok(Items(items))

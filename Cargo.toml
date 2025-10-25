@@ -18,4 +18,3 @@ path = "src/lib.rs"
 [dependencies]
 
 [dev-dependencies]
-diff = "0.1"

@@ -1,5 +1,7 @@
 //! Common test helpers shared across test files
 
+mod diff;
+
 use nixfmt_rs::colored_writer::ColoredWriter;
 use nixfmt_rs::pretty_simple::PrettySimple;
 use std::process::Command;
@@ -45,14 +47,8 @@ pub fn test_ast_format(name: &str, input: &str) {
         eprintln!("{}", our_output);
         eprintln!("\n=== DIFF ===");
 
-        // Show diff
-        for diff in diff::lines(&expected, &our_output) {
-            match diff {
-                diff::Result::Left(l) => eprintln!("- {}", l),
-                diff::Result::Both(l, _) => eprintln!("  {}", l),
-                diff::Result::Right(r) => eprintln!("+ {}", r),
-            }
-        }
+        // Show colored diff
+        diff::print_colored_diff(&expected, &our_output);
 
         panic!("Output mismatch for test '{}'", name);
     }
