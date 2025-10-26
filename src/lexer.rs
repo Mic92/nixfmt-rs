@@ -926,26 +926,52 @@ fn convert_trailing(pts: &[ParseTrivium]) -> Option<TrailingComment> {
 }
 
 /// Convert leading trivia to Trivia
+/// Merges consecutive Newlines (matching Haskell's `some (preLexeme eol)` behavior)
+/// and converts to final Trivium entries in a single pass to avoid intermediate allocations.
 fn convert_leading(pts: &[ParseTrivium]) -> Trivia {
-    pts.iter()
-        .flat_map(|pt| match pt {
-            ParseTrivium::Newlines(1) => vec![],
-            ParseTrivium::Newlines(_) => vec![Trivium::EmptyLine()],
-            ParseTrivium::LineComment { text, .. } => vec![Trivium::LineComment(text.clone())],
-            ParseTrivium::BlockComment(_, lines) if lines.is_empty() => vec![],
-            ParseTrivium::BlockComment(false, lines) if lines.len() == 1 => {
-                // Convert single-line block comment to line comment
-                vec![Trivium::LineComment(format!(" {}", lines[0].trim()))]
+    // State: (result_vec, accumulated_newline_count)
+    let (mut result, pending_newlines) = pts.iter().fold(
+        (Vec::new(), 0),
+        |(mut acc, newline_count), pt| match pt {
+            ParseTrivium::Newlines(count) => {
+                // Accumulate consecutive newlines
+                (acc, newline_count + count)
             }
-            ParseTrivium::BlockComment(is_doc, lines) => {
-                vec![Trivium::BlockComment(*is_doc, lines.clone())]
+            other => {
+                // Flush pending newlines first (single newlines are discarded)
+                if newline_count > 1 {
+                    acc.push(Trivium::EmptyLine());
+                }
+
+                // Then convert and add the current non-newline trivium
+                match other {
+                    ParseTrivium::LineComment { text, .. } => {
+                        acc.push(Trivium::LineComment(text.clone()));
+                    }
+                    ParseTrivium::BlockComment(_, lines) if lines.is_empty() => {}
+                    ParseTrivium::BlockComment(false, lines) if lines.len() == 1 => {
+                        acc.push(Trivium::LineComment(format!(" {}", lines[0].trim())));
+                    }
+                    ParseTrivium::BlockComment(is_doc, lines) => {
+                        acc.push(Trivium::BlockComment(*is_doc, lines.clone()));
+                    }
+                    ParseTrivium::LanguageAnnotation(text) => {
+                        acc.push(Trivium::LanguageAnnotation(text.clone()));
+                    }
+                    ParseTrivium::Newlines(_) => unreachable!(),
+                }
+
+                (acc, 0)
             }
-            ParseTrivium::LanguageAnnotation(text) => {
-                vec![Trivium::LanguageAnnotation(text.clone())]
-            }
-        })
-        .collect::<Vec<_>>()
-        .into()
+        },
+    );
+
+    // Flush any trailing newlines
+    if pending_newlines > 1 {
+        result.push(Trivium::EmptyLine());
+    }
+
+    result.into()
 }
 
 /// Convert ParseTrivium list to (trailing_comment, leading_trivia)

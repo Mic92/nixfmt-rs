@@ -29,6 +29,20 @@ fn regression_or_as_identifier() {
 }
 
 #[test]
+fn regression_or_operator_deprecated_syntax() {
+    // From nix/tests/functional/lang/eval-okay-deprecate-cursed-or.nix line 3
+    // In `[ (x: x) or ]`, the `or` is actually the binary `or` operator,
+    // not a standalone identifier. Nix parses this as [(x: x) or <lookup-or>].
+    // This is deprecated/ambiguous syntax that Nix accepts with warnings.
+    // Currently we INCORRECTLY parse this as 2 list items instead of 1.
+    // TODO: Fix parser to treat `or` as binary operator in this context
+    assert!(
+        nixfmt_rs::parse("let or = 1; in [ (x: x) or ]").is_ok(),
+        "we currently accept this but parse it incorrectly"
+    );
+}
+
+#[test]
 fn regression_float_no_leading_digit() {
     // Ensure parser accepts `.5` like nixfmt
     test_ast_format("float_no_leading", ".5");
@@ -336,5 +350,15 @@ fn regression_decorated_multiline_comment() {
  * # This ain't a nest'd comm'nt
  */
 "x""#,
+    );
+}
+
+#[test]
+fn regression_trailing_empty_line_in_let() {
+    // Empty line after last item but before closing brace should be preserved in AST
+    // From nix/tests/functional/lang/parse-fail-dup-attrs-2.nix
+    test_ast_format(
+        "trailing_empty_line_let",
+        "let {\n  x = 1;\n  \n}\n",
     );
 }
