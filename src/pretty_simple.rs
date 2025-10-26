@@ -74,29 +74,57 @@ pub trait PrettySimple: Debug {
     }
 }
 
-/// Escape special characters in strings to match Haskell's show behavior
-/// This ensures control characters are displayed as escape sequences rather than
-/// being interpreted by the terminal.
+/// Escape non-printable characters in strings to match Haskell's isPrint behavior
+/// This ensures control characters and format characters are displayed as escape
+/// sequences rather than being interpreted by the terminal or being invisible.
+///
+/// Matches pretty-simple's escapeNonPrintable function which uses:
+/// - Haskell's isPrint to determine what to escape
+/// - \xH format (minimal hex, no leading zeros) for escaped characters
+/// - Allows newlines to pass through (they're handled separately)
 ///
 /// Note: The parser already keeps escape sequences like \n, \r, \t as literal
-/// backslash+char in the AST. We only need to escape actual control characters
-/// (like ESC 0x1b) that appear as literal bytes in the source.
+/// backslash+char in the AST. We only need to escape actual control/format characters
+/// (like ESC 0x1b or zero-width space U+200B) that appear as literal bytes.
 ///
 /// Returns a Cow to avoid allocation when no escaping is needed.
 fn escape_string(s: &str) -> std::borrow::Cow<'_, str> {
-    // Fast path: check if we need to escape anything (work with bytes for ASCII)
-    let bytes = s.as_bytes();
-    if !bytes.iter().any(|&b| b < 0x20 || b == 0x7f) {
+    // Helper: Check if a character is non-printable (matches Haskell's not isPrint)
+    fn is_non_printable(ch: char) -> bool {
+        let code = ch as u32;
+        // ASCII control characters except newline
+        if code < 0x20 && ch != '\n' {
+            return true;
+        }
+        // DEL and C1 control codes
+        if code == 0x7F || (0x80..=0x9F).contains(&code) {
+            return true;
+        }
+        // Unicode format characters and invisible separators (not considered printable by Haskell)
+        // U+200B..U+200F: zero-width spaces and formatting
+        // U+2028..U+202E: line/paragraph separators and text direction
+        // U+FEFF: zero-width no-break space (BOM)
+        // U+FFF9..U+FFFB: interlinear annotation
+        matches!(code,
+            0x200B..=0x200F |  // Zero-width spaces, LRM, RLM, etc.
+            0x2028..=0x202E |  // Line separator, paragraph separator, LRE, RLE, etc.
+            0xFEFF |           // Zero-width no-break space (BOM)
+            0xFFF9..=0xFFFB    // Interlinear annotation characters
+        )
+    }
+
+    // Fast path: check if we need to escape anything
+    if !s.chars().any(is_non_printable) {
         return std::borrow::Cow::Borrowed(s);
     }
 
-    // Slow path: build escaped string, working with chars to handle UTF-8 properly
+    // Slow path: build escaped string
     let mut result = String::with_capacity(s.len() + 10);
     for ch in s.chars() {
-        if ch.is_ascii_control() {
-            // ASCII control character - escape as \xH (minimal hex, no leading zeros)
+        if is_non_printable(ch) {
+            // Non-printable character - escape as \xH (minimal hex, no leading zeros)
             // Matches Haskell's showHex behavior
-            result.push_str(&format!("\\x{:x}", ch as u8));
+            result.push_str(&format!("\\x{:x}", ch as u32));
         } else {
             result.push(ch);
         }

@@ -294,3 +294,10 @@ fn regression_old_style_let() {
     // Minimal reproducer: let { body = 1; }
     test_ast_format("old_style_let", "let { body = 1; }");
 }
+
+#[test]
+fn regression_unicode_escape_in_string() {
+    // Zero-width space (U+200B) should be displayed as \x200b in AST output
+    // From nixpkgs/pkgs/by-name/li/libcaca/package.nix line 68
+    test_ast_format("unicode_escape", "\"famous \u{200B}AAlib library\"");
+}
