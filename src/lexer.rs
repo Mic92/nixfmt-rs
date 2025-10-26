@@ -243,15 +243,7 @@ impl Lexer {
                 } else if self.peek_ahead(1).is_some_and(|c| c.is_ascii_digit()) {
                     self.advance();
                     let mut num = String::from(".");
-
-                    while let Some(ch) = self.peek() {
-                        if ch.is_ascii_digit() {
-                            num.push(ch);
-                            self.advance();
-                        } else {
-                            break;
-                        }
-                    }
+                    num.push_str(&self.consume_digits());
 
                     if let Some(exp) = self.parse_exponent() {
                         num.push_str(&exp);
@@ -462,13 +454,8 @@ impl Lexer {
 
     /// Parse number (integer or float)
     fn parse_number(&mut self) -> crate::error::Result<Token> {
-        let mut num = String::new();
+        let mut num = self.consume_digits();
         let mut is_float = false;
-
-        // Parse digits
-        while self.peek().is_some_and(|ch| ch.is_ascii_digit()) {
-            num.push(self.advance().unwrap());
-        }
 
         // Check for decimal point
         if self.peek() == Some('.') {
@@ -480,11 +467,7 @@ impl Lexer {
                 is_float = true;
                 num.push('.');
                 self.advance();
-
-                // Parse fractional part
-                while self.peek().is_some_and(|ch| ch.is_ascii_digit()) {
-                    num.push(self.advance().unwrap());
-                }
+                num.push_str(&self.consume_digits());
             } else if next.is_none_or(|c| !c.is_ascii_digit()) && !num.is_empty() && num != "0" {
                 // Allow trailing '.' for numbers starting with non-zero digit (e.g., 1.)
                 is_float = true;
@@ -517,14 +500,21 @@ impl Lexer {
         }
 
         if self.peek().is_some_and(|c| c.is_ascii_digit()) {
-            while self.peek().is_some_and(|c| c.is_ascii_digit()) {
-                exponent.push(self.advance().unwrap());
-            }
+            exponent.push_str(&self.consume_digits());
             Some(exponent)
         } else {
             self.restore_state(saved_state);
             None
         }
+    }
+
+    /// Consume consecutive ASCII digits and return as String
+    fn consume_digits(&mut self) -> String {
+        let mut digits = String::new();
+        while self.peek().is_some_and(|ch| ch.is_ascii_digit()) {
+            digits.push(self.advance().unwrap());
+        }
+        digits
     }
 
     /// Peek at current character without consuming
