@@ -43,7 +43,18 @@ impl Parser {
     fn parse_expression(&mut self) -> Result<Expression> {
         // Match Haskell's order: try operation, then abstraction, then keywords
         match &self.current.value {
-            Token::KLet => self.parse_let(),
+            Token::KLet => {
+                // Check if this is old-style 'let { }' or modern 'let ... in ...'
+                // Old-style: let is followed by {
+                // Modern: let is followed by bindings
+                if self.lexer.peek() == Some('{') {
+                    // Old-style let { } - parse as operation/term
+                    self.parse_abstraction_or_operation()
+                } else {
+                    // Modern let ... in ...
+                    self.parse_let()
+                }
+            }
             Token::KIf => self.parse_if(),
             Token::KWith => self.parse_with(),
             Token::KAssert => self.parse_assert(),
@@ -1019,7 +1030,7 @@ impl Parser {
             Token::Integer(_) => self.parse_integer_term(),
             Token::Float(_) => self.parse_float_term(),
             Token::EnvPath(_) => self.parse_env_path_term(),
-            Token::TBraceOpen | Token::KRec => self.parse_set(),
+            Token::TBraceOpen | Token::KRec | Token::KLet => self.parse_set(),
             Token::TBrackOpen => self.parse_list(),
             Token::TParenOpen => self.parse_parenthesized(),
             Token::TDoubleQuote => self.parse_simple_string(),
@@ -1606,10 +1617,10 @@ impl Parser {
         Ok(Term::Token(token_ann))
     }
 
-    /// Parse attribute set: { ... } or rec { ... }
+    /// Parse attribute set: { ... } or rec { ... } or let { ... }
     fn parse_set(&mut self) -> Result<Term> {
-        // Check for 'rec' keyword
-        let rec_tok = if matches!(self.current.value, Token::KRec) {
+        // Check for 'rec' or 'let' keyword
+        let prefix_tok = if matches!(self.current.value, Token::KRec | Token::KLet) {
             let tok = self.take_current();
             self.advance()?;
             Some(tok)
@@ -1624,7 +1635,7 @@ impl Parser {
 
         let close_brace = self.expect_token_match(|t| matches!(t, Token::TBraceClose))?;
 
-        Ok(Term::Set(rec_tok, open_brace, bindings, close_brace))
+        Ok(Term::Set(prefix_tok, open_brace, bindings, close_brace))
     }
 
     /// Parse list: [ ... ]

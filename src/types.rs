@@ -172,7 +172,7 @@ pub enum Term {
     Path(Path),
     /// [ items ]
     List(Leaf, Items<Term>, Leaf),
-    /// { items } or rec { items }
+    /// { items } or rec { items } or let { items }
     Set(Option<Leaf>, Leaf, Items<Binder>, Leaf),
     /// term.selector1.selector2 or term.selector or term
     Selection(Box<Term>, Vec<Selector>, Option<(Leaf, Box<Term>)>),

@@ -288,3 +288,9 @@ fn regression_inline_comments_after_strings_and_paths() {
 ]"#,
     );
 }
+
+#[test]
+fn regression_old_style_let() {
+    // Minimal reproducer: let { body = 1; }
+    test_ast_format("old_style_let", "let { body = 1; }");
+}
