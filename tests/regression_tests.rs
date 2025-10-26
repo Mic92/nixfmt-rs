@@ -324,3 +324,17 @@ fn regression_unquoted_url() {
     // From nix/tests/functional/lang/parse-okay-regression-20041027.nix line 6
     test_ast_format("unquoted_url", "{ url = http://example.com/path; }");
 }
+
+#[test]
+fn regression_decorated_multiline_comment() {
+    // Decorated multiline comments should strip leading "* " from each line
+    // From nix/tests/functional/lang/eval-okay-comments.nix lines 42-45
+    test_ast_format(
+        "decorated_multiline_comment",
+        r#"/*
+ * Multiline, decorated comments
+ * # This ain't a nest'd comm'nt
+ */
+"x""#,
+    );
+}

@@ -794,12 +794,21 @@ impl Lexer {
 
     // Comment normalization functions (from Haskell Lexer.hs)
 
-    /// Split text into lines, normalize line endings
+    /// Split text into lines, normalize line endings, and drop trailing empty lines
+    /// This matches nixfmt's splitLines function which does `dropWhileEnd Text.null`
     fn split_lines(text: &str) -> Vec<String> {
-        text.replace("\r\n", "\n")
+        let mut lines: Vec<String> = text
+            .replace("\r\n", "\n")
             .lines()
             .map(|line| line.trim_end().to_string())
-            .collect()
+            .collect();
+
+        // Drop trailing empty lines (matches Haskell's dropWhileEnd Text.null)
+        while lines.last().map_or(false, |line| line.is_empty()) {
+            lines.pop();
+        }
+
+        lines
     }
 
     /// Remove aligned stars from block comments (Lexer.hs:110-118)
