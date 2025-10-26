@@ -482,16 +482,19 @@ impl Lexer {
     }
 
     /// Peek at current character without consuming
+    #[inline(always)]
     pub(crate) fn peek(&self) -> Option<char> {
         self.input.get(self.pos).copied()
     }
 
     /// Peek ahead n characters
+    #[inline(always)]
     pub(crate) fn peek_ahead(&self, n: usize) -> Option<char> {
         self.input.get(self.pos + n).copied()
     }
 
     /// Consume and return current character
+    #[inline(always)]
     pub(crate) fn advance(&mut self) -> Option<char> {
         let ch = self.peek()?;
         self.pos += 1;
@@ -505,18 +508,26 @@ impl Lexer {
     }
 
     /// Check if we're at end of input
+    #[inline(always)]
     fn is_eof(&self) -> bool {
         self.pos >= self.input.len()
     }
 
     /// Skip horizontal whitespace (spaces and tabs, but not newlines)
+    #[inline]
     fn skip_hspace(&mut self) -> usize {
-        let mut count = 0;
-        while matches!(self.peek(), Some(' ' | '\t')) {
-            self.advance();
-            count += 1;
+        let start_pos = self.pos;
+        // Direct array indexing is faster than peek/advance calls
+        while self.pos < self.input.len() {
+            match self.input[self.pos] {
+                ' ' | '\t' => {
+                    self.pos += 1;
+                    self.column += 1;
+                }
+                _ => break,
+            }
         }
-        count
+        self.pos - start_pos
     }
 
     /// Parse trivia (comments and whitespace)
