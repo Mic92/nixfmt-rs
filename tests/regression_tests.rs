@@ -383,3 +383,11 @@ fn regression_or_operator_with_application() {
     // From nix/tests/functional/lang/eval-okay-attrs5.nix line 20
     test_ast_format("or_operator_application", "(fold or [] [true false false])");
 }
+
+#[test]
+fn regression_chained_comparison_operators() {
+    // Comparison operators can be "chained" when they're actually operands to equality/inequality
+    // `2 > 1 == 1 < 2` should parse as `(2 > 1) == (1 < 2)` - comparing two boolean results
+    // From nix/tests/functional/lang/eval-okay-arithmetic.nix line 50
+    test_ast_format("chained_comparison", "2 > 1 == 1 < 2");
+}

@@ -797,17 +797,22 @@ impl Parser {
 
     /// Parse binary operation with precedence climbing
     fn parse_binary_operation(&mut self, mut left: Expression, min_prec: u8) -> Result<Expression> {
-        let mut last_was_comparison = false;
+        let mut last_comparison_prec: Option<u8> = None;
         while self.is_binary_op() && self.get_precedence() >= min_prec {
             let op_token = self.take_current();
             let is_comparison = Self::is_comparison_operator(&op_token.value);
-            if last_was_comparison && is_comparison {
+            let prec = self.get_precedence_for(&op_token.value);
+
+            // Check if we're chaining comparison operators at the same precedence level
+            // This prevents: 1 < 2 < 3 (both < at precedence 9)
+            // But allows: 1 < 2 == 2 > 3 (< and > at precedence 9, == at precedence 8)
+            if is_comparison && last_comparison_prec == Some(prec) {
                 return Err(ParseError::new(
                     op_token.source_line,
                     "comparison operators cannot be chained",
                 ));
             }
-            let prec = self.get_precedence_for(&op_token.value);
+
             let is_right_assoc = self.is_right_associative(&op_token.value);
             self.advance()?;
 
@@ -852,7 +857,8 @@ impl Parser {
                 Expression::Operation(Box::new(left), op_token, Box::new(right))
             };
 
-            last_was_comparison = is_comparison;
+            // Track the precedence of comparison operators to prevent chaining at the same level
+            last_comparison_prec = is_comparison.then_some(prec);
         }
 
         Ok(left)
