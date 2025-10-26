@@ -192,3 +192,16 @@ fn regression_ansi_escape_codes_in_strings() {
     let test_input = "\"\x1b[1;31mtest\x1b[0m\"";
     test_ast_format("ansi_escape_codes", test_input);
 }
+
+#[test]
+fn regression_dot_selector_on_newline() {
+    // Parser should accept dot selector on a newline after closing brace
+    // From nixpkgs/nixos/release.nix line 262-267
+    test_ast_format(
+        "dot_selector_newline",
+        r#"{
+  armv6l-linux = ./foo.nix;
+}
+.${system}"#,
+    );
+}

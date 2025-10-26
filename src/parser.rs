@@ -159,7 +159,8 @@ impl Parser {
                 } else {
                     // Empty set literal (possibly with comments)
                     let set_term = Term::Set(None, open_brace, Items(items), close_brace);
-                    self.continue_operation_from(Expression::Term(set_term))
+                    let term_with_selection = self.parse_postfix_selection(set_term)?;
+                    self.continue_operation_from(Expression::Term(term_with_selection))
                 }
             }
             Token::Identifier(_) => {
@@ -224,7 +225,8 @@ impl Parser {
                         let close_brace =
                             self.expect_token_match(|t| matches!(t, Token::TBraceClose))?;
                         let set_term = Term::Set(None, open_brace, bindings, close_brace);
-                        self.continue_operation_from(Expression::Term(set_term))
+                        let term_with_selection = self.parse_postfix_selection(set_term)?;
+                        self.continue_operation_from(Expression::Term(term_with_selection))
                     }
                 }
             }
@@ -254,7 +256,8 @@ impl Parser {
                 let bindings = self.parse_binders()?;
                 let close_brace = self.expect_token_match(|t| matches!(t, Token::TBraceClose))?;
                 let set_term = Term::Set(None, open_brace, bindings, close_brace);
-                self.continue_operation_from(Expression::Term(set_term))
+                let term_with_selection = self.parse_postfix_selection(set_term)?;
+                self.continue_operation_from(Expression::Term(term_with_selection))
             }
         }
     }
