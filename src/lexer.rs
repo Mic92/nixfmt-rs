@@ -930,41 +930,40 @@ fn convert_trailing(pts: &[ParseTrivium]) -> Option<TrailingComment> {
 /// and converts to final Trivium entries in a single pass to avoid intermediate allocations.
 fn convert_leading(pts: &[ParseTrivium]) -> Trivia {
     // State: (result_vec, accumulated_newline_count)
-    let (mut result, pending_newlines) = pts.iter().fold(
-        (Vec::new(), 0),
-        |(mut acc, newline_count), pt| match pt {
-            ParseTrivium::Newlines(count) => {
-                // Accumulate consecutive newlines
-                (acc, newline_count + count)
-            }
-            other => {
-                // Flush pending newlines first (single newlines are discarded)
-                if newline_count > 1 {
-                    acc.push(Trivium::EmptyLine());
+    let (mut result, pending_newlines) =
+        pts.iter()
+            .fold((Vec::new(), 0), |(mut acc, newline_count), pt| match pt {
+                ParseTrivium::Newlines(count) => {
+                    // Accumulate consecutive newlines
+                    (acc, newline_count + count)
                 }
+                other => {
+                    // Flush pending newlines first (single newlines are discarded)
+                    if newline_count > 1 {
+                        acc.push(Trivium::EmptyLine());
+                    }
 
-                // Then convert and add the current non-newline trivium
-                match other {
-                    ParseTrivium::LineComment { text, .. } => {
-                        acc.push(Trivium::LineComment(text.clone()));
+                    // Then convert and add the current non-newline trivium
+                    match other {
+                        ParseTrivium::LineComment { text, .. } => {
+                            acc.push(Trivium::LineComment(text.clone()));
+                        }
+                        ParseTrivium::BlockComment(_, lines) if lines.is_empty() => {}
+                        ParseTrivium::BlockComment(false, lines) if lines.len() == 1 => {
+                            acc.push(Trivium::LineComment(format!(" {}", lines[0].trim())));
+                        }
+                        ParseTrivium::BlockComment(is_doc, lines) => {
+                            acc.push(Trivium::BlockComment(*is_doc, lines.clone()));
+                        }
+                        ParseTrivium::LanguageAnnotation(text) => {
+                            acc.push(Trivium::LanguageAnnotation(text.clone()));
+                        }
+                        ParseTrivium::Newlines(_) => unreachable!(),
                     }
-                    ParseTrivium::BlockComment(_, lines) if lines.is_empty() => {}
-                    ParseTrivium::BlockComment(false, lines) if lines.len() == 1 => {
-                        acc.push(Trivium::LineComment(format!(" {}", lines[0].trim())));
-                    }
-                    ParseTrivium::BlockComment(is_doc, lines) => {
-                        acc.push(Trivium::BlockComment(*is_doc, lines.clone()));
-                    }
-                    ParseTrivium::LanguageAnnotation(text) => {
-                        acc.push(Trivium::LanguageAnnotation(text.clone()));
-                    }
-                    ParseTrivium::Newlines(_) => unreachable!(),
+
+                    (acc, 0)
                 }
-
-                (acc, 0)
-            }
-        },
-    );
+            });
 
     // Flush any trailing newlines
     if pending_newlines > 1 {
