@@ -156,6 +156,22 @@ impl Parser {
                         colon,
                         Box::new(body),
                     ))
+                } else if matches!(self.current.value, Token::TAt) {
+                    // Context parameter: { } @ param: body
+                    let at_tok = self.take_current();
+                    self.advance()?;
+                    let second_param = self.parse_full_parameter()?;
+                    let colon = self.expect_token_match(|t| matches!(t, Token::TColon))?;
+                    let body = self.parse_expression()?;
+                    Ok(Expression::Abstraction(
+                        Parameter::ContextParameter(
+                            Box::new(Parameter::SetParameter(open_brace, Vec::new(), close_brace)),
+                            at_tok,
+                            Box::new(second_param),
+                        ),
+                        colon,
+                        Box::new(body),
+                    ))
                 } else {
                     // Empty set literal (possibly with comments)
                     let set_term = Term::Set(None, open_brace, Items(items), close_brace);

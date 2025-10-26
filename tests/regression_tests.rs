@@ -205,3 +205,10 @@ fn regression_dot_selector_on_newline() {
 .${system}"#,
     );
 }
+
+#[test]
+fn regression_empty_set_context_parameter() {
+    // Context parameter with empty set: { }@args: body
+    // From nixpkgs/lib/generators.nix line 729
+    test_ast_format("empty_set_context_param", "{ }@args: args");
+}
