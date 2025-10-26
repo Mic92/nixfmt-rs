@@ -47,6 +47,12 @@ fn regression_attrset_interpolated_key() {
 }
 
 #[test]
+fn regression_context_pattern() {
+    // Minimal reproducer: {...}@args: args
+    test_ast_format("context_pattern", "{...}@args: args");
+}
+
+#[test]
 fn regression_let_string_key() {
     // Minimal reproducer: let "foo" = 1; in foo
     test_ast_format("let_string_key", r#"let "foo" = 1; in foo"#);

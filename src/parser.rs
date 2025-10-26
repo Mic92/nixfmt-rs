@@ -260,10 +260,26 @@ impl Parser {
                         colon,
                         Box::new(body),
                     ))
+                } else if matches!(self.current.value, Token::TAt) {
+                    // Context parameter: {...}@args
+                    let at_tok = self.take_current();
+                    self.advance()?;
+                    let second_param = self.parse_full_parameter()?;
+                    let colon = self.expect_token_match(|t| matches!(t, Token::TColon))?;
+                    let body = self.parse_expression()?;
+                    Ok(Expression::Abstraction(
+                        Parameter::ContextParameter(
+                            Box::new(Parameter::SetParameter(open_brace, attrs, close_brace)),
+                            at_tok,
+                            Box::new(second_param),
+                        ),
+                        colon,
+                        Box::new(body),
+                    ))
                 } else {
                     Err(ParseError::new(
                         close_brace.source_line,
-                        "{ ... } must be followed by :",
+                        "{ ... } must be followed by : or @",
                     ))
                 }
             }
