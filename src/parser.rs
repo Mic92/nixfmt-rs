@@ -6,9 +6,25 @@ use crate::error::{ParseError, Result};
 use crate::lexer::Lexer;
 use crate::types::*;
 
+/// Characters allowed in URI schemes (in addition to alphanumeric)
+/// Based on nixfmt's schemeChar: "-.+"
+const URI_SCHEME_SPECIAL_CHARS: &[char] = &['-', '.', '+'];
+
+/// Characters allowed in URIs (in addition to alphanumeric)
+/// Based on nixfmt's uriChar: "~!@$%&*-=_+:',./?"
+const URI_SPECIAL_CHARS: &[char] = &[
+    '~', '!', '@', '$', '%', '&', '*', '-', '=', '_', '+', ':', '\'', ',', '.', '/', '?',
+];
+
 pub(crate) struct Parser {
     lexer: Lexer,
     /// Current token
+    current: Ann<Token>,
+}
+
+/// Saved parser state for checkpointing
+struct ParserState {
+    lexer_state: crate::lexer::LexerState,
     current: Ann<Token>,
 }
 
@@ -91,13 +107,11 @@ impl Parser {
 
                 // Could be identifier parameter OR identifier term
                 // Parse identifier and check for : or @
-                let ident = self.take_current();
-                self.advance()?;
+                let ident = self.take_and_advance()?;
 
                 if matches!(self.current.value, Token::TColon) {
                     // It's a lambda: x: body
-                    let colon = self.take_current();
-                    self.advance()?;
+                    let colon = self.take_and_advance()?;
                     let body = self.parse_expression()?;
                     Ok(Expression::Abstraction(
                         Parameter::IDParameter(ident),
@@ -106,8 +120,7 @@ impl Parser {
                     ))
                 } else if matches!(self.current.value, Token::TAt) {
                     // Context parameter: x @ param: body
-                    let at_tok = self.take_current();
-                    self.advance()?;
+                    let at_tok = self.take_and_advance()?;
                     let second_param = self.parse_full_parameter()?;
 
                     // Check for colon - if not present, give helpful error
@@ -146,12 +159,10 @@ impl Parser {
 
     /// Parse { as either set parameter or set literal
     fn parse_set_parameter_or_literal(&mut self) -> Result<Expression> {
-        // Save complete lexer state before consuming {
-        let saved_state = self.lexer.save_state();
-        let saved_current = self.current.clone();
+        // Save state for potential backtracking
+        let saved_state = self.save_state();
 
-        let open_brace = self.take_current();
-        self.advance()?;
+        let open_brace = self.take_and_advance()?;
 
         // Look at next token to decide
         match &self.current.value {
@@ -172,8 +183,7 @@ impl Parser {
                 if matches!(self.current.value, Token::TColon) {
                     // Empty set parameter: {}: body
                     // Note: parameters can't have Comments items, so this should be empty
-                    let colon = self.take_current();
-                    self.advance()?;
+                    let colon = self.take_and_advance()?;
                     let body = self.parse_expression()?;
                     Ok(Expression::Abstraction(
                         Parameter::SetParameter(open_brace, Vec::new(), close_brace),
@@ -182,8 +192,7 @@ impl Parser {
                     ))
                 } else if matches!(self.current.value, Token::TAt) {
                     // Context parameter: { } @ param: body
-                    let at_tok = self.take_current();
-                    self.advance()?;
+                    let at_tok = self.take_and_advance()?;
                     let second_param = self.parse_full_parameter()?;
                     let colon = self.expect_token_match(|t| matches!(t, Token::TColon))?;
                     let body = self.parse_expression()?;
@@ -215,8 +224,7 @@ impl Parser {
                         // Check if followed by : or @
                         if matches!(self.current.value, Token::TColon) {
                             // Set parameter: { x, y }: body
-                            let colon = self.take_current();
-                            self.advance()?;
+                            let colon = self.take_and_advance()?;
                             let body = self.parse_expression()?;
                             Ok(Expression::Abstraction(
                                 Parameter::SetParameter(open_brace, attrs, close_brace),
@@ -225,8 +233,7 @@ impl Parser {
                             ))
                         } else if matches!(self.current.value, Token::TAt) {
                             // Context parameter: { x } @ param: body
-                            let at_tok = self.take_current();
-                            self.advance()?;
+                            let at_tok = self.take_and_advance()?;
                             let second_param = self.parse_full_parameter()?;
                             let colon = self.expect_token_match(|t| matches!(t, Token::TColon))?;
                             let body = self.parse_expression()?;
@@ -253,9 +260,8 @@ impl Parser {
                     }
                     Err(_) => {
                         // Failed to parse as parameters (saw = or .)
-                        // Restore complete state
-                        self.lexer.restore_state(saved_state);
-                        self.current = saved_current;
+                        // Restore state to try parsing as set literal
+                        self.restore_state(saved_state);
 
                         // Now parse as set literal
                         let open_brace = self.take_current();
@@ -276,8 +282,7 @@ impl Parser {
                 let close_brace = self.expect_token_match(|t| matches!(t, Token::TBraceClose))?;
 
                 if matches!(self.current.value, Token::TColon) {
-                    let colon = self.take_current();
-                    self.advance()?;
+                    let colon = self.take_and_advance()?;
                     let body = self.parse_expression()?;
                     Ok(Expression::Abstraction(
                         Parameter::SetParameter(open_brace, attrs, close_brace),
@@ -286,8 +291,7 @@ impl Parser {
                     ))
                 } else if matches!(self.current.value, Token::TAt) {
                     // Context parameter: {...}@args
-                    let at_tok = self.take_current();
-                    self.advance()?;
+                    let at_tok = self.take_and_advance()?;
                     let second_param = self.parse_full_parameter()?;
                     let colon = self.expect_token_match(|t| matches!(t, Token::TColon))?;
                     let body = self.parse_expression()?;
@@ -321,35 +325,24 @@ impl Parser {
     /// Continue parsing operation from a given left expression
     fn continue_operation_from(&mut self, expr: Expression) -> Result<Expression> {
         // Check for member check (?), binary operations, or application
-        if matches!(self.current.value, Token::TQuestion) {
+        let expr = if matches!(self.current.value, Token::TQuestion) {
             let question = self.take_current();
             self.advance()?;
             let selectors = self.parse_selector_path()?;
-            let expr = Expression::MemberCheck(Box::new(expr), question, selectors);
-
-            if self.is_binary_op() {
-                self.parse_binary_operation(expr, 0)
-            } else {
-                Ok(expr)
-            }
-        } else if self.is_binary_op() {
-            self.parse_binary_operation(expr, 0)
+            Expression::MemberCheck(Box::new(expr), question, selectors)
         } else if self.is_term_start() {
             // Application
             let mut app_expr = expr;
             while self.is_term_start() && !self.is_expression_end() {
-                let arg = self.parse_term_expr()?;
+                let arg = Expression::Term(self.parse_term()?);
                 app_expr = Expression::Application(Box::new(app_expr), Box::new(arg));
             }
-
-            if self.is_binary_op() {
-                self.parse_binary_operation(app_expr, 0)
-            } else {
-                Ok(app_expr)
-            }
+            app_expr
         } else {
-            Ok(expr)
-        }
+            expr
+        };
+
+        self.maybe_parse_binary_operation(expr)
     }
 
     /// Parse operation or lambda (needs lookahead for :)
@@ -360,8 +353,7 @@ impl Parser {
         // Check for @ (context parameter) - special case
         if matches!(self.current.value, Token::TAt) {
             // This is a context parameter pattern: param @ param
-            let at_tok = self.take_current();
-            self.advance()?;
+            let at_tok = self.take_and_advance()?;
 
             // Parse second part as a PARAMETER (not expression)
             let second_param = self.parse_full_parameter()?;
@@ -395,12 +387,9 @@ impl Parser {
             let colon = self.expect_token_match(|t| matches!(t, Token::TColon))?;
             let body = self.parse_expression()?;
             Ok(Expression::Abstraction(param, colon, Box::new(body)))
-        } else if self.is_binary_op() {
-            // It's a binary operation
-            self.parse_binary_operation(expr, 0)
         } else {
-            // Just return the expression
-            Ok(expr)
+            // Check for binary operation
+            self.maybe_parse_binary_operation(expr)
         }
     }
 
@@ -514,13 +503,11 @@ impl Parser {
             self.parse_set_or_context_parameter()
         } else if matches!(self.current.value, Token::Identifier(_)) {
             // Could be identifier or context parameter (id @ pattern)
-            let ident = self.take_current();
-            self.advance()?;
+            let ident = self.take_and_advance()?;
 
             if matches!(self.current.value, Token::TAt) {
                 // Context parameter: id @ pattern
-                let at_tok = self.take_current();
-                self.advance()?;
+                let at_tok = self.take_and_advance()?;
                 let second = self.parse_full_parameter()?;
                 Ok(Parameter::ContextParameter(
                     Box::new(Parameter::IDParameter(ident)),
@@ -551,8 +538,7 @@ impl Parser {
 
         // Check for @ (context parameter)
         if matches!(self.current.value, Token::TAt) {
-            let at_tok = self.take_current();
-            self.advance()?;
+            let at_tok = self.take_and_advance()?;
             let second = self.parse_full_parameter()?;
             Ok(Parameter::ContextParameter(
                 Box::new(set_param),
@@ -572,8 +558,7 @@ impl Parser {
         while !matches!(self.current.value, Token::TBraceClose | Token::SOF) {
             if matches!(self.current.value, Token::TEllipsis) {
                 // Ellipsis
-                let dots = self.take_current();
-                self.advance()?;
+                let dots = self.take_and_advance()?;
                 attrs.push(ParamAttr::ParamEllipsis(dots));
 
                 // Optional comma after ellipsis
@@ -582,8 +567,7 @@ impl Parser {
                 }
                 break; // Ellipsis must be last
             } else if matches!(self.current.value, Token::Identifier(_)) {
-                let name = self.take_current();
-                self.advance()?;
+                let name = self.take_and_advance()?;
 
                 // Check what follows the identifier
                 if matches!(self.current.value, Token::TAssign | Token::TDot) {
@@ -596,8 +580,7 @@ impl Parser {
 
                 // Check for ? default
                 let default = if matches!(self.current.value, Token::TQuestion) {
-                    let q = self.take_current();
-                    self.advance()?;
+                    let q = self.take_and_advance()?;
                     let def_expr = self.parse_expression()?;
                     Some((q, def_expr))
                 } else {
@@ -606,9 +589,7 @@ impl Parser {
 
                 // Check for comma
                 let comma = if matches!(self.current.value, Token::TComma) {
-                    let c = self.take_current();
-                    self.advance()?;
-                    Some(c)
+                    Some(self.take_and_advance()?)
                 } else {
                     None
                 };
@@ -689,15 +670,13 @@ impl Parser {
         // But we need to parse ? (postfix) before applying ! or - (prefix) due to precedence
         match &self.current.value {
             Token::TMinus => {
-                let op = self.take_current();
-                self.advance()?;
+                let op = self.take_and_advance()?;
                 // Recursively parse to handle chained unary operators
                 let inner = self.parse_application()?;
                 return Ok(Expression::Negation(op, Box::new(inner)));
             }
             Token::TNot => {
-                let op = self.take_current();
-                self.advance()?;
+                let op = self.take_and_advance()?;
                 // Recursively parse to handle chained unary operators
                 let inner = self.parse_application()?;
                 return Ok(Expression::Inversion(op, Box::new(inner)));
@@ -706,12 +685,12 @@ impl Parser {
         }
 
         // Parse first term
-        let mut expr = self.parse_term_expr()?;
+        let mut expr = Expression::Term(self.parse_term()?);
 
         // Keep applying while we see more TERMS (not unary ops)
         // IMPORTANT: Don't treat binary operators as term starts even if they could start paths
         while self.is_term_start() && !self.is_binary_op() && !self.is_expression_end() {
-            let arg = self.parse_term_expr()?;
+            let arg = Expression::Term(self.parse_term()?);
             expr = Expression::Application(Box::new(expr), Box::new(arg));
         }
 
@@ -719,19 +698,12 @@ impl Parser {
         // This is the KEY fix: we check for ? here, AFTER application but within the recursive call
         // This ensures: !a ? b parses as !(a ? b), not (!a) ? b
         if matches!(self.current.value, Token::TQuestion) {
-            let question = self.take_current();
-            self.advance()?;
+            let question = self.take_and_advance()?;
             let selectors = self.parse_selector_path()?;
             expr = Expression::MemberCheck(Box::new(expr), question, selectors);
         }
 
         Ok(expr)
-    }
-
-    /// Parse term as expression
-    fn parse_term_expr(&mut self) -> Result<Expression> {
-        let term = self.parse_term()?;
-        Ok(Expression::Term(term))
     }
 
     /// Check if current token starts a term
@@ -917,18 +889,14 @@ impl Parser {
             Token::KIn | Token::TBraceClose | Token::SOF
         ) {
             // Check for comments before binding
-            if !self.current.pre_trivia.is_empty() {
-                items.push(Item::Comments(std::mem::take(&mut self.current.pre_trivia)));
-            }
+            self.collect_trivia_as_comments(&mut items);
 
             let binder = self.parse_binder()?;
             items.push(Item::Item(binder));
         }
 
-        if matches!(self.current.value, Token::KIn | Token::TBraceClose)
-            && !self.current.pre_trivia.is_empty()
-        {
-            items.push(Item::Comments(std::mem::take(&mut self.current.pre_trivia)));
+        if matches!(self.current.value, Token::KIn | Token::TBraceClose) {
+            self.collect_trivia_as_comments(&mut items);
         }
 
         Ok(Items(items))
@@ -1221,32 +1189,13 @@ impl Parser {
     /// Check if character is valid in URI scheme
     /// Based on nixfmt's schemeChar: "-.+" + alphanumeric
     fn is_scheme_char(c: char) -> bool {
-        c.is_alphanumeric() || matches!(c, '-' | '.' | '+')
+        c.is_alphanumeric() || URI_SCHEME_SPECIAL_CHARS.contains(&c)
     }
 
     /// Check if character is valid in URI
     /// Based on nixfmt's uriChar: "~!@$%&*-=_+:',./?" + alphanumeric
     fn is_uri_char(c: char) -> bool {
-        c.is_alphanumeric()
-            || matches!(
-                c,
-                '~' | '!'
-                    | '@'
-                    | '$'
-                    | '%'
-                    | '&'
-                    | '*'
-                    | '-'
-                    | '='
-                    | '_'
-                    | '+'
-                    | ':'
-                    | '\''
-                    | ','
-                    | '.'
-                    | '/'
-                    | '?'
-            )
+        c.is_alphanumeric() || URI_SPECIAL_CHARS.contains(&c)
     }
 
     /// Check if current position starts a URI
@@ -1348,8 +1297,7 @@ impl Parser {
 
         // Parse .attr chains
         while matches!(self.current.value, Token::TDot) {
-            let dot_token = self.current.clone();
-            let saved_state = self.lexer.save_state();
+            let saved_state = self.save_state();
 
             self.advance()?;
             let is_selector_start = matches!(
@@ -1358,10 +1306,11 @@ impl Parser {
             );
 
             if !is_selector_start {
-                self.lexer.restore_state(saved_state);
-                self.current = dot_token;
+                self.restore_state(saved_state);
                 break;
             }
+
+            let dot_token = saved_state.current;
 
             let simple_sel = self.parse_simple_selector()?;
             selectors.push(Selector {
@@ -1378,8 +1327,7 @@ impl Parser {
         // but simple variable lookups either succeed or error - there's no "not found" case.
         let or_default = if self.is_or_token() {
             // Save state in case we need to backtrack
-            let saved_state = self.lexer.save_state();
-            let saved_current = self.current.clone();
+            let saved_state = self.save_state();
 
             let mut or_tok = self.take_current();
             if matches!(
@@ -1396,9 +1344,8 @@ impl Parser {
                 let default_term = self.parse_term()?;
                 Some((or_tok, Box::new(default_term)))
             } else {
-                // Backtrack: restore lexer state and current token
-                self.lexer.restore_state(saved_state);
-                self.current = saved_current;
+                // Backtrack: restore parser state
+                self.restore_state(saved_state);
                 None
             }
         } else {
@@ -1788,17 +1735,15 @@ impl Parser {
 
         while !matches!(self.current.value, Token::TBrackClose | Token::SOF) {
             // Check for comments before item
-            if !self.current.pre_trivia.is_empty() {
-                items.push(Item::Comments(std::mem::take(&mut self.current.pre_trivia)));
-            }
+            self.collect_trivia_as_comments(&mut items);
 
             // Parse a term
             let term = self.parse_term()?;
             items.push(Item::Item(term));
         }
 
-        if matches!(self.current.value, Token::TBrackClose) && !self.current.pre_trivia.is_empty() {
-            items.push(Item::Comments(std::mem::take(&mut self.current.pre_trivia)));
+        if matches!(self.current.value, Token::TBrackClose) {
+            self.collect_trivia_as_comments(&mut items);
         }
 
         Ok(Items(items))
@@ -1853,6 +1798,43 @@ impl Parser {
             trail_comment: None,
         };
         std::mem::replace(&mut self.current, dummy)
+    }
+
+    /// Take current token and advance to next (common pattern)
+    fn take_and_advance(&mut self) -> Result<Ann<Token>> {
+        let token = self.take_current();
+        self.advance()?;
+        Ok(token)
+    }
+
+    /// Collect pre_trivia as Comments item if not empty (common pattern)
+    fn collect_trivia_as_comments<T>(&mut self, items: &mut Vec<Item<T>>) {
+        if !self.current.pre_trivia.is_empty() {
+            items.push(Item::Comments(std::mem::take(&mut self.current.pre_trivia)));
+        }
+    }
+
+    /// Save current parser state for potential backtracking
+    fn save_state(&self) -> ParserState {
+        ParserState {
+            lexer_state: self.lexer.save_state(),
+            current: self.current.clone(),
+        }
+    }
+
+    /// Restore parser state from a checkpoint
+    fn restore_state(&mut self, state: ParserState) {
+        self.lexer.restore_state(state.lexer_state);
+        self.current = state.current;
+    }
+
+    /// Parse binary operation if present, otherwise return expression as-is
+    fn maybe_parse_binary_operation(&mut self, expr: Expression) -> Result<Expression> {
+        if self.is_binary_op() {
+            self.parse_binary_operation(expr, 0)
+        } else {
+            Ok(expr)
+        }
     }
 
     /// Expect specific token, advance if matches
@@ -1915,10 +1897,7 @@ impl Parser {
     /// Check if the current token represents the `or` keyword (identifier or actual keyword)
     fn is_or_token(&self) -> bool {
         matches!(self.current.value, Token::KOr)
-            || matches!(
-                &self.current.value,
-                Token::Identifier(name) if name == "or"
-            )
+            || matches!(&self.current.value, Token::Identifier(name) if name == "or")
     }
 
     fn is_comparison_operator(token: &Token) -> bool {
@@ -2004,23 +1983,17 @@ fn is_spaces(text: &str) -> bool {
 }
 
 fn is_empty_line(line: &[StringPart]) -> bool {
-    match line {
-        [] => true,
-        [StringPart::TextPart(text)] => is_spaces(text),
-        _ => false,
-    }
+    line.is_empty() || matches!(line, [StringPart::TextPart(text)] if is_spaces(text))
 }
 
 fn fix_first_line(mut lines: Vec<Vec<StringPart>>) -> Vec<Vec<StringPart>> {
-    if lines.is_empty() {
-        return lines;
-    }
-
-    let first = normalize_line(lines[0].clone());
-    if is_empty_line(&first) && lines.len() > 1 {
-        lines.remove(0);
-    } else {
-        lines[0] = first;
+    if let Some(first_line) = lines.first().cloned() {
+        let first = normalize_line(first_line);
+        if is_empty_line(&first) && lines.len() > 1 {
+            lines.remove(0);
+        } else {
+            lines[0] = first;
+        }
     }
     lines
 }
