@@ -437,17 +437,20 @@ impl Lexer {
 
         let mut path = String::new();
         while let Some(ch) = self.peek() {
-            if ch == '>' {
-                self.advance(); // consume '>'
-                return Ok(Token::EnvPath(path));
-            } else if ch.is_alphanumeric() || ch == '_' || ch == '-' || ch == '/' || ch == '.' {
-                path.push(ch);
-                self.advance();
-            } else {
-                return Err(crate::error::ParseError::new(
-                    self.current_pos(),
-                    "invalid character in path",
-                ));
+            match ch {
+                '>' => {
+                    self.advance();
+                    return Ok(Token::EnvPath(path));
+                }
+                _ if ch.is_alphanumeric() || matches!(ch, '_' | '-' | '/' | '.') => {
+                    path.push(self.advance().unwrap());
+                }
+                _ => {
+                    return Err(crate::error::ParseError::new(
+                        self.current_pos(),
+                        "invalid character in path",
+                    ))
+                }
             }
         }
 
@@ -463,13 +466,8 @@ impl Lexer {
         let mut is_float = false;
 
         // Parse digits
-        while let Some(ch) = self.peek() {
-            if ch.is_ascii_digit() {
-                num.push(ch);
-                self.advance();
-            } else {
-                break;
-            }
+        while self.peek().is_some_and(|ch| ch.is_ascii_digit()) {
+            num.push(self.advance().unwrap());
         }
 
         // Check for decimal point
@@ -484,13 +482,8 @@ impl Lexer {
                 self.advance();
 
                 // Parse fractional part
-                while let Some(ch) = self.peek() {
-                    if ch.is_ascii_digit() {
-                        num.push(ch);
-                        self.advance();
-                    } else {
-                        break;
-                    }
+                while self.peek().is_some_and(|ch| ch.is_ascii_digit()) {
+                    num.push(self.advance().unwrap());
                 }
             } else if next.is_none_or(|c| !c.is_ascii_digit()) && !num.is_empty() && num != "0" {
                 // Allow trailing '.' for numbers starting with non-zero digit (e.g., 1.)
@@ -511,32 +504,26 @@ impl Lexer {
     }
 
     fn parse_exponent(&mut self) -> Option<String> {
-        match self.peek() {
-            Some('e') | Some('E') => {
-                let saved_state = self.save_state();
-                let mut exponent = String::new();
+        if !matches!(self.peek(), Some('e' | 'E')) {
+            return None;
+        }
+
+        let saved_state = self.save_state();
+        let mut exponent = String::new();
+        exponent.push(self.advance().unwrap());
+
+        if matches!(self.peek(), Some('+' | '-')) {
+            exponent.push(self.advance().unwrap());
+        }
+
+        if self.peek().is_some_and(|c| c.is_ascii_digit()) {
+            while self.peek().is_some_and(|c| c.is_ascii_digit()) {
                 exponent.push(self.advance().unwrap());
-
-                if matches!(self.peek(), Some('+') | Some('-')) {
-                    exponent.push(self.advance().unwrap());
-                }
-
-                if self.peek().is_some_and(|c| c.is_ascii_digit()) {
-                    while let Some(ch) = self.peek() {
-                        if ch.is_ascii_digit() {
-                            exponent.push(ch);
-                            self.advance();
-                        } else {
-                            break;
-                        }
-                    }
-                    Some(exponent)
-                } else {
-                    self.restore_state(saved_state);
-                    None
-                }
             }
-            _ => None,
+            Some(exponent)
+        } else {
+            self.restore_state(saved_state);
+            None
         }
     }
 
@@ -571,13 +558,9 @@ impl Lexer {
     /// Skip horizontal whitespace (spaces and tabs, but not newlines)
     fn skip_hspace(&mut self) -> usize {
         let mut count = 0;
-        while let Some(ch) = self.peek() {
-            if ch == ' ' || ch == '\t' {
-                self.advance();
-                count += 1;
-            } else {
-                break;
-            }
+        while matches!(self.peek(), Some(' ' | '\t')) {
+            self.advance();
+            count += 1;
         }
         count
     }
@@ -612,17 +595,13 @@ impl Lexer {
                 }
                 Some('/') if self.peek_ahead(1) == Some('*') => {
                     // Try language annotation first, fall back to block comment
-                    let saved_pos = self.pos;
-                    let saved_line = self.line;
-                    let saved_column = self.column;
+                    let saved_state = self.save_state();
 
                     if let Some(lang_annot) = self.try_parse_language_annotation() {
                         trivia.push(lang_annot);
                     } else {
                         // Restore position and parse as block comment
-                        self.pos = saved_pos;
-                        self.line = saved_line;
-                        self.column = saved_column;
+                        self.restore_state(saved_state);
                         trivia.push(self.parse_block_comment());
                     }
                 }
@@ -657,20 +636,14 @@ impl Lexer {
     /// Also clears the trivia buffer since rewound trivia should not be attached to next token
     pub(crate) fn rewind_trivia(&mut self) {
         // Rewind to the position before parse_trivia() was called
-        if let (Some(pos), Some(line), Some(column)) = (
-            self.trivia_start_pos,
-            self.trivia_start_line,
-            self.trivia_start_column,
-        ) {
+        if let Some(pos) = self.trivia_start_pos {
             self.pos = pos;
-            self.line = line;
-            self.column = column;
+            self.line = self.trivia_start_line.unwrap();
+            self.column = self.trivia_start_column.unwrap();
         }
 
         self.recent_hspace = 0;
         self.recent_newlines = 0;
-
-        // Clear trivia buffer since rewound trivia should not be attached to next token
         self.trivia_buffer.clear();
     }
 
@@ -681,17 +654,16 @@ impl Lexer {
 
         let mut text = String::new();
         while let Some(ch) = self.peek() {
-            if ch == '\n' || ch == '\r' {
+            if matches!(ch, '\n' | '\r') {
                 break;
             }
-            text.push(ch);
-            self.advance();
+            text.push(self.advance().unwrap());
         }
 
-        // Strip trailing whitespace
-        let text = text.trim_end().to_string();
-
-        ParseTrivium::LineComment { text, col }
+        ParseTrivium::LineComment {
+            text: text.trim_end().to_string(),
+            col,
+        }
     }
 
     /// Parse block comment /* ... */
@@ -701,23 +673,19 @@ impl Lexer {
         self.advance(); // consume '*'
 
         // Check for doc comment /**
-        let is_doc = if self.peek() == Some('*') && self.peek_ahead(1) != Some('/') {
+        let is_doc = self.peek() == Some('*') && self.peek_ahead(1) != Some('/');
+        if is_doc {
             self.advance();
-            true
-        } else {
-            false
-        };
+        }
 
         let mut chars = String::new();
         while !self.is_eof() {
-            if self.peek() == Some('*') && self.peek_ahead(1) == Some('/') {
+            if matches!((self.peek(), self.peek_ahead(1)), (Some('*'), Some('/'))) {
                 self.advance(); // consume '*'
                 self.advance(); // consume '/'
                 break;
             }
-            if let Some(ch) = self.advance() {
-                chars.push(ch);
-            }
+            chars.push(self.advance().unwrap());
         }
 
         // Normalize the comment according to Haskell logic
@@ -734,9 +702,7 @@ impl Lexer {
 
     /// Try to parse a language annotation like /* lua */
     fn try_parse_language_annotation(&mut self) -> Option<ParseTrivium> {
-        let start_pos = self.pos;
-        let start_line = self.line;
-        let start_col = self.column;
+        let saved_state = self.save_state();
 
         // Parse as block comment
         let pt = self.parse_block_comment();
@@ -757,9 +723,7 @@ impl Lexer {
         }
 
         // Not a language annotation, restore state
-        self.pos = start_pos;
-        self.line = start_line;
-        self.column = start_col;
+        self.restore_state(saved_state);
         None
     }
 
@@ -773,14 +737,12 @@ impl Lexer {
 
     /// Check if next non-whitespace token is " or ''
     fn is_next_string_delimiter(&mut self) -> bool {
-        let saved_pos = self.pos;
-        let saved_line = self.line;
-        let saved_column = self.column;
+        let saved_state = self.save_state();
 
         let _ = self.skip_hspace();
 
         // Optionally consume one newline
-        if self.peek() == Some('\n') || self.peek() == Some('\r') {
+        if matches!(self.peek(), Some('\n') | Some('\r')) {
             self.parse_newlines();
             let _ = self.skip_hspace();
         }
@@ -790,11 +752,7 @@ impl Lexer {
             (Some('"'), _) | (Some('\''), Some('\''))
         );
 
-        // Restore position
-        self.pos = saved_pos;
-        self.line = saved_line;
-        self.column = saved_column;
-
+        self.restore_state(saved_state);
         result
     }
 
@@ -810,7 +768,7 @@ impl Lexer {
             .collect();
 
         // Drop trailing empty lines (matches Haskell's dropWhileEnd Text.null)
-        while lines.last().map_or(false, |line| line.is_empty()) {
+        while lines.last().is_some_and(|line| line.is_empty()) {
             lines.pop();
         }
 
@@ -875,12 +833,9 @@ impl Lexer {
     }
 
     fn strip_indentation(n: usize, text: &str) -> String {
-        let prefix = " ".repeat(n);
-        if let Some(stripped) = text.strip_prefix(&prefix) {
-            stripped.to_string()
-        } else {
-            text.trim_start().to_string()
-        }
+        text.strip_prefix(&" ".repeat(n))
+            .unwrap_or_else(|| text.trim_start())
+            .to_string()
     }
 
     fn drop_while_empty_start(lines: Vec<String>) -> Vec<String> {
