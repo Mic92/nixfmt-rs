@@ -375,3 +375,11 @@ fn regression_crlf_line_endings() {
         result.err()
     );
 }
+
+#[test]
+fn regression_or_operator_with_application() {
+    // The `or` operator in Nix is binary and has lower precedence than function application
+    // `fold or []` should parse as "fold or []" (using the or operator), not as "fold(or)([])"
+    // From nix/tests/functional/lang/eval-okay-attrs5.nix line 20
+    test_ast_format("or_operator_application", "(fold or [] [true false false])");
+}

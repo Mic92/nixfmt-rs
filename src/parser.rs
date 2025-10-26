@@ -1364,8 +1364,17 @@ impl Parser {
             });
         }
 
-        // Check for 'or' default (only valid if we have at least one selector)
-        let or_default = if !selectors.is_empty() && self.is_or_token() {
+        // Check for 'or' default
+        // The 'or' operator is syntactically allowed on any term,
+        // but semantically only makes sense with selectors (e.g., `foo.bar or default`).
+        // When there are no selectors, nixfmt parses and then discards the 'or' clause.
+        // This makes sense: `fold or []` means "lookup fold, use [] if not found",
+        // but simple variable lookups either succeed or error - there's no "not found" case.
+        let or_default = if self.is_or_token() {
+            // Save state in case we need to backtrack
+            let saved_state = self.lexer.save_state();
+            let saved_current = self.current.clone();
+
             let mut or_tok = self.take_current();
             if matches!(
                 &or_tok.value,
@@ -1374,12 +1383,24 @@ impl Parser {
                 or_tok.value = Token::KOr;
             }
             self.advance()?;
-            let default_term = self.parse_term()?;
-            Some((or_tok, Box::new(default_term)))
+
+            // Check if the next token can start a term (the default value)
+            // If not, backtrack and treat 'or' as an identifier
+            if self.is_term_start() {
+                let default_term = self.parse_term()?;
+                Some((or_tok, Box::new(default_term)))
+            } else {
+                // Backtrack: restore lexer state and current token
+                self.lexer.restore_state(saved_state);
+                self.current = saved_current;
+                None
+            }
         } else {
             None
         };
 
+        // Return Selection only if we have selectors
+        // If there are no selectors, discard any 'or' default (matching nixfmt behavior)
         if !selectors.is_empty() {
             Ok(Term::Selection(Box::new(base_term), selectors, or_default))
         } else {
