@@ -18,3 +18,8 @@ path = "src/lib.rs"
 [dependencies]
 
 [dev-dependencies]
+criterion = "0.5"
+
+[[bench]]
+name = "parser_benchmark"
+harness = false
