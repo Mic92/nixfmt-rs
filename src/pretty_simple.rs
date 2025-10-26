@@ -74,12 +74,43 @@ pub trait PrettySimple: Debug {
     }
 }
 
+/// Escape special characters in strings to match Haskell's show behavior
+/// This ensures control characters are displayed as escape sequences rather than
+/// being interpreted by the terminal.
+///
+/// Note: The parser already keeps escape sequences like \n, \r, \t as literal
+/// backslash+char in the AST. We only need to escape actual control characters
+/// (like ESC 0x1b) that appear as literal bytes in the source.
+///
+/// Returns a Cow to avoid allocation when no escaping is needed.
+fn escape_string(s: &str) -> std::borrow::Cow<'_, str> {
+    // Fast path: check if we need to escape anything (work with bytes for ASCII)
+    let bytes = s.as_bytes();
+    if !bytes.iter().any(|&b| b < 0x20 || b == 0x7f) {
+        return std::borrow::Cow::Borrowed(s);
+    }
+
+    // Slow path: build escaped string, working with chars to handle UTF-8 properly
+    let mut result = String::with_capacity(s.len() + 10);
+    for ch in s.chars() {
+        if ch.is_ascii_control() {
+            // ASCII control character - escape as \xHH
+            result.push_str(&format!("\\x{:02x}", ch as u8));
+        } else {
+            result.push(ch);
+        }
+    }
+    std::borrow::Cow::Owned(result)
+}
+
 /// PrettySimple for &str - quoted string literals
 /// Based on pretty-simple's StringLit
 impl PrettySimple for &str {
     fn format<W: Writer>(&self, w: &mut W) {
         w.write_colored("\"", STRING_QUOTE_COLOR);
-        w.write_colored(self, STRING_CONTENT_COLOR);
+        // Escape special characters to match Haskell's show behavior
+        let escaped = escape_string(self);
+        w.write_colored(&escaped, STRING_CONTENT_COLOR);
         w.write_colored("\"", STRING_QUOTE_COLOR);
     }
 

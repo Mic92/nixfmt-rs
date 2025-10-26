@@ -183,3 +183,12 @@ fn regression_path_trailing_slash_current() {
         "expected path with trailing slash to be rejected"
     );
 }
+
+#[test]
+fn regression_ansi_escape_codes_in_strings() {
+    // Our parser strips ANSI escape codes (literal ESC characters) from strings
+    // but nixfmt preserves them. The literal ESC character is 0x1b.
+    // We create a test string with a real escape character followed by "[1;31m"
+    let test_input = "\"\x1b[1;31mtest\x1b[0m\"";
+    test_ast_format("ansi_escape_codes", test_input);
+}
