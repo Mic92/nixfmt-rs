@@ -205,15 +205,7 @@ impl Lexer {
                 self.advance();
                 Ok(Token::TParenClose)
             }
-            '=' => {
-                self.advance();
-                if self.peek() == Some('=') {
-                    self.advance();
-                    Ok(Token::TEqual)
-                } else {
-                    Ok(Token::TAssign)
-                }
-            }
+            '=' => Ok(self.try_two_char('=', Token::TEqual, Token::TAssign)),
             '@' => {
                 self.advance();
                 Ok(Token::TAt)
@@ -255,46 +247,14 @@ impl Lexer {
                     Ok(Token::TDot)
                 }
             }
-            '+' => {
-                self.advance();
-                if self.peek() == Some('+') {
-                    self.advance();
-                    Ok(Token::TConcat)
-                } else {
-                    Ok(Token::TPlus)
-                }
-            }
-            '-' => {
-                self.advance();
-                if self.peek() == Some('>') {
-                    self.advance();
-                    Ok(Token::TImplies)
-                } else {
-                    Ok(Token::TMinus)
-                }
-            }
+            '+' => Ok(self.try_two_char('+', Token::TConcat, Token::TPlus)),
+            '-' => Ok(self.try_two_char('>', Token::TImplies, Token::TMinus)),
             '*' => {
                 self.advance();
                 Ok(Token::TMul)
             }
-            '/' => {
-                self.advance();
-                if self.peek() == Some('/') {
-                    self.advance();
-                    Ok(Token::TUpdate)
-                } else {
-                    Ok(Token::TDiv)
-                }
-            }
-            '!' => {
-                self.advance();
-                if self.peek() == Some('=') {
-                    self.advance();
-                    Ok(Token::TUnequal)
-                } else {
-                    Ok(Token::TNot)
-                }
-            }
+            '/' => Ok(self.try_two_char('/', Token::TUpdate, Token::TDiv)),
+            '!' => Ok(self.try_two_char('=', Token::TUnequal, Token::TNot)),
             '<' => {
                 // Check for angle bracket path <nixpkgs>
                 if self.peek_ahead(1).is_some_and(|c| c.is_alphanumeric()) {
@@ -314,15 +274,7 @@ impl Lexer {
                     }
                 }
             }
-            '>' => {
-                self.advance();
-                if self.peek() == Some('=') {
-                    self.advance();
-                    Ok(Token::TGreaterEqual)
-                } else {
-                    Ok(Token::TGreater)
-                }
-            }
+            '>' => Ok(self.try_two_char('=', Token::TGreaterEqual, Token::TGreater)),
             '&' => {
                 self.advance();
                 if self.peek() == Some('&') {
@@ -515,6 +467,18 @@ impl Lexer {
             digits.push(self.advance().unwrap());
         }
         digits
+    }
+
+    /// Helper for two-character tokens: advance and check if next char matches
+    /// Returns if_match if second char matches, otherwise if_single
+    fn try_two_char(&mut self, second: char, if_match: Token, if_single: Token) -> Token {
+        self.advance();
+        if self.peek() == Some(second) {
+            self.advance();
+            if_match
+        } else {
+            if_single
+        }
     }
 
     /// Peek at current character without consuming
