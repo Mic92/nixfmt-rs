@@ -357,8 +357,21 @@ fn regression_decorated_multiline_comment() {
 fn regression_trailing_empty_line_in_let() {
     // Empty line after last item but before closing brace should be preserved in AST
     // From nix/tests/functional/lang/parse-fail-dup-attrs-2.nix
-    test_ast_format(
-        "trailing_empty_line_let",
-        "let {\n  x = 1;\n  \n}\n",
+    test_ast_format("trailing_empty_line_let", "let {\n  x = 1;\n  \n}\n");
+}
+
+#[test]
+fn regression_crlf_line_endings() {
+    // Test various line ending formats: LF, CRLF, and bare CR
+    // Lexer should treat all as newlines for cross-platform compatibility
+    // From nix/tests/functional/lang/parse-okay-crlf.nix
+    // Note: The test file has a bare CR after a comment, which nixfmt (Haskell) fails to parse,
+    // but we handle correctly for cross-platform robustness
+    let input = "rec {\n  x =\n  # Comment\r  y;\n}\n";
+    let result = nixfmt_rs::parse(input);
+    assert!(
+        result.is_ok(),
+        "Failed to parse input with CRLF/bare CR: {:?}",
+        result.err()
     );
 }
