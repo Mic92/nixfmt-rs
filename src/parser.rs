@@ -1034,6 +1034,16 @@ impl Parser {
         self.parse_postfix_selection(base_term)
     }
 
+    /// Check if character at given offset starts valid path content
+    /// Valid path content: alphanumeric, ., _, -, +, ~, or ${ for interpolation
+    fn is_path_content_at(&self, offset: usize) -> bool {
+        match self.lexer.peek_ahead(offset) {
+            Some(c) if c.is_alphanumeric() || matches!(c, '.' | '_' | '-' | '+' | '~') => true,
+            Some('$') => self.lexer.peek_ahead(offset + 1) == Some('{'), // interpolation ${
+            _ => false,
+        }
+    }
+
     /// Check if current position starts a path
     /// Must check BEFORE consuming any tokens
     fn looks_like_path(&self) -> bool {
@@ -1041,30 +1051,37 @@ impl Parser {
         match &self.current.value {
             Token::Identifier(_) => {
                 // Identifiers followed by / are paths (e.g., common/file.nix, foo-bar/baz.nix)
-                // But NOT the // operator (update)
-                // This matches nixfmt's behavior where pathText can start a path
-                self.lexer.peek() == Some('/') && self.lexer.peek_ahead(1) != Some('/')
+                // But NOT the // operator (update) or division operator (a / b)
+                // The / must be followed immediately by valid path content (no space)
+                self.lexer.peek() == Some('/')
+                    && self.lexer.peek_ahead(1) != Some('/')
+                    && self.is_path_content_at(1)
             }
             Token::TDot => {
                 // Could be ./ or ../
-                self.lexer.peek() == Some('/')
-                    || (self.lexer.peek() == Some('.') && self.lexer.peek_ahead(1) == Some('/'))
+                // The / must be followed immediately by valid path content
+                let peek1 = self.lexer.peek();
+                let peek2 = self.lexer.peek_ahead(1);
+
+                if peek1 == Some('/') {
+                    // ./ - check what comes after the slash
+                    self.is_path_content_at(1)
+                } else if peek1 == Some('.') && peek2 == Some('/') {
+                    // ../ - check what comes after the slash
+                    self.is_path_content_at(2)
+                } else {
+                    false
+                }
             }
             Token::TDiv => {
                 // / at start - this is a path IF it's followed immediately by path chars
-                // Path chars are: alphanumeric, ., _, -, +, ~, or ${ for interpolation
                 // Key: there must be NO whitespace between / and the path char
-                match self.lexer.peek() {
-                    Some(c) if c.is_alphanumeric() || matches!(c, '.' | '_' | '-' | '+' | '~') => {
-                        true
-                    }
-                    Some('$') => self.lexer.peek_ahead(1) == Some('{'), // interpolation ${
-                    _ => false,
-                }
+                self.is_path_content_at(0)
             }
             Token::TTilde => {
                 // ~ - check if followed by /
-                self.lexer.peek() == Some('/')
+                // The / must be followed immediately by valid path content
+                self.lexer.peek() == Some('/') && self.is_path_content_at(1)
             }
             _ => false,
         }

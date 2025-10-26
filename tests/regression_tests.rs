@@ -53,6 +53,7 @@ fn regression_import_relative_path() {
     // Bug 2: "x = common/file.nix" was parsed as division "x = common / file.nix"
     // Bug 3: "x = foo-bar/baz.nix" was parsed as division with selection
     // Bug 4: "metaCommon // { ... }" was incorrectly detected as path "metaCommon//"
+    // Bug 5: "(a / b)" was incorrectly detected as path starting with "a/"
     test_ast_format(
         "import_relative_path",
         r#"{
@@ -60,6 +61,8 @@ fn regression_import_relative_path() {
   b = common/file.nix;
   c = foo-bar/baz.nix;
   d = metaCommon // { mainProgram = "gopeed"; };
+  e = (a / b);
+  f = ((targetPodcastSize + lameMp3FileAdjust) / (lameMp3Bitrate / 8));
 }
 "#,
     );
