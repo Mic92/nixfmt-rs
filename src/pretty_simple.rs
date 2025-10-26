@@ -90,27 +90,50 @@ pub trait PrettySimple: Debug {
 /// Returns a Cow to avoid allocation when no escaping is needed.
 fn escape_string(s: &str) -> std::borrow::Cow<'_, str> {
     // Helper: Check if a character is non-printable (matches Haskell's not isPrint)
+    // Haskell's isPrint returns False for Unicode categories: Cc, Cf, Cs, Co, Cn, Zl, Zp
+    // Source: https://hackage.haskell.org/package/base-4.21.0.0/docs/Data-Char.html#v:isPrint
     fn is_non_printable(ch: char) -> bool {
         let code = ch as u32;
-        // ASCII control characters except newline
-        if code < 0x20 && ch != '\n' {
+
+        // Control characters (Cc category) - except newline which we allow
+        if ch.is_control() && ch != '\n' {
             return true;
         }
-        // DEL and C1 control codes
-        if code == 0x7F || (0x80..=0x9F).contains(&code) {
+
+        // Line and Paragraph Separators (Zl, Zp categories)
+        if matches!(code, 0x2028 | 0x2029) {
             return true;
         }
-        // Unicode format characters and invisible separators (not considered printable by Haskell)
-        // U+200B..U+200F: zero-width spaces and formatting
-        // U+2028..U+202E: line/paragraph separators and text direction
-        // U+FEFF: zero-width no-break space (BOM)
-        // U+FFF9..U+FFFB: interlinear annotation
+
+        // Surrogates (Cs) are not valid in Rust char, so we don't need to check for them
+
+        // Format characters (Cf category) - complete list from Unicode Character Database
+        // Source: https://www.compart.com/en/unicode/category/Cf (161 characters)
         matches!(code,
-            0x200B..=0x200F |  // Zero-width spaces, LRM, RLM, etc.
-            0x2028..=0x202E |  // Line separator, paragraph separator, LRE, RLE, etc.
-            0xFEFF |           // Zero-width no-break space (BOM)
-            0xFFF9..=0xFFFB    // Interlinear annotation characters
+            0x00AD |               // SOFT HYPHEN
+            0x0600..=0x0605 |      // Arabic Number signs
+            0x061C |               // ARABIC LETTER MARK
+            0x06DD |               // ARABIC END OF AYAH
+            0x070F |               // SYRIAC ABBREVIATION MARK
+            0x08E2 |               // ARABIC DISPUTED END OF AYAH
+            0x180E |               // MONGOLIAN VOWEL SEPARATOR
+            0x200B..=0x200F |      // Zero-width space, joiners, marks
+            0x202A..=0x202E |      // Bidirectional formatting
+            0x2060..=0x2064 |      // Word joiner, invisible operators
+            0x2066..=0x206F |      // Bidirectional isolates and deprecated
+            0xFEFF |               // ZERO WIDTH NO-BREAK SPACE (BOM)
+            0xFFF9..=0xFFFB |      // Interlinear annotation
+            0x110BD |              // KAITHI NUMBER SIGN
+            0x110CD |              // KAITHI NUMBER SIGN ABOVE
+            0x13430..=0x13438 |    // EGYPTIAN HIEROGLYPH format controls
+            0x1BCA0..=0x1BCA3 |    // SHORTHAND FORMAT controls
+            0x1D173..=0x1D17A |    // MUSICAL SYMBOL format controls
+            0xE0001 |              // LANGUAGE TAG
+            0xE0020..=0xE007F      // TAG characters
         )
+
+        // Note: We don't check for PrivateUse (Co) or NotAssigned (Cn) categories
+        // as these may legitimately appear in source files and should be preserved
     }
 
     // Fast path: check if we need to escape anything

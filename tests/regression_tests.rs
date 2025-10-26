@@ -303,6 +303,13 @@ fn regression_unicode_escape_in_string() {
 }
 
 #[test]
+fn regression_soft_hyphen_escape() {
+    // Soft hyphen (U+00AD) is a Format character (Cf category) and should be escaped as \xad
+    // From nixpkgs/pkgs/tools/graphics/diagrams-builder/default.nix line 10
+    test_ast_format("soft_hyphen_escape", "\"\u{00AD}~~~\"");
+}
+
+#[test]
 fn regression_identifier_slash_path() {
     // Function application with path argument: mkDefault /tmp
     // Should parse as Application(mkDefault, /tmp), not Path("mkDefault/tmp")
