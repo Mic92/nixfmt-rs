@@ -65,6 +65,13 @@ impl Parser {
                 self.parse_set_parameter_or_literal()
             }
             Token::Identifier(_) => {
+                // Check if this might be a path (identifier followed by /)
+                // But NOT the // operator (update)
+                // If so, parse it normally as an operation (which will handle the path)
+                if self.lexer.peek() == Some('/') && self.lexer.peek_ahead(1) != Some('/') {
+                    return self.parse_operation_or_lambda();
+                }
+
                 // Could be identifier parameter OR identifier term
                 // Parse identifier and check for : or @
                 let ident = self.take_current();
@@ -1013,8 +1020,14 @@ impl Parser {
     /// Check if current position starts a path
     /// Must check BEFORE consuming any tokens
     fn looks_like_path(&self) -> bool {
-        // Paths start with: ~/, ./, ../, or /
+        // Paths start with: identifier/, ~/, ./, ../, or /
         match &self.current.value {
+            Token::Identifier(_) => {
+                // Identifiers followed by / are paths (e.g., common/file.nix, foo-bar/baz.nix)
+                // But NOT the // operator (update)
+                // This matches nixfmt's behavior where pathText can start a path
+                self.lexer.peek() == Some('/') && self.lexer.peek_ahead(1) != Some('/')
+            }
             Token::TDot => {
                 // Could be ./ or ../
                 self.lexer.peek() == Some('/')
@@ -1050,6 +1063,11 @@ impl Parser {
         // Handle the prefix that was already tokenized
         // NOTE: Don't call self.advance() here - we need to read raw chars from lexer
         match &self.current.value {
+            Token::Identifier(ident) => {
+                // Path starting with identifier (e.g., common/file.nix, foo-bar/baz.nix)
+                // The identifier has already been consumed by the lexer
+                parts.push(StringPart::TextPart(ident.clone()));
+            }
             Token::TDot => {
                 // ./ or ../
                 // The lexer is positioned just after the '.' character

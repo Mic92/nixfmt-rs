@@ -47,6 +47,25 @@ fn regression_attrset_interpolated_key() {
 }
 
 #[test]
+fn regression_import_relative_path() {
+    // Paths starting with identifiers should be parsed as paths, not applications/division
+    // Bug 1: "import common/file.nix" was parsed as application of import to common
+    // Bug 2: "x = common/file.nix" was parsed as division "x = common / file.nix"
+    // Bug 3: "x = foo-bar/baz.nix" was parsed as division with selection
+    // Bug 4: "metaCommon // { ... }" was incorrectly detected as path "metaCommon//"
+    test_ast_format(
+        "import_relative_path",
+        r#"{
+  a = import common/acme/server/snakeoil-certs.nix;
+  b = common/file.nix;
+  c = foo-bar/baz.nix;
+  d = metaCommon // { mainProgram = "gopeed"; };
+}
+"#,
+    );
+}
+
+#[test]
 fn regression_context_pattern() {
     // Minimal reproducer: {...}@args: args
     test_ast_format("context_pattern", "{...}@args: args");
