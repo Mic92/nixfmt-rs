@@ -172,6 +172,13 @@ impl Lexer {
 
         let ch = self.peek().unwrap();
 
+        // Check for identifiers/keywords (Unicode alphabetic or underscore)
+        // This must come before the match to handle non-ASCII alphabetic characters
+        // which can't be matched in patterns
+        if ch.is_alphabetic() || ch == '_' {
+            return self.parse_ident_or_keyword();
+        }
+
         // Single character tokens and operators
         match ch {
             '{' => {
@@ -382,7 +389,6 @@ impl Lexer {
                 }
             }
             '0'..='9' => self.parse_number(),
-            'a'..='z' | 'A'..='Z' | '_' => self.parse_ident_or_keyword(),
             '~' => {
                 // Tilde - used in paths ~/
                 self.advance();

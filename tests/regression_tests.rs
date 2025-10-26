@@ -391,3 +391,12 @@ fn regression_chained_comparison_operators() {
     // From nix/tests/functional/lang/eval-okay-arithmetic.nix line 50
     test_ast_format("chained_comparison", "2 > 1 == 1 < 2");
 }
+
+#[test]
+fn regression_utf8_identifier() {
+    // Identifiers can contain UTF-8/Unicode alphabetic characters
+    // nixfmt uses isAlpha which accepts Unicode, not just ASCII a-z
+    // From nix/tests/functional/lang/parse-fail-utf8.nix
+    // Note: This file is "parse-fail" in Nix itself, but nixfmt still parses it to show AST
+    test_ast_format("utf8_identifier", "123 é 4");
+}
