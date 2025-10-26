@@ -1117,14 +1117,13 @@ impl Parser {
             }
         }
 
-        // Re-sync parser
-        self.current = self.lexer.lexeme()?;
+        let trail_comment = self.parse_trailing_trivia_and_advance()?;
 
         let ann = Ann {
             pre_trivia,
             source_line: start_pos,
             value: parts,
-            trail_comment: None,
+            trail_comment,
         };
 
         Ok(Term::Path(ann))
@@ -1253,15 +1252,15 @@ impl Parser {
 
         // Consume closing "
         self.lexer.advance();
-        self.current = self.lexer.lexeme()?;
 
+        let trail_comment = self.parse_trailing_trivia_and_advance()?;
         let lines = fix_simple_string(parts);
 
         Ok(Ann {
             pre_trivia,
             source_line: open_quote_pos,
             value: lines,
-            trail_comment: None,
+            trail_comment,
         })
     }
 
@@ -1391,16 +1390,14 @@ impl Parser {
         self.lexer.advance(); // '
         self.lexer.advance(); // '
 
-        // Re-sync
-        self.current = self.lexer.lexeme()?;
-
+        let trail_comment = self.parse_trailing_trivia_and_advance()?;
         let lines = fix_indented_string(lines);
 
         let ann = Ann {
             pre_trivia,
             source_line: open_quote_pos,
             value: lines,
-            trail_comment: None,
+            trail_comment,
         };
 
         Ok(Term::IndentedString(ann))
@@ -1608,6 +1605,26 @@ impl Parser {
     }
 
     // Helper methods
+
+    /// Parse trivia after manually consuming content (strings, paths, etc.)
+    /// and return the trailing comment for the previous construct.
+    /// This also stores leading trivia for the next token and advances to it.
+    fn parse_trailing_trivia_and_advance(
+        &mut self,
+    ) -> Result<Option<crate::types::TrailingComment>> {
+        // Parse trivia after the construct and split into trailing/leading
+        let parsed_trivia = self.lexer.parse_trivia();
+        let next_col = self.lexer.column;
+        let (trail_comment, next_leading) = crate::lexer::convert_trivia(parsed_trivia, next_col);
+
+        // Store the leading trivia for the next token
+        self.lexer.trivia_buffer = next_leading;
+
+        // Now get the next token
+        self.current = self.lexer.lexeme()?;
+
+        Ok(trail_comment)
+    }
 
     /// Advance to next token
     fn advance(&mut self) -> Result<()> {

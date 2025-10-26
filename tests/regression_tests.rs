@@ -212,3 +212,23 @@ fn regression_empty_set_context_parameter() {
     // From nixpkgs/lib/generators.nix line 729
     test_ast_format("empty_set_context_param", "{ }@args: args");
 }
+
+#[test]
+fn regression_inline_comments_after_strings_and_paths() {
+    // Inline comments after simple strings, indented strings, and paths
+    // should be captured as trailing comments, not cause parse errors.
+    // Bug: The lexer would encounter '#' after manually parsing these constructs
+    // and fail with "unexpected character: '#'"
+    // From nixpkgs/nixos/tests/public-inbox.nix line 97
+    test_ast_format(
+        "inline_comments_after_strings_and_paths",
+        r#"[
+  "simple" # comment after simple string
+  ''
+    indented
+  '' # comment after indented string
+  ./path # comment after path
+  "end"
+]"#,
+    );
+}

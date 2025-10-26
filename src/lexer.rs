@@ -34,7 +34,7 @@ pub(crate) struct Lexer {
     pub(crate) line: usize,
     pub(crate) column: usize,
     /// Accumulated leading trivia for next token
-    trivia_buffer: Trivia,
+    pub(crate) trivia_buffer: Trivia,
     recent_newlines: usize,
     recent_hspace: usize,
     /// Position before last parse_trivia() call, for rewinding
@@ -87,16 +87,25 @@ impl Lexer {
         // Take accumulated leading trivia from buffer
         let mut leading_trivia = std::mem::take(&mut self.trivia_buffer);
 
+        // Skip horizontal space first
+        let _ = self.skip_hspace();
+
         // Check for newlines/trivia at current position (can happen after string parsing + rewind)
-        // Parse them NOW as leading trivia for THIS token, not for the next token
+        // Parse them and split into trailing (for previous token) and leading (for next token)
         if matches!(self.peek(), Some('\n') | Some('\r') | Some('#') | Some('/')) {
             let extra_trivia = self.parse_trivia();
-            leading_trivia.extend(convert_leading(&extra_trivia));
+
+            // Split into trailing and leading
+            let next_col = self.column;
+            let (_trailing, next_leading) = convert_trivia(extra_trivia, next_col);
+
+            leading_trivia.extend(next_leading);
+
             // Skip hspace after trivia
             let _ = self.skip_hspace();
         }
 
-        // Parse the token
+        // Parse the token (note: next_token() also skips hspace, but that's ok since we already did)
         let token = self.next_token()?;
 
         // Record position AFTER next_token() has consumed any leading trivia
