@@ -36,7 +36,7 @@ fn main() {
                 // Output AST with colors matching nixfmt
                 let mut writer = ColoredWriter::new();
                 file.format(&mut writer);
-                println!("{}", writer.finish());
+                print!("{}", writer.finish());
             } else {
                 eprintln!("nixfmt_rs: formatting not yet implemented");
                 eprintln!("Use --ast to dump AST");
