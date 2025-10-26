@@ -195,6 +195,28 @@ fn regression_mixed_add_sub_associativity() {
 }
 
 #[test]
+fn regression_chained_string_concatenation() {
+    // Chained + operators should create nested Operation nodes
+    // From nixpkgs/nixos/modules/config/resolvconf.nix lines 18-37
+    test_ast_format(
+        "chained_string_concat",
+        r#"''
+  line1
+''
++ lib.optionalString cond1 ''
+  line2
+''
++ lib.optionalString cond2 ''
+  line3
+''
++ lib.optionalString cond3 ''
+  line4
+''
++ cfg.extra"#,
+    );
+}
+
+#[test]
 fn regression_empty_set_with_comment() {
     // Comments inside empty sets should be separate Comments items, not in preTrivia
     test_ast_format("empty_set_comment", "{\n  # comment\n}");

@@ -797,18 +797,43 @@ impl Parser {
 
             // For right-associative operators, use >= to allow same-precedence operators to bind right
             // For left-associative operators, use > to make them bind left
-            // IMPORTANT: For TPlus, only allow right-associativity when the next operator is also TPlus
-            // This matches nixfmt's behavior where `1 + 2 + 3` is right-assoc but `1 + 2 - 3` is left-assoc
             while self.is_binary_op()
                 && (self.get_precedence() > prec
-                    || (self.get_precedence() == prec
-                        && is_right_assoc
-                        && self.same_operator(&op_token.value)))
+                    || (self.get_precedence() == prec && is_right_assoc))
             {
                 right = self.parse_binary_operation(right, self.get_precedence())?;
             }
 
-            left = Expression::Operation(Box::new(left), op_token, Box::new(right));
+            // HACK: nixfmt parses TPlus as left-associative but restructures it to right-associative
+            // in the AST. This is needed because some formatting code needs to match on the first
+            // operand, and doing that with a left-associative chain is not possible.
+            // If we have: (a + b) + c, restructure to: a + (b + c)
+            left = if matches!(op_token.value, Token::TPlus) {
+                if let Expression::Operation(one, op1, two) = left {
+                    if matches!(op1.value, Token::TPlus) {
+                        // Restructure: Operation(one, op1, Operation(two, op2, three))
+                        Expression::Operation(
+                            one,
+                            op1,
+                            Box::new(Expression::Operation(two, op_token, Box::new(right))),
+                        )
+                    } else {
+                        // Left is an operation but not TPlus, create normal operation
+                        Expression::Operation(
+                            Box::new(Expression::Operation(one, op1, two)),
+                            op_token,
+                            Box::new(right),
+                        )
+                    }
+                } else {
+                    // Left is not an operation, create normal operation
+                    Expression::Operation(Box::new(left), op_token, Box::new(right))
+                }
+            } else {
+                // Not TPlus, create normal operation
+                Expression::Operation(Box::new(left), op_token, Box::new(right))
+            };
+
             last_was_comparison = is_comparison;
         }
 
@@ -848,23 +873,15 @@ impl Parser {
     /// - TConcat (++) - line 575: InfixR
     /// - TUpdate (//) - line 583: InfixR
     /// - TPipeBackward (<|) - line 596: InfixR
-    /// - TPlus (+) - line 579: InfixL in spec, but nixfmt uses a HACK to convert to right-assoc in AST
     ///
-    /// (Note: + follows nixfmt's AST conversion hack where it's
-    /// parsed as right-associative for formatting purposes, even though
-    /// it's defined as InfixL in nixfmt's Types.hs)
+    /// Note: TPlus (+) is InfixL in the spec and is parsed as left-associative,
+    /// but nixfmt uses a HACK to restructure it to right-associative in the AST.
+    /// This is handled separately in the parse_binary_operation function.
     fn is_right_associative(&self, token: &Token) -> bool {
         matches!(
             token,
-            Token::TConcat | Token::TUpdate | Token::TPipeBackward | Token::TPlus
+            Token::TConcat | Token::TUpdate | Token::TPipeBackward
         )
-    }
-
-    /// Check if the current operator is the same as the given operator
-    /// This is used to implement nixfmt's hack where TPlus is only right-associative
-    /// when chained with itself (not with TMinus)
-    fn same_operator(&self, token: &Token) -> bool {
-        std::mem::discriminant(&self.current.value) == std::mem::discriminant(token)
     }
 
     /// Parse binders (for let and attribute sets)
