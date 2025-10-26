@@ -301,3 +301,11 @@ fn regression_unicode_escape_in_string() {
     // From nixpkgs/pkgs/by-name/li/libcaca/package.nix line 68
     test_ast_format("unicode_escape", "\"famous \u{200B}AAlib library\"");
 }
+
+#[test]
+fn regression_identifier_slash_path() {
+    // Function application with path argument: mkDefault /tmp
+    // Should parse as Application(mkDefault, /tmp), not Path("mkDefault/tmp")
+    // From nixpkgs/nixos/modules/services/monitoring/prometheus/exporters.nix line 353
+    test_ast_format("identifier_slash_path", "mkDefault /tmp");
+}

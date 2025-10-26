@@ -35,8 +35,8 @@ pub(crate) struct Lexer {
     pub(crate) column: usize,
     /// Accumulated leading trivia for next token
     pub(crate) trivia_buffer: Trivia,
-    recent_newlines: usize,
-    recent_hspace: usize,
+    pub(crate) recent_newlines: usize,
+    pub(crate) recent_hspace: usize,
     /// Position before last parse_trivia() call, for rewinding
     trivia_start_pos: Option<usize>,
     trivia_start_line: Option<usize>,

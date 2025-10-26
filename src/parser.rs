@@ -751,26 +751,27 @@ impl Parser {
 
     /// Check if current token is a binary operator
     fn is_binary_op(&self) -> bool {
-        matches!(
-            self.current.value,
+        match self.current.value {
+            // TDiv can start a path (e.g., /tmp), so check if it looks like one
+            Token::TDiv => !self.looks_like_path(),
             Token::TPlus
-                | Token::TMinus
-                | Token::TMul
-                | Token::TDiv
-                | Token::TConcat
-                | Token::TUpdate
-                | Token::TAnd
-                | Token::TOr
-                | Token::TEqual
-                | Token::TUnequal
-                | Token::TLess
-                | Token::TGreater
-                | Token::TLessEqual
-                | Token::TGreaterEqual
-                | Token::TImplies
-                | Token::TPipeForward
-                | Token::TPipeBackward
-        )
+            | Token::TMinus
+            | Token::TMul
+            | Token::TConcat
+            | Token::TUpdate
+            | Token::TAnd
+            | Token::TOr
+            | Token::TEqual
+            | Token::TUnequal
+            | Token::TLess
+            | Token::TGreater
+            | Token::TLessEqual
+            | Token::TGreaterEqual
+            | Token::TImplies
+            | Token::TPipeForward
+            | Token::TPipeBackward => true,
+            _ => false,
+        }
     }
 
     /// Check if we're at the end of an expression
@@ -1055,45 +1056,37 @@ impl Parser {
         }
     }
 
+    /// Check if there's whitespace before current token
+    /// Used to distinguish paths from operators: "a/b" (path) vs "a / b" (division)
+    fn has_preceding_whitespace(&self) -> bool {
+        self.lexer.recent_hspace > 0 || self.lexer.recent_newlines > 0
+    }
+
     /// Check if current position starts a path
     /// Must check BEFORE consuming any tokens
     fn looks_like_path(&self) -> bool {
-        // Paths start with: identifier/, ~/, ./, ../, or /
         match &self.current.value {
+            // identifier/ → path (no space), identifier /path → application (space before /)
             Token::Identifier(_) => {
-                // Identifiers followed by / are paths (e.g., common/file.nix, foo-bar/baz.nix)
-                // But NOT the // operator (update) or division operator (a / b)
-                // The / must be followed immediately by valid path content (no space)
                 self.lexer.peek() == Some('/')
-                    && self.lexer.peek_ahead(1) != Some('/')
+                    && self.lexer.peek_ahead(1) != Some('/') // not //
                     && self.is_path_content_at(1)
+                    && !self.has_preceding_whitespace()
             }
-            Token::TDot => {
-                // Could be ./ or ../
-                // The / must be followed immediately by valid path content
-                let peek1 = self.lexer.peek();
-                let peek2 = self.lexer.peek_ahead(1);
 
-                if peek1 == Some('/') {
-                    // ./ - check what comes after the slash
-                    self.is_path_content_at(1)
-                } else if peek1 == Some('.') && peek2 == Some('/') {
-                    // ../ - check what comes after the slash
-                    self.is_path_content_at(2)
-                } else {
-                    false
-                }
-            }
-            Token::TDiv => {
-                // / at start - this is a path IF it's followed immediately by path chars
-                // Key: there must be NO whitespace between / and the path char
-                self.is_path_content_at(0)
-            }
-            Token::TTilde => {
-                // ~ - check if followed by /
-                // The / must be followed immediately by valid path content
-                self.lexer.peek() == Some('/') && self.is_path_content_at(1)
-            }
+            // ./ or ../
+            Token::TDot => match (self.lexer.peek(), self.lexer.peek_ahead(1)) {
+                (Some('/'), _) => self.is_path_content_at(1),           // ./
+                (Some('.'), Some('/')) => self.is_path_content_at(2),   // ../
+                _ => false,
+            },
+
+            // /path → path (no space before), expr /path → division (space before)
+            Token::TDiv => self.is_path_content_at(0) && !self.has_preceding_whitespace(),
+
+            // ~/
+            Token::TTilde => self.lexer.peek() == Some('/') && self.is_path_content_at(1),
+
             _ => false,
         }
     }
