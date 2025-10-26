@@ -316,3 +316,11 @@ fn regression_identifier_slash_path() {
     // From nixpkgs/nixos/modules/services/monitoring/prometheus/exporters.nix line 353
     test_ast_format("identifier_slash_path", "mkDefault /tmp");
 }
+
+#[test]
+fn regression_unquoted_url() {
+    // Unquoted URLs should be parsed as strings, not as division/update operators
+    // Bug: "http://example.com" was tokenized as "http:" followed by TUpdate ("//" operator)
+    // From nix/tests/functional/lang/parse-okay-regression-20041027.nix line 6
+    test_ast_format("unquoted_url", "{ url = http://example.com/path; }");
+}

@@ -76,6 +76,12 @@ impl Parser {
                 self.parse_set_parameter_or_literal()
             }
             Token::Identifier(_) => {
+                // Check if this is a URI (identifier followed by : and URI chars)
+                // Must check BEFORE lambda parameter check (which also looks for :)
+                if self.looks_like_uri() {
+                    return self.parse_operation_or_lambda();
+                }
+
                 // Check if this might be a path (identifier followed by /)
                 // But NOT the // operator (update)
                 // If so, parse it normally as an operation (which will handle the path)
@@ -1021,7 +1027,12 @@ impl Parser {
 
     /// Parse a term (atom), including postfix selection
     fn parse_term(&mut self) -> Result<Term> {
-        // Check for paths first (they can start with identifiers)
+        // Check for URIs first (they look like identifiers followed by ":")
+        if self.looks_like_uri() {
+            return self.parse_uri();
+        }
+
+        // Check for paths (they can start with identifiers)
         if self.looks_like_path() {
             return self.parse_path();
         }
@@ -1076,8 +1087,8 @@ impl Parser {
 
             // ./ or ../
             Token::TDot => match (self.lexer.peek(), self.lexer.peek_ahead(1)) {
-                (Some('/'), _) => self.is_path_content_at(1),           // ./
-                (Some('.'), Some('/')) => self.is_path_content_at(2),   // ../
+                (Some('/'), _) => self.is_path_content_at(1), // ./
+                (Some('.'), Some('/')) => self.is_path_content_at(2), // ../
                 _ => false,
             },
 
@@ -1199,6 +1210,107 @@ impl Parser {
         };
 
         Ok(Term::Path(ann))
+    }
+
+    /// Check if character is valid in URI scheme
+    /// Based on nixfmt's schemeChar: "-.+" + alphanumeric
+    fn is_scheme_char(c: char) -> bool {
+        c.is_alphanumeric() || matches!(c, '-' | '.' | '+')
+    }
+
+    /// Check if character is valid in URI
+    /// Based on nixfmt's uriChar: "~!@$%&*-=_+:',./?" + alphanumeric
+    fn is_uri_char(c: char) -> bool {
+        c.is_alphanumeric()
+            || matches!(
+                c,
+                '~' | '!'
+                    | '@'
+                    | '$'
+                    | '%'
+                    | '&'
+                    | '*'
+                    | '-'
+                    | '='
+                    | '_'
+                    | '+'
+                    | ':'
+                    | '\''
+                    | ','
+                    | '.'
+                    | '/'
+                    | '?'
+            )
+    }
+
+    /// Check if current position starts a URI
+    /// Pattern: scheme_chars ":" uri_chars (e.g., http://example.com)
+    fn looks_like_uri(&self) -> bool {
+        // Must be an identifier
+        let Token::Identifier(scheme) = &self.current.value else {
+            return false;
+        };
+
+        // All characters in scheme must be valid scheme chars
+        if !scheme.chars().all(Self::is_scheme_char) {
+            return false;
+        }
+
+        // Must be followed by ":"
+        if self.lexer.peek() != Some(':') {
+            return false;
+        }
+
+        // Must be followed by at least one URI char after ":"
+        matches!(self.lexer.peek_ahead(1), Some(c) if Self::is_uri_char(c))
+    }
+
+    /// Parse URI as a SimpleString
+    /// Based on nixfmt's uri parser
+    fn parse_uri(&mut self) -> Result<Term> {
+        let start_pos = self.current.source_line;
+        let pre_trivia = self.current.pre_trivia.clone();
+
+        // Get the scheme (already tokenized as identifier)
+        let Token::Identifier(scheme) = &self.current.value else {
+            return Err(ParseError::new(
+                start_pos,
+                "expected identifier for URI scheme",
+            ));
+        };
+
+        let mut uri_text = scheme.clone();
+
+        // Expect ":"
+        if self.lexer.peek() != Some(':') {
+            return Err(ParseError::new(start_pos, "expected ':' after URI scheme"));
+        }
+        self.lexer.advance();
+        uri_text.push(':');
+
+        // Parse URI characters
+        while let Some(ch) = self.lexer.peek() {
+            if Self::is_uri_char(ch) {
+                uri_text.push(ch);
+                self.lexer.advance();
+            } else {
+                break;
+            }
+        }
+
+        // Parse trailing trivia and advance
+        let trail_comment = self.parse_trailing_trivia_and_advance()?;
+
+        // Wrap as SimpleString
+        let parts = vec![vec![StringPart::TextPart(uri_text)]];
+        let ann = Ann {
+            pre_trivia,
+            source_line: start_pos,
+            value: parts,
+            trail_comment,
+        };
+
+        Ok(Term::SimpleString(ann))
     }
 
     /// Parse path text component (without /)
