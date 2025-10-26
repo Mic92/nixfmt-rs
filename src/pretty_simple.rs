@@ -94,8 +94,9 @@ fn escape_string(s: &str) -> std::borrow::Cow<'_, str> {
     let mut result = String::with_capacity(s.len() + 10);
     for ch in s.chars() {
         if ch.is_ascii_control() {
-            // ASCII control character - escape as \xHH
-            result.push_str(&format!("\\x{:02x}", ch as u8));
+            // ASCII control character - escape as \xH (minimal hex, no leading zeros)
+            // Matches Haskell's showHex behavior
+            result.push_str(&format!("\\x{:x}", ch as u8));
         } else {
             result.push(ch);
         }

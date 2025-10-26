@@ -241,6 +241,12 @@ fn regression_ansi_escape_codes_in_strings() {
     // We create a test string with a real escape character followed by "[1;31m"
     let test_input = "\"\x1b[1;31mtest\x1b[0m\"";
     test_ast_format("ansi_escape_codes", test_input);
+
+    // Test that escape sequences are formatted without leading zeros
+    // nixfmt outputs \x9 for tab, not \x09
+    // From nixpkgs/lib/generators.nix
+    let tab_test = "\"\t\"";
+    test_ast_format("tab_escape_sequence", tab_test);
 }
 
 #[test]
