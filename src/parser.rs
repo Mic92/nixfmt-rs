@@ -1062,7 +1062,7 @@ impl Parser {
                     let interp = self.parse_string_interpolation()?;
                     parts.push(interp);
                 }
-                Some(ch) if ch.is_alphanumeric() || "._-+".contains(ch) => {
+                Some(ch) if ch.is_alphanumeric() || matches!(ch, '.' | '_' | '-' | '+') => {
                     // Path text (not / here, that's handled specially)
                     let text = self.parse_path_part()?;
                     if !text.is_empty() {
@@ -1117,7 +1117,7 @@ impl Parser {
         let mut text = String::new();
 
         while let Some(ch) = self.lexer.peek() {
-            if ch.is_alphanumeric() || "._-+~".contains(ch) {
+            if ch.is_alphanumeric() || matches!(ch, '.' | '_' | '-' | '+' | '~') {
                 text.push(ch);
                 self.lexer.advance();
             } else if ch == '$' && self.lexer.peek_ahead(1) == Some('{') {
@@ -1753,7 +1753,7 @@ fn normalize_line(line: Vec<StringPart>) -> Vec<StringPart> {
 }
 
 fn is_spaces(text: &str) -> bool {
-    text.chars().all(|c| c == ' ')
+    text.bytes().all(|b| b == b' ')
 }
 
 fn is_empty_line(line: &[StringPart]) -> bool {

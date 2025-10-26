@@ -752,7 +752,8 @@ impl Lexer {
     fn is_valid_language_identifier(s: &str) -> bool {
         !s.is_empty()
             && s.len() <= 30
-            && s.chars().all(|c| c.is_alphanumeric() || "-+._".contains(c))
+            && s.bytes()
+                .all(|b| b.is_ascii_alphanumeric() || matches!(b, b'-' | b'+' | b'.' | b'_'))
     }
 
     /// Check if next non-whitespace token is " or ''
@@ -836,7 +837,7 @@ impl Lexer {
         let common_indent = lines[1..]
             .iter()
             .filter(|line| !line.trim().is_empty())
-            .map(|line| line.chars().take_while(|&c| c == ' ').count())
+            .map(|line| line.bytes().take_while(|&b| b == b' ').count())
             .min()
             .unwrap_or(0)
             .min(offset);
