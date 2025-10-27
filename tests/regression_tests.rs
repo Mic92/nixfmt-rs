@@ -416,3 +416,23 @@ fn regression_multiline_string_unicode_line_numbers() {
 }"#,
     );
 }
+
+#[test]
+fn regression_duplicate_function_formals() {
+    // Parser should reject duplicate formal parameters
+    // From nix/tests/functional/lang/parse-fail-dup-formals.nix
+    assert!(
+        nixfmt_rs::parse("{x, y, x}: x").is_err(),
+        "expected duplicate formal parameters to be rejected"
+    );
+}
+
+#[test]
+fn regression_pattern_shadows_formal() {
+    // Parser should reject when pattern name shadows a formal parameter
+    // From nix/tests/functional/lang/parse-fail-patterns-1.nix
+    assert!(
+        nixfmt_rs::parse("args@{args, x, y, z}: x").is_err(),
+        "expected pattern name shadowing formal parameter to be rejected"
+    );
+}

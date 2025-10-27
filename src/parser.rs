@@ -137,11 +137,15 @@ impl Parser {
                         });
                     }
 
+                    // Validate that pattern name doesn't shadow a formal
+                    let first_param = Parameter::IDParameter(ident.clone());
+                    self.validate_context_parameter(&first_param, &second_param)?;
+
                     let colon = self.expect_token_match(|t| matches!(t, Token::TColon))?;
                     let body = self.parse_expression()?;
                     Ok(Expression::Abstraction(
                         Parameter::ContextParameter(
-                            Box::new(Parameter::IDParameter(ident)),
+                            Box::new(first_param),
                             at_tok,
                             Box::new(second_param),
                         ),
@@ -200,11 +204,20 @@ impl Parser {
                     // Context parameter: { } @ param: body
                     let at_tok = self.take_and_advance()?;
                     let second_param = self.parse_full_parameter()?;
+
+                    // Validate that pattern name doesn't shadow a formal
+                    let first_param = Parameter::SetParameter(
+                        open_brace.clone(),
+                        Vec::new(),
+                        close_brace.clone(),
+                    );
+                    self.validate_context_parameter(&first_param, &second_param)?;
+
                     let colon = self.expect_token_match(|t| matches!(t, Token::TColon))?;
                     let body = self.parse_expression()?;
                     Ok(Expression::Abstraction(
                         Parameter::ContextParameter(
-                            Box::new(Parameter::SetParameter(open_brace, Vec::new(), close_brace)),
+                            Box::new(first_param),
                             at_tok,
                             Box::new(second_param),
                         ),
@@ -224,6 +237,10 @@ impl Parser {
                 match self.parse_param_attrs() {
                     Ok(attrs) => {
                         // Successfully parsed as parameter attributes
+
+                        // Check for duplicate formal parameters
+                        self.check_duplicate_formals(&attrs)?;
+
                         let close_brace =
                             self.expect_token_match(|t| matches!(t, Token::TBraceClose))?;
 
@@ -241,15 +258,20 @@ impl Parser {
                             // Context parameter: { x } @ param: body
                             let at_tok = self.take_and_advance()?;
                             let second_param = self.parse_full_parameter()?;
+
+                            // Validate that pattern name doesn't shadow a formal
+                            let first_param = Parameter::SetParameter(
+                                open_brace.clone(),
+                                attrs.clone(),
+                                close_brace.clone(),
+                            );
+                            self.validate_context_parameter(&first_param, &second_param)?;
+
                             let colon = self.expect_token_match(|t| matches!(t, Token::TColon))?;
                             let body = self.parse_expression()?;
                             Ok(Expression::Abstraction(
                                 Parameter::ContextParameter(
-                                    Box::new(Parameter::SetParameter(
-                                        open_brace,
-                                        attrs,
-                                        close_brace,
-                                    )),
+                                    Box::new(first_param),
                                     at_tok,
                                     Box::new(second_param),
                                 ),
@@ -289,6 +311,10 @@ impl Parser {
             Token::TEllipsis => {
                 // Definitely a parameter: { ... }
                 let attrs = self.parse_param_attrs()?;
+
+                // Check for duplicate formal parameters
+                self.check_duplicate_formals(&attrs)?;
+
                 let close_brace = self.expect_token_match(|t| matches!(t, Token::TBraceClose))?;
 
                 if matches!(self.current.value, Token::TColon) {
@@ -303,11 +329,20 @@ impl Parser {
                     // Context parameter: {...}@args
                     let at_tok = self.take_and_advance()?;
                     let second_param = self.parse_full_parameter()?;
+
+                    // Validate that pattern name doesn't shadow a formal
+                    let first_param = Parameter::SetParameter(
+                        open_brace.clone(),
+                        attrs.clone(),
+                        close_brace.clone(),
+                    );
+                    self.validate_context_parameter(&first_param, &second_param)?;
+
                     let colon = self.expect_token_match(|t| matches!(t, Token::TColon))?;
                     let body = self.parse_expression()?;
                     Ok(Expression::Abstraction(
                         Parameter::ContextParameter(
-                            Box::new(Parameter::SetParameter(open_brace, attrs, close_brace)),
+                            Box::new(first_param),
                             at_tok,
                             Box::new(second_param),
                         ),
@@ -375,6 +410,10 @@ impl Parser {
             // Now we MUST see a colon for this to be valid
             if matches!(self.current.value, Token::TColon) {
                 let first_param = self.expr_to_parameter(expr)?;
+
+                // Validate that pattern name doesn't shadow a formal
+                self.validate_context_parameter(&first_param, &second_param)?;
+
                 let param = Parameter::ContextParameter(
                     Box::new(first_param),
                     at_tok,
@@ -549,8 +588,13 @@ impl Parser {
                 // Context parameter: id @ pattern
                 let at_tok = self.take_and_advance()?;
                 let second = self.parse_full_parameter()?;
+
+                // Validate that pattern name doesn't shadow a formal
+                let first_param = Parameter::IDParameter(ident.clone());
+                self.validate_context_parameter(&first_param, &second)?;
+
                 Ok(Parameter::ContextParameter(
-                    Box::new(Parameter::IDParameter(ident)),
+                    Box::new(first_param),
                     at_tok,
                     Box::new(second),
                 ))
@@ -576,6 +620,9 @@ impl Parser {
         // Parse parameter attributes
         let attrs = self.parse_param_attrs()?;
 
+        // Check for duplicate formal parameters
+        self.check_duplicate_formals(&attrs)?;
+
         let close_brace = self.expect_token_match(|t| matches!(t, Token::TBraceClose))?;
 
         let set_param = Parameter::SetParameter(open_brace, attrs, close_brace);
@@ -584,6 +631,10 @@ impl Parser {
         if matches!(self.current.value, Token::TAt) {
             let at_tok = self.take_and_advance()?;
             let second = self.parse_full_parameter()?;
+
+            // Validate that pattern name doesn't shadow a formal
+            self.validate_context_parameter(&set_param, &second)?;
+
             Ok(Parameter::ContextParameter(
                 Box::new(set_param),
                 at_tok,
@@ -649,6 +700,88 @@ impl Parser {
         }
 
         Ok(attrs)
+    }
+
+    /// Check for duplicate formal parameters
+    /// Validates that no parameter name appears more than once in the attrs list
+    fn check_duplicate_formals(&self, attrs: &[ParamAttr]) -> Result<()> {
+        use std::collections::HashSet;
+
+        let mut seen = HashSet::new();
+
+        for attr in attrs {
+            if let ParamAttr::ParamAttr(name_leaf, _, _) = attr {
+                if let Token::Identifier(name) = &name_leaf.value {
+                    if !seen.insert(name.clone()) {
+                        // Found a duplicate!
+                        return Err(ParseError {
+                            span: name_leaf.span,
+                            kind: crate::error::ErrorKind::InvalidSyntax {
+                                description: format!(
+                                    "duplicate formal function argument '{}'",
+                                    name
+                                ),
+                                hint: None,
+                            },
+                            labels: vec![],
+                        });
+                    }
+                }
+            }
+        }
+
+        Ok(())
+    }
+
+    /// Check if pattern name shadows a formal parameter
+    /// For args@{x, y}: the pattern name 'args' must not appear in the formals
+    fn check_pattern_shadows_formal(&self, pattern_name: &str, attrs: &[ParamAttr]) -> Result<()> {
+        for attr in attrs {
+            if let ParamAttr::ParamAttr(name_leaf, _, _) = attr {
+                if let Token::Identifier(name) = &name_leaf.value {
+                    if name == pattern_name {
+                        return Err(ParseError {
+                            span: name_leaf.span,
+                            kind: crate::error::ErrorKind::InvalidSyntax {
+                                description: format!(
+                                    "duplicate formal function argument '{}'",
+                                    name
+                                ),
+                                hint: None,
+                            },
+                            labels: vec![],
+                        });
+                    }
+                }
+            }
+        }
+
+        Ok(())
+    }
+
+    /// Validate context parameter: check that pattern name doesn't shadow a formal
+    /// For id@{formals} or {formals}@id patterns
+    fn validate_context_parameter(&self, first: &Parameter, second: &Parameter) -> Result<()> {
+        // Extract the pattern name and formals from the context parameter
+        match (first, second) {
+            // Case 1: args@{x, y, z} - pattern name is first, set is second
+            (Parameter::IDParameter(pattern_leaf), Parameter::SetParameter(_, attrs, _)) => {
+                if let Token::Identifier(pattern_name) = &pattern_leaf.value {
+                    self.check_pattern_shadows_formal(pattern_name, attrs)?;
+                }
+            }
+            // Case 2: {x, y, z}@args - set is first, pattern name is second
+            (Parameter::SetParameter(_, attrs, _), Parameter::IDParameter(pattern_leaf)) => {
+                if let Token::Identifier(pattern_name) = &pattern_leaf.value {
+                    self.check_pattern_shadows_formal(pattern_name, attrs)?;
+                }
+            }
+            _ => {
+                // Other combinations are not relevant for this check
+            }
+        }
+
+        Ok(())
     }
 
     /// Parse let expression: let bindings in expr
