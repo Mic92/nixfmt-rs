@@ -25,11 +25,21 @@ fn main() {
     // Read from stdin if no files specified
     let (source, filename) = if files.is_empty() {
         let mut buffer = String::new();
-        io::stdin().read_to_string(&mut buffer).unwrap();
-        (buffer, None)
+        match io::stdin().read_to_string(&mut buffer) {
+            Ok(_) => (buffer, None),
+            Err(e) => {
+                eprintln!("error: failed to read stdin: {}", e);
+                exit(1);
+            }
+        }
     } else {
-        let content = std::fs::read_to_string(&files[0]).unwrap();
-        (content, Some(files[0].as_str()))
+        match std::fs::read_to_string(&files[0]) {
+            Ok(content) => (content, Some(files[0].as_str())),
+            Err(e) => {
+                eprintln!("error: failed to read file '{}': {}", files[0], e);
+                exit(1);
+            }
+        }
     };
 
     // Parse the file

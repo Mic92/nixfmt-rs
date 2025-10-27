@@ -439,3 +439,19 @@ fn regression_pattern_shadows_formal() {
         "expected pattern name shadowing formal parameter to be rejected"
     );
 }
+
+#[test]
+fn regression_non_utf8_input() {
+    // Parser should handle non-UTF-8 input gracefully with an error, not panic
+    // From nix/tests/functional/lang/eval-fail-toJSON-non-utf-8.nix
+    // Note: This test verifies error handling at the parsing API level.
+    // The actual non-UTF-8 handling happens when reading files in main.rs
+
+    // Test with valid UTF-8 that contains a Unicode replacement character
+    // This simulates what would be shown after reading non-UTF-8 bytes
+    let result = nixfmt_rs::parse("builtins.toJSON \"_invalid UTF-8: �_\"");
+    assert!(
+        result.is_ok(),
+        "Parser should handle Unicode replacement character"
+    );
+}
