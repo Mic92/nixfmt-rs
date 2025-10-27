@@ -290,10 +290,14 @@ impl Lexer {
                     self.advance();
                     Ok(Token::TAnd)
                 } else {
-                    Err(crate::error::ParseError::new(
-                        self.current_pos(),
-                        "unexpected '&', expected '&&'",
-                    ))
+                    Err(crate::error::ParseError {
+                        span: self.current_pos(),
+                        kind: crate::error::ErrorKind::UnexpectedToken {
+                            expected: vec!["'&&'".to_string()],
+                            found: "'&'".to_string(),
+                        },
+                        labels: vec![],
+                    })
                 }
             }
             '|' => {
@@ -307,10 +311,14 @@ impl Lexer {
                         self.advance();
                         Ok(Token::TPipeForward)
                     }
-                    _ => Err(crate::error::ParseError::new(
-                        self.current_pos(),
-                        "unexpected '|', expected '||' or '|>'",
-                    )),
+                    _ => Err(crate::error::ParseError {
+                        span: self.current_pos(),
+                        kind: crate::error::ErrorKind::UnexpectedToken {
+                            expected: vec!["'||'".to_string(), "'|>'".to_string()],
+                            found: "'|'".to_string(),
+                        },
+                        labels: vec![],
+                    }),
                 }
             }
             '"' => {
@@ -323,10 +331,14 @@ impl Lexer {
                     self.advance();
                     Ok(Token::TDoubleSingleQuote)
                 } else {
-                    Err(crate::error::ParseError::new(
-                        self.current_pos(),
-                        "unexpected single quote, expected ''",
-                    ))
+                    Err(crate::error::ParseError {
+                        span: self.current_pos(),
+                        kind: crate::error::ErrorKind::UnexpectedToken {
+                            expected: vec!["''".to_string()],
+                            found: "'".to_string(),
+                        },
+                        labels: vec![],
+                    })
                 }
             }
             '$' => {
@@ -335,10 +347,14 @@ impl Lexer {
                     self.advance();
                     Ok(Token::TInterOpen)
                 } else {
-                    Err(crate::error::ParseError::new(
-                        self.current_pos(),
-                        "unexpected '$', expected '${'",
-                    ))
+                    Err(crate::error::ParseError {
+                        span: self.current_pos(),
+                        kind: crate::error::ErrorKind::UnexpectedToken {
+                            expected: vec!["'${'".to_string()],
+                            found: "'$'".to_string(),
+                        },
+                        labels: vec![],
+                    })
                 }
             }
             '0'..='9' => self.parse_number(),
@@ -347,10 +363,14 @@ impl Lexer {
                 self.advance();
                 Ok(Token::TTilde)
             }
-            _ => Err(crate::error::ParseError::new(
-                self.current_pos(),
-                format!("unexpected character: '{}'", ch),
-            )),
+            _ => Err(crate::error::ParseError {
+                span: self.current_pos(),
+                kind: crate::error::ErrorKind::UnexpectedToken {
+                    expected: vec![],
+                    found: format!("'{}'", ch),
+                },
+                labels: vec![],
+            }),
         }
     }
 
@@ -386,6 +406,7 @@ impl Lexer {
 
     /// Parse angle bracket path: <nixpkgs>
     fn parse_env_path(&mut self) -> crate::error::Result<Token> {
+        let opening_span = self.current_pos();
         self.advance(); // consume '<'
 
         let mut path = String::new();
@@ -399,18 +420,26 @@ impl Lexer {
                     path.push(self.advance().unwrap());
                 }
                 _ => {
-                    return Err(crate::error::ParseError::new(
-                        self.current_pos(),
-                        "invalid character in path",
-                    ))
+                    return Err(crate::error::ParseError {
+                        span: self.current_pos(),
+                        kind: crate::error::ErrorKind::InvalidSyntax {
+                            description: format!("invalid character '{}' in path", ch),
+                            hint: Some("paths can only contain alphanumeric characters, '.', '_', '-', and '/'".to_string()),
+                        },
+                        labels: vec![],
+                    })
                 }
             }
         }
 
-        Err(crate::error::ParseError::new(
-            self.current_pos(),
-            "unclosed path",
-        ))
+        Err(crate::error::ParseError {
+            span: self.current_pos(),
+            kind: crate::error::ErrorKind::UnclosedDelimiter {
+                delimiter: '<',
+                opening_span,
+            },
+            labels: vec![],
+        })
     }
 
     /// Parse number (integer or float)

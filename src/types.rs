@@ -373,7 +373,7 @@ impl Token {
             Token::TUnequal => "!=",
             Token::TPipeForward => "|>",
             Token::TPipeBackward => "<|",
-            Token::SOF => "",
+            Token::SOF => "end of file",
             _ => "",
         }
     }

@@ -37,7 +37,7 @@ fn test_single_ampersand_error() {
     let result = parse("a & b");
     assert!(result.is_err());
     let err = result.unwrap_err();
-    assert!(err.to_string().contains("unexpected '&', expected '&&'"));
+    assert!(err.to_string().contains("expected '&&', found '&'"));
 }
 
 #[test]
@@ -47,7 +47,7 @@ fn test_single_pipe_error() {
     let err = result.unwrap_err();
     assert!(err
         .to_string()
-        .contains("unexpected '|', expected '||' or '|>'"));
+        .contains("expected one of '||', '|>', found '|'"));
 }
 
 #[test]
@@ -62,7 +62,9 @@ fn test_ellipsis_without_colon_error() {
     let result = parse("{ ... }");
     assert!(result.is_err());
     let err = result.unwrap_err();
-    assert!(err.to_string().contains("{ ... } must be followed by :"));
+    assert!(err
+        .to_string()
+        .contains("{ ... } must be followed by ':' or '@'"));
 }
 
 #[test]

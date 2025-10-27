@@ -1,6 +1,8 @@
 //! nixfmt-rs2 CLI
 
 use nixfmt_rs::colored_writer::ColoredWriter;
+use nixfmt_rs::error::context::ErrorContext;
+use nixfmt_rs::error::format::ErrorFormatter;
 use nixfmt_rs::pretty_simple::PrettySimple;
 use std::io::{self, Read};
 use std::process::exit;
@@ -21,12 +23,13 @@ fn main() {
     }
 
     // Read from stdin if no files specified
-    let source = if files.is_empty() {
+    let (source, filename) = if files.is_empty() {
         let mut buffer = String::new();
         io::stdin().read_to_string(&mut buffer).unwrap();
-        buffer
+        (buffer, None)
     } else {
-        std::fs::read_to_string(&files[0]).unwrap()
+        let content = std::fs::read_to_string(&files[0]).unwrap();
+        (content, Some(files[0].as_str()))
     };
 
     // Parse the file
@@ -44,7 +47,10 @@ fn main() {
             }
         }
         Err(e) => {
-            eprintln!("Error: {}", e);
+            // Use the new beautiful error formatter
+            let context = ErrorContext::new(&source, filename);
+            let formatter = ErrorFormatter::new(&context);
+            eprintln!("{}", formatter.format(&e));
             exit(1);
         }
     }

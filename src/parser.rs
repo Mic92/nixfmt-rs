@@ -125,10 +125,16 @@ impl Parser {
 
                     // Check for colon - if not present, give helpful error
                     if !matches!(self.current.value, Token::TColon) {
-                        return Err(ParseError::new(
-                            at_tok.span,
-                            "@ is only valid in lambda parameters",
-                        ));
+                        return Err(ParseError {
+                            span: at_tok.span,
+                            kind: crate::error::ErrorKind::InvalidSyntax {
+                                description: "@ is only valid in lambda parameters".to_string(),
+                                hint: Some(
+                                    "use 'name1 @ name2: body' for function parameters".to_string(),
+                                ),
+                            },
+                            labels: vec![],
+                        });
                     }
 
                     let colon = self.expect_token_match(|t| matches!(t, Token::TColon))?;
@@ -252,10 +258,14 @@ impl Parser {
                             ))
                         } else {
                             // Not a parameter - must be invalid
-                            Err(ParseError::new(
-                                close_brace.span,
-                                "set with parameter-like syntax but no : - expected = for bindings",
-                            ))
+                            Err(ParseError {
+                                span: close_brace.span,
+                                kind: crate::error::ErrorKind::InvalidSyntax {
+                                    description: "set with parameter-like syntax but no colon".to_string(),
+                                    hint: Some("use '{ x = ...; }' for set literals or '{ x }: body' for parameters".to_string()),
+                                },
+                                labels: vec![],
+                            })
                         }
                     }
                     Err(_) => {
@@ -305,10 +315,14 @@ impl Parser {
                         Box::new(body),
                     ))
                 } else {
-                    Err(ParseError::new(
-                        close_brace.span,
-                        "{ ... } must be followed by : or @",
-                    ))
+                    Err(ParseError {
+                        span: close_brace.span,
+                        kind: crate::error::ErrorKind::InvalidSyntax {
+                            description: "{ ... } must be followed by ':' or '@'".to_string(),
+                            hint: Some("use '{ x }: body' for function parameters".to_string()),
+                        },
+                        labels: vec![],
+                    })
                 }
             }
             _ => {
@@ -426,7 +440,14 @@ impl Parser {
                 if matches!(ann.value, Token::Identifier(_)) {
                     Ok(Parameter::IDParameter(ann))
                 } else {
-                    Err(ParseError::new(ann.span, "expected parameter"))
+                    Err(ParseError {
+                        span: ann.span,
+                        kind: crate::error::ErrorKind::UnexpectedToken {
+                            expected: vec!["identifier".to_string()],
+                            found: format!("'{}'", ann.value.text()),
+                        },
+                        labels: vec![],
+                    })
                 }
             }
             Expression::Term(Term::Set(None, open, items, close)) => {
@@ -435,10 +456,14 @@ impl Parser {
                 let attrs = self.items_to_param_attrs(items)?;
                 Ok(Parameter::SetParameter(open, attrs, close))
             }
-            _ => Err(ParseError::new(
-                Span::point(0),
-                "complex parameters not yet supported",
-            )),
+            _ => Err(ParseError {
+                span: Span::point(0),
+                kind: crate::error::ErrorKind::InvalidSyntax {
+                    description: "complex parameters not yet supported".to_string(),
+                    hint: Some("use simple identifiers or set patterns as parameters".to_string()),
+                },
+                labels: vec![],
+            }),
         }
     }
 
@@ -472,13 +497,28 @@ impl Parser {
                                         comma,
                                     ));
                                 } else {
-                                    return Err(ParseError::new(
-                                        Span::point(0),
-                                        "invalid parameter attribute",
-                                    ));
+                                    return Err(ParseError {
+                                        span: Span::point(0),
+                                        kind: crate::error::ErrorKind::InvalidSyntax {
+                                            description: "invalid parameter attribute".to_string(),
+                                            hint: Some(
+                                                "expected 'name' or 'name ? default'".to_string(),
+                                            ),
+                                        },
+                                        labels: vec![],
+                                    });
                                 }
                             } else {
-                                return Err(ParseError::new(Span::point(0), "invalid parameter selector"));
+                                return Err(ParseError {
+                                    span: Span::point(0),
+                                    kind: crate::error::ErrorKind::InvalidSyntax {
+                                        description: "invalid parameter selector".to_string(),
+                                        hint: Some(
+                                            "expected identifier in parameter pattern".to_string(),
+                                        ),
+                                    },
+                                    labels: vec![],
+                                });
                             }
                         }
                         Binder::Inherit(_, _, _, dots) => {
@@ -518,10 +558,14 @@ impl Parser {
                 Ok(Parameter::IDParameter(ident))
             }
         } else {
-            Err(ParseError::new(
-                self.current.span,
-                "expected parameter",
-            ))
+            Err(ParseError {
+                span: self.current.span,
+                kind: crate::error::ErrorKind::UnexpectedToken {
+                    expected: vec!["identifier".to_string(), "set pattern".to_string()],
+                    found: format!("'{}'", self.current.value.text()),
+                },
+                labels: vec![],
+            })
         }
     }
 
@@ -572,10 +616,14 @@ impl Parser {
                 // Check what follows the identifier
                 if matches!(self.current.value, Token::TAssign | Token::TDot) {
                     // This is a binding (a = ...), not a parameter!
-                    return Err(ParseError::new(
-                        name.span,
-                        "not a parameter - looks like binding",
-                    ));
+                    return Err(ParseError {
+                        span: name.span,
+                        kind: crate::error::ErrorKind::InvalidSyntax {
+                            description: "not a parameter - looks like binding".to_string(),
+                            hint: Some("parameters cannot have '=' or '.'".to_string()),
+                        },
+                        labels: vec![],
+                    });
                 }
 
                 // Check for ? default
@@ -607,7 +655,23 @@ impl Parser {
     fn parse_let(&mut self) -> Result<Expression> {
         let let_tok = self.expect_token_match(|t| matches!(t, Token::KLet))?;
         let bindings = self.parse_binders()?;
-        let in_tok = self.expect_token_match(|t| matches!(t, Token::KIn))?;
+
+        // Expect 'in' keyword
+        let in_tok = if matches!(self.current.value, Token::KIn) {
+            let tok = self.take_current();
+            self.advance()?;
+            tok
+        } else {
+            return Err(ParseError {
+                span: self.current.span,
+                kind: crate::error::ErrorKind::UnexpectedToken {
+                    expected: vec!["'in'".to_string()],
+                    found: format!("'{}'", self.current.value.text()),
+                },
+                labels: vec![],
+            });
+        };
+
         let body = self.parse_expression()?;
 
         Ok(Expression::Let(let_tok, bindings, in_tok, Box::new(body)))
@@ -617,9 +681,41 @@ impl Parser {
     fn parse_if(&mut self) -> Result<Expression> {
         let if_tok = self.expect_token_match(|t| matches!(t, Token::KIf))?;
         let cond = self.parse_expression()?;
-        let then_tok = self.expect_token_match(|t| matches!(t, Token::KThen))?;
+
+        // Expect 'then' with a helpful error message
+        let then_tok = if matches!(self.current.value, Token::KThen) {
+            let tok = self.take_current();
+            self.advance()?;
+            tok
+        } else {
+            return Err(ParseError {
+                span: self.current.span,
+                kind: crate::error::ErrorKind::UnexpectedToken {
+                    expected: vec!["'then'".to_string()],
+                    found: format!("'{}'", self.current.value.text()),
+                },
+                labels: vec![],
+            });
+        };
+
         let then_expr = self.parse_expression()?;
-        let else_tok = self.expect_token_match(|t| matches!(t, Token::KElse))?;
+
+        // Expect 'else' with a helpful error message
+        let else_tok = if matches!(self.current.value, Token::KElse) {
+            let tok = self.take_current();
+            self.advance()?;
+            tok
+        } else {
+            return Err(ParseError {
+                span: self.current.span,
+                kind: crate::error::ErrorKind::UnexpectedToken {
+                    expected: vec!["'else'".to_string()],
+                    found: format!("'{}'", self.current.value.text()),
+                },
+                labels: vec![],
+            });
+        };
+
         let else_expr = self.parse_expression()?;
 
         Ok(Expression::If(
@@ -636,7 +732,23 @@ impl Parser {
     fn parse_with(&mut self) -> Result<Expression> {
         let with_tok = self.expect_token_match(|t| matches!(t, Token::KWith))?;
         let expr1 = self.parse_expression()?;
-        let semi = self.expect_token_match(|t| matches!(t, Token::TSemicolon))?;
+
+        // Expect semicolon after with expression
+        let semi = if matches!(self.current.value, Token::TSemicolon) {
+            let tok = self.take_current();
+            self.advance()?;
+            tok
+        } else {
+            return Err(ParseError {
+                span: self.current.span,
+                kind: crate::error::ErrorKind::MissingToken {
+                    token: "';'".to_string(),
+                    after: "'with' expression".to_string(),
+                },
+                labels: vec![],
+            });
+        };
+
         let expr2 = self.parse_expression()?;
 
         Ok(Expression::With(
@@ -651,7 +763,23 @@ impl Parser {
     fn parse_assert(&mut self) -> Result<Expression> {
         let assert_tok = self.expect_token_match(|t| matches!(t, Token::KAssert))?;
         let cond = self.parse_expression()?;
-        let semi = self.expect_token_match(|t| matches!(t, Token::TSemicolon))?;
+
+        // Expect semicolon after assert condition
+        let semi = if matches!(self.current.value, Token::TSemicolon) {
+            let tok = self.take_current();
+            self.advance()?;
+            tok
+        } else {
+            return Err(ParseError {
+                span: self.current.span,
+                kind: crate::error::ErrorKind::MissingToken {
+                    token: "';'".to_string(),
+                    after: "'assert' condition".to_string(),
+                },
+                labels: vec![],
+            });
+        };
+
         let body = self.parse_expression()?;
 
         Ok(Expression::Assert(
@@ -770,25 +898,56 @@ impl Parser {
     /// Parse binary operation with precedence climbing
     fn parse_binary_operation(&mut self, mut left: Expression, min_prec: u8) -> Result<Expression> {
         let mut last_comparison_prec: Option<u8> = None;
+        let mut last_comparison_op: Option<String> = None;
         while self.is_binary_op() && self.get_precedence() >= min_prec {
             let op_token = self.take_current();
             let is_comparison = Self::is_comparison_operator(&op_token.value);
             let prec = self.get_precedence_for(&op_token.value);
+            let op_string = op_token.value.text().to_string(); // User-friendly format
 
             // Check if we're chaining comparison operators at the same precedence level
             // This prevents: 1 < 2 < 3 (both < at precedence 9)
             // But allows: 1 < 2 == 2 > 3 (< and > at precedence 9, == at precedence 8)
             if is_comparison && last_comparison_prec == Some(prec) {
-                return Err(ParseError::new(
-                    op_token.span,
-                    "comparison operators cannot be chained",
-                ));
+                return Err(ParseError {
+                    span: op_token.span,
+                    kind: crate::error::ErrorKind::ChainedComparison {
+                        first_op: last_comparison_op.unwrap_or_else(|| "?".to_string()),
+                        second_op: op_string,
+                    },
+                    labels: vec![],
+                });
             }
 
             let is_right_assoc = self.is_right_associative(&op_token.value);
             self.advance()?;
 
-            let mut right = self.parse_application()?;
+            // Try to parse the right-hand side, providing better error for incomplete expressions
+            let mut right = match self.parse_application() {
+                Ok(expr) => expr,
+                Err(e) => {
+                    // If we failed to parse the right-hand side and current token is }
+                    // (closing an interpolation), provide a more helpful error
+                    if matches!(self.current.value, Token::TBraceClose | Token::TInterClose) {
+                        return Err(ParseError {
+                            span: self.current.span,
+                            kind: crate::error::ErrorKind::InvalidSyntax {
+                                description: format!(
+                                    "incomplete expression after '{}' operator",
+                                    op_token.value.text()
+                                ),
+                                hint: Some(
+                                    "binary operators require expressions on both sides"
+                                        .to_string(),
+                                ),
+                            },
+                            labels: vec![],
+                        });
+                    } else {
+                        return Err(e);
+                    }
+                }
+            };
 
             // For right-associative operators, use >= to allow same-precedence operators to bind right
             // For left-associative operators, use > to make them bind left
@@ -829,8 +988,14 @@ impl Parser {
                 Expression::Operation(Box::new(left), op_token, Box::new(right))
             };
 
-            // Track the precedence of comparison operators to prevent chaining at the same level
-            last_comparison_prec = is_comparison.then_some(prec);
+            // Track the precedence and operator of comparison operators to prevent chaining at the same level
+            if is_comparison {
+                last_comparison_prec = Some(prec);
+                last_comparison_op = Some(op_string);
+            } else {
+                last_comparison_prec = None;
+                last_comparison_op = None;
+            }
         }
 
         Ok(left)
@@ -960,11 +1125,69 @@ impl Parser {
             });
         }
 
+        // Check for common mistake: attribute path followed by semicolon (forgot = and value)
+        if matches!(self.current.value, Token::TSemicolon) {
+            return Err(ParseError {
+                span: self.current.span,
+                kind: crate::error::ErrorKind::UnexpectedToken {
+                    expected: vec!["'='".to_string()],
+                    found: "';'".to_string(),
+                },
+                labels: vec![],
+            });
+        }
+
         let eq = self.expect_token_match(|t| matches!(t, Token::TAssign))?;
         let expr = self.parse_expression()?;
-        let semi = self.expect_token_match(|t| matches!(t, Token::TSemicolon))?;
 
-        Ok(Binder::Assignment(selectors, eq, expr, semi))
+        // Get the end of the expression for error reporting
+        // Special case: if the expression is an Application, the user likely forgot
+        // a semicolon and the parser treated the next line as a function argument.
+        // Point to the end of the LEFT side (the function) instead of the RIGHT side.
+        let expr_end_span = match &expr {
+            Expression::Application(func, _arg) => Self::expr_end_span(func),
+            _ => Self::expr_end_span(&expr),
+        };
+
+        // Expect semicolon with helpful error message
+        if matches!(self.current.value, Token::TSemicolon) {
+            let semi = self.take_current();
+            self.advance()?;
+            Ok(Binder::Assignment(selectors, eq, expr, semi))
+        } else if matches!(self.current.value, Token::SOF) {
+            // EOF found - check if this is an unclosed nested set
+            // If the expression is a set, the closing brace might have belonged to an outer scope
+            if let Expression::Term(Term::Set(_, open_brace, _, close_brace)) = &expr {
+                Err(ParseError {
+                    span: close_brace.span,
+                    kind: crate::error::ErrorKind::UnclosedDelimiter {
+                        delimiter: '{',
+                        opening_span: open_brace.span,
+                    },
+                    labels: vec![],
+                })
+            } else {
+                // Generic EOF error
+                Err(ParseError {
+                    span: expr_end_span,
+                    kind: crate::error::ErrorKind::UnexpectedToken {
+                        expected: vec!["';'".to_string()],
+                        found: "'end of file'".to_string(),
+                    },
+                    labels: vec![],
+                })
+            }
+        } else {
+            // Missing semicolon - point to the END of the expression
+            Err(ParseError {
+                span: expr_end_span,
+                kind: crate::error::ErrorKind::UnexpectedToken {
+                    expected: vec!["';'".to_string()],
+                    found: format!("'{}'", self.current.value.text()),
+                },
+                labels: vec![],
+            })
+        }
     }
 
     /// Parse a selector (with optional dot)
@@ -992,10 +1215,18 @@ impl Parser {
                 let interpol = self.parse_selector_interpolation()?;
                 Ok(SimpleSelector::InterpolSelector(interpol))
             }
-            _ => Err(ParseError::new(
-                self.current.span,
-                "expected selector",
-            )),
+            _ => Err(ParseError {
+                span: self.current.span,
+                kind: crate::error::ErrorKind::UnexpectedToken {
+                    expected: vec![
+                        "identifier".to_string(),
+                        "string".to_string(),
+                        "interpolation".to_string(),
+                    ],
+                    found: format!("'{}'", self.current.value.text()),
+                },
+                labels: vec![],
+            }),
         }
     }
 
@@ -1021,10 +1252,21 @@ impl Parser {
             Token::TParenOpen => self.parse_parenthesized(),
             Token::TDoubleQuote => self.parse_simple_string(),
             Token::TDoubleSingleQuote => self.parse_indented_string(),
-            _ => Err(ParseError::new(
-                self.current.span,
-                format!("unexpected token: {:?}", self.current.value),
-            )),
+            _ => Err(ParseError {
+                span: self.current.span,
+                kind: crate::error::ErrorKind::UnexpectedToken {
+                    expected: vec![
+                        "identifier".to_string(),
+                        "number".to_string(),
+                        "string".to_string(),
+                        "set".to_string(),
+                        "list".to_string(),
+                        "path".to_string(),
+                    ],
+                    found: format!("'{}'", self.current.value.text()),
+                },
+                labels: vec![],
+            }),
         }?;
 
         // Check for selection (.attr) or or-default
@@ -1167,10 +1409,22 @@ impl Parser {
         // This matches nixfmt's requirement that pathTraversal must have content after the slash
         if let Some(StringPart::TextPart(text)) = parts.last() {
             if text.ends_with('/') {
-                return Err(ParseError::new(
-                    start_pos,
-                    "path cannot end with a trailing slash",
-                ));
+                // Point to the trailing slash, not the start of the path
+                let current_pos = self.lexer.current_pos().start;
+                let slash_pos = Span {
+                    start: current_pos.saturating_sub(1),
+                    end: current_pos,
+                };
+                return Err(ParseError {
+                    span: slash_pos,
+                    kind: crate::error::ErrorKind::InvalidSyntax {
+                        description: "path cannot end with a trailing slash".to_string(),
+                        hint: Some(
+                            "remove the trailing '/' or add more path components".to_string(),
+                        ),
+                    },
+                    labels: vec![],
+                });
             }
         }
 
@@ -1228,17 +1482,28 @@ impl Parser {
 
         // Get the scheme (already tokenized as identifier)
         let Token::Identifier(scheme) = &self.current.value else {
-            return Err(ParseError::new(
-                start_pos,
-                "expected identifier for URI scheme",
-            ));
+            return Err(ParseError {
+                span: start_pos,
+                kind: crate::error::ErrorKind::UnexpectedToken {
+                    expected: vec!["identifier".to_string()],
+                    found: format!("'{}'", self.current.value.text()),
+                },
+                labels: vec![],
+            });
         };
 
         let mut uri_text = scheme.clone();
 
         // Expect ":"
         if self.lexer.peek() != Some(':') {
-            return Err(ParseError::new(start_pos, "expected ':' after URI scheme"));
+            return Err(ParseError {
+                span: self.lexer.current_pos(),
+                kind: crate::error::ErrorKind::MissingToken {
+                    token: "':'".to_string(),
+                    after: "URI scheme".to_string(),
+                },
+                labels: vec![],
+            });
         }
         self.lexer.advance();
         uri_text.push(':');
@@ -1375,7 +1640,14 @@ impl Parser {
 
         // DON'T advance - just verify we're at a quote
         if !matches!(self.current.value, Token::TDoubleQuote) {
-            return Err(ParseError::new(open_quote_pos, "expected opening quote"));
+            return Err(ParseError {
+                span: open_quote_pos,
+                kind: crate::error::ErrorKind::UnexpectedToken {
+                    expected: vec!["'\"'".to_string()],
+                    found: format!("'{}'", self.current.value.text()),
+                },
+                labels: vec![],
+            });
         }
 
         let _opening_quote = self.take_current();
@@ -1391,7 +1663,14 @@ impl Parser {
                     break;
                 }
                 None => {
-                    return Err(ParseError::new(open_quote_pos, "unclosed string"));
+                    return Err(ParseError {
+                        span: self.lexer.current_pos(),
+                        kind: crate::error::ErrorKind::UnclosedDelimiter {
+                            delimiter: '"',
+                            opening_span: open_quote_pos,
+                        },
+                        labels: vec![],
+                    });
                 }
                 Some('$') if self.lexer.peek_ahead(1) == Some('{') => {
                     // Interpolation
@@ -1493,18 +1772,57 @@ impl Parser {
         // Re-sync parser
         self.current = self.lexer.lexeme()?;
 
-        // Parse expression
-        let expr = self.parse_expression()?;
+        // Check for empty interpolation ${}
+        if matches!(self.current.value, Token::TBraceClose) {
+            return Err(ParseError {
+                span: self.current.span,
+                kind: crate::error::ErrorKind::InvalidSyntax {
+                    description: "empty interpolation expression".to_string(),
+                    hint: Some(
+                        "string interpolations require an expression inside ${...}".to_string(),
+                    ),
+                },
+                labels: vec![],
+            });
+        }
+
+        // Parse expression, catching errors to provide better messages for common mistakes
+        let expr = match self.parse_expression() {
+            Ok(e) => e,
+            Err(err) => {
+                // If we got an UnclosedDelimiter error for a quote, it's likely because
+                // the user forgot to close the interpolation with }, and the expression
+                // parser treated the closing quote of the outer string as a new string start
+                if let crate::error::ErrorKind::UnclosedDelimiter {
+                    delimiter: '"',
+                    opening_span,
+                } = &err.kind
+                {
+                    // Check if the "opening" position is likely the closing quote of outer string
+                    // by seeing if there's a quote at that position
+                    return Err(ParseError {
+                        span: *opening_span,
+                        kind: crate::error::ErrorKind::UnexpectedToken {
+                            expected: vec!["'}'".to_string()],
+                            found: "'\"'".to_string(),
+                        },
+                        labels: vec![],
+                    });
+                }
+                return Err(err);
+            }
+        };
 
         // Verify we're at }
         if !matches!(self.current.value, Token::TBraceClose) {
-            return Err(ParseError::new(
-                self.current.span,
-                format!(
-                    "expected }} in interpolation, found {:?}",
-                    self.current.value
-                ),
-            ));
+            return Err(ParseError {
+                span: self.current.span,
+                kind: crate::error::ErrorKind::UnexpectedToken {
+                    expected: vec!["'}'".to_string()],
+                    found: format!("'{}'", self.current.value.text()),
+                },
+                labels: vec![],
+            });
         }
 
         // The } token was already consumed by the lexer when creating TBraceClose
@@ -1543,7 +1861,14 @@ impl Parser {
 
         // Expect closing ''
         if self.lexer.peek() != Some('\'') || self.lexer.peek_ahead(1) != Some('\'') {
-            return Err(ParseError::new(open_quote_pos, "unclosed indented string"));
+            return Err(ParseError {
+                span: self.lexer.current_pos(),
+                kind: crate::error::ErrorKind::UnclosedDelimiter {
+                    delimiter: '\'', // represents ''
+                    opening_span: open_quote_pos,
+                },
+                labels: vec![],
+            });
         }
         self.lexer.advance(); // '
         self.lexer.advance(); // '
@@ -1708,11 +2033,12 @@ impl Parser {
         };
 
         let open_brace = self.expect_token_match(|t| matches!(t, Token::TBraceOpen))?;
+        let opening_span = open_brace.span;
 
         // Parse bindings
         let bindings = self.parse_binders()?;
 
-        let close_brace = self.expect_token_match(|t| matches!(t, Token::TBraceClose))?;
+        let close_brace = self.expect_closing_delimiter(opening_span, '{', Token::TBraceClose)?;
 
         Ok(Term::Set(prefix_tok, open_brace, bindings, close_brace))
     }
@@ -1720,11 +2046,12 @@ impl Parser {
     /// Parse list: [ ... ]
     fn parse_list(&mut self) -> Result<Term> {
         let open_bracket = self.expect_token_match(|t| matches!(t, Token::TBrackOpen))?;
+        let opening_span = open_bracket.span;
 
         // Parse list items (terms separated by whitespace)
         let items = self.parse_list_items()?;
 
-        let close_bracket = self.expect_token_match(|t| matches!(t, Token::TBrackClose))?;
+        let close_bracket = self.expect_closing_delimiter(opening_span, '[', Token::TBrackClose)?;
 
         Ok(Term::List(open_bracket, items, close_bracket))
     }
@@ -1734,6 +2061,40 @@ impl Parser {
         let mut items = Vec::new();
 
         while !matches!(self.current.value, Token::TBrackClose | Token::SOF) {
+            // Check for commas (not valid in Nix lists)
+            if matches!(self.current.value, Token::TComma) {
+                return Err(ParseError {
+                    span: self.current.span,
+                    kind: crate::error::ErrorKind::InvalidSyntax {
+                        description: "commas are not used to separate list elements in Nix"
+                            .to_string(),
+                        hint: Some("use spaces to separate list elements: [1 2 3]".to_string()),
+                    },
+                    labels: vec![],
+                });
+            }
+
+            // Check for mismatched closing delimiters before trying to parse
+            if matches!(
+                self.current.value,
+                Token::TBraceClose | Token::TParenClose | Token::TInterClose
+            ) {
+                return Err(ParseError {
+                    span: self.current.span,
+                    kind: crate::error::ErrorKind::InvalidSyntax {
+                        description: format!(
+                            "mismatched delimiter: expected ']', found '{}'",
+                            self.current.value.text()
+                        ),
+                        hint: Some(format!(
+                            "change '{}' to ']' to match the opening bracket",
+                            self.current.value.text()
+                        )),
+                    },
+                    labels: vec![],
+                });
+            }
+
             // Check for comments before item
             self.collect_trivia_as_comments(&mut items);
 
@@ -1752,10 +2113,11 @@ impl Parser {
     /// Parse parenthesized expression: ( expr )
     fn parse_parenthesized(&mut self) -> Result<Term> {
         let open_paren = self.expect_token_match(|t| matches!(t, Token::TParenOpen))?;
+        let opening_span = open_paren.span;
 
         let expr = self.parse_expression()?;
 
-        let close_paren = self.expect_token_match(|t| matches!(t, Token::TParenClose))?;
+        let close_paren = self.expect_closing_delimiter(opening_span, '(', Token::TParenClose)?;
 
         Ok(Term::Parenthesized(open_paren, Box::new(expr), close_paren))
     }
@@ -1837,6 +2199,108 @@ impl Parser {
         }
     }
 
+    /// Get the ending span of an expression (the span of its last/rightmost token)
+    fn expr_end_span(expr: &Expression) -> Span {
+        match expr {
+            Expression::Term(term) => Self::term_end_span(term),
+            Expression::With(_, _, _, expr) => Self::expr_end_span(expr),
+            Expression::Let(_, _, _, expr) => Self::expr_end_span(expr),
+            Expression::Assert(_, _, _, expr) => Self::expr_end_span(expr),
+            Expression::If(_, _, _, _, _, expr) => Self::expr_end_span(expr),
+            Expression::Abstraction(_, _, expr) => Self::expr_end_span(expr),
+            Expression::Application(_, expr) => Self::expr_end_span(expr),
+            Expression::Operation(_, _, right) => Self::expr_end_span(right),
+            Expression::MemberCheck(_, _, selectors) => {
+                // Last selector's span
+                if let Some(last) = selectors.last() {
+                    Self::simple_selector_end_span(&last.selector)
+                } else {
+                    // No selectors - shouldn't happen
+                    Span::point(0)
+                }
+            }
+            Expression::Negation(_, expr) => Self::expr_end_span(expr),
+            Expression::Inversion(_, expr) => Self::expr_end_span(expr),
+        }
+    }
+
+    /// Get the ending span of a term
+    fn term_end_span(term: &Term) -> Span {
+        match term {
+            Term::Token(leaf) => leaf.span,
+            Term::SimpleString(s) | Term::IndentedString(s) => s.span,
+            Term::Path(p) => p.span,
+            Term::List(_, _, close) => close.span,
+            Term::Set(_, _, _, close) => close.span,
+            Term::Selection(base, selectors, default) => {
+                // Return the rightmost element: default > last selector > base
+                if let Some((_, default_expr)) = default {
+                    Self::term_end_span(default_expr)
+                } else if let Some(last) = selectors.last() {
+                    Self::simple_selector_end_span(&last.selector)
+                } else {
+                    Self::term_end_span(base)
+                }
+            }
+            Term::Parenthesized(_, _, close) => close.span,
+        }
+    }
+
+    /// Get the ending span of a simple selector
+    fn simple_selector_end_span(sel: &SimpleSelector) -> Span {
+        match sel {
+            SimpleSelector::IDSelector(leaf) => leaf.span,
+            SimpleSelector::InterpolSelector(ann) => ann.span,
+            SimpleSelector::StringSelector(s) => s.span,
+        }
+    }
+
+    /// Expect a closing delimiter, providing helpful error if not found
+    fn expect_closing_delimiter(
+        &mut self,
+        opening_span: Span,
+        opening_char: char,
+        closing_token: Token,
+    ) -> Result<Ann<Token>> {
+        if self.current.value == closing_token {
+            let token = self.take_current();
+            self.advance()?;
+            Ok(token)
+        } else if matches!(self.current.value, Token::SOF) {
+            // EOF reached without closing delimiter
+            Err(ParseError {
+                span: self.current.span,
+                kind: crate::error::ErrorKind::UnclosedDelimiter {
+                    delimiter: opening_char,
+                    opening_span,
+                },
+                labels: vec![],
+            })
+        } else {
+            // Special case: comma inside parentheses (common mistake from other languages)
+            if opening_char == '(' && matches!(self.current.value, Token::TComma) {
+                return Err(ParseError {
+                    span: self.current.span,
+                    kind: crate::error::ErrorKind::InvalidSyntax {
+                        description: "comma not allowed inside parentheses".to_string(),
+                        hint: Some("Nix doesn't use commas in parenthesized expressions. For function calls, use spaces: f x y. For multiple values, use a list [x y] or set { a = x; b = y; }".to_string()),
+                    },
+                    labels: vec![],
+                });
+            }
+
+            // Some other token found
+            Err(ParseError {
+                span: self.current.span,
+                kind: crate::error::ErrorKind::UnexpectedToken {
+                    expected: vec![format!("'{}'", closing_token.text())],
+                    found: format!("'{}'", self.current.value.text()),
+                },
+                labels: vec![],
+            })
+        }
+    }
+
     /// Expect specific token, advance if matches
     fn expect_token_match<F>(&mut self, predicate: F) -> Result<Ann<Token>>
     where
@@ -1847,10 +2311,14 @@ impl Parser {
             self.advance()?;
             Ok(token)
         } else {
-            Err(ParseError::new(
-                self.current.span,
-                format!("unexpected token: {:?}", self.current.value),
-            ))
+            Err(ParseError {
+                span: self.current.span,
+                kind: crate::error::ErrorKind::UnexpectedToken {
+                    expected: vec![], // caller doesn't specify what's expected
+                    found: format!("'{}'", self.current.value.text()),
+                },
+                labels: vec![],
+            })
         }
     }
 
@@ -1859,10 +2327,14 @@ impl Parser {
         if matches!(self.current.value, Token::SOF) {
             Ok(())
         } else {
-            Err(ParseError::new(
-                self.current.span,
-                format!("expected end of file, found: {:?}", self.current.value),
-            ))
+            Err(ParseError {
+                span: self.current.span,
+                kind: crate::error::ErrorKind::UnexpectedToken {
+                    expected: vec!["end of file".to_string()],
+                    found: format!("'{}'", self.current.value.text()),
+                },
+                labels: vec![],
+            })
         }
     }
 
