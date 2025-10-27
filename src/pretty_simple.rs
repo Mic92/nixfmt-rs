@@ -34,6 +34,9 @@ pub trait Writer {
     fn with_depth<F, R>(&mut self, f: F) -> R
     where
         F: FnOnce(&mut Self) -> R;
+
+    /// Get the source text (used for computing line numbers from byte offsets)
+    fn source(&self) -> &str;
 }
 
 // ANSI color codes
@@ -634,14 +637,21 @@ impl PrettySimple for Token {
 }
 
 // Generic Ann<T> implementation for all T that implement PrettySimple
-/// Helper wrapper for formatting "Pos N" inline
+/// Helper wrapper for formatting span as "Pos N" for Haskell compatibility
+/// Even though we use Span internally, the pretty-printed AST should match Haskell
 #[derive(Debug)]
-struct PosWrapper(usize);
+struct SpanWrapper(Span);
 
-impl PrettySimple for PosWrapper {
+impl PrettySimple for SpanWrapper {
     fn format<W: Writer>(&self, w: &mut W) {
+        use crate::error::context::ErrorContext;
+
         w.write_plain("Pos ");
-        self.0.format(w);
+
+        // Compute line number from byte offset
+        let ctx = ErrorContext::new(w.source(), None);
+        let pos = ctx.position(self.0.start);
+        pos.line.format(w);
     }
 
     fn is_simple(&self) -> bool {
@@ -681,7 +691,7 @@ impl<T: PrettySimple> PrettySimple for Ann<T> {
             w,
             [
                 ("preTrivia", &self.pre_trivia),
-                ("sourceLine", &PosWrapper(self.source_line.0)),
+                ("sourceLine", &SpanWrapper(self.span)),
                 ("value", &self.value),
                 ("trailComment", &self.trail_comment),
             ]

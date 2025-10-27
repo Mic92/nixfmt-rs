@@ -33,7 +33,7 @@ pub fn test_ast_format(name: &str, input: &str) {
     let ast = nixfmt_rs::parse(input).expect(&format!("Failed to parse test '{}'", name));
 
     // Format with our trait-based formatter
-    let mut writer = ColoredWriter::new();
+    let mut writer = ColoredWriter::new(input);
     ast.format(&mut writer);
     let our_output = writer.finish();
 

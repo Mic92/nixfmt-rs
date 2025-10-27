@@ -126,7 +126,7 @@ impl Parser {
                     // Check for colon - if not present, give helpful error
                     if !matches!(self.current.value, Token::TColon) {
                         return Err(ParseError::new(
-                            at_tok.source_line,
+                            at_tok.span,
                             "@ is only valid in lambda parameters",
                         ));
                     }
@@ -253,7 +253,7 @@ impl Parser {
                         } else {
                             // Not a parameter - must be invalid
                             Err(ParseError::new(
-                                close_brace.source_line,
+                                close_brace.span,
                                 "set with parameter-like syntax but no : - expected = for bindings",
                             ))
                         }
@@ -306,7 +306,7 @@ impl Parser {
                     ))
                 } else {
                     Err(ParseError::new(
-                        close_brace.source_line,
+                        close_brace.span,
                         "{ ... } must be followed by : or @",
                     ))
                 }
@@ -371,7 +371,7 @@ impl Parser {
                 return Ok(Expression::Abstraction(param, colon, Box::new(body)));
             } else {
                 return Err(ParseError::new(
-                    at_tok.source_line,
+                    at_tok.span,
                     "@ is only valid in lambda parameters",
                 ));
             }
@@ -426,7 +426,7 @@ impl Parser {
                 if matches!(ann.value, Token::Identifier(_)) {
                     Ok(Parameter::IDParameter(ann))
                 } else {
-                    Err(ParseError::new(ann.source_line, "expected parameter"))
+                    Err(ParseError::new(ann.span, "expected parameter"))
                 }
             }
             Expression::Term(Term::Set(None, open, items, close)) => {
@@ -436,7 +436,7 @@ impl Parser {
                 Ok(Parameter::SetParameter(open, attrs, close))
             }
             _ => Err(ParseError::new(
-                Pos(1),
+                Span::point(0),
                 "complex parameters not yet supported",
             )),
         }
@@ -462,7 +462,7 @@ impl Parser {
                                     // Check if expr indicates a default (x ? default pattern)
                                     // For simplicity, we'll treat any assignment as x ? default
                                     let default = Some((
-                                        Ann::new(Token::TQuestion, name.source_line), // Fake ? token
+                                        Ann::new(Token::TQuestion, name.span), // Fake ? token
                                         expr,
                                     ));
                                     let comma = Some(comma_or_semi);
@@ -473,12 +473,12 @@ impl Parser {
                                     ));
                                 } else {
                                     return Err(ParseError::new(
-                                        Pos(1),
+                                        Span::point(0),
                                         "invalid parameter attribute",
                                     ));
                                 }
                             } else {
-                                return Err(ParseError::new(Pos(1), "invalid parameter selector"));
+                                return Err(ParseError::new(Span::point(0), "invalid parameter selector"));
                             }
                         }
                         Binder::Inherit(_, _, _, dots) => {
@@ -519,7 +519,7 @@ impl Parser {
             }
         } else {
             Err(ParseError::new(
-                self.current.source_line,
+                self.current.span,
                 "expected parameter",
             ))
         }
@@ -573,7 +573,7 @@ impl Parser {
                 if matches!(self.current.value, Token::TAssign | Token::TDot) {
                     // This is a binding (a = ...), not a parameter!
                     return Err(ParseError::new(
-                        name.source_line,
+                        name.span,
                         "not a parameter - looks like binding",
                     ));
                 }
@@ -780,7 +780,7 @@ impl Parser {
             // But allows: 1 < 2 == 2 > 3 (< and > at precedence 9, == at precedence 8)
             if is_comparison && last_comparison_prec == Some(prec) {
                 return Err(ParseError::new(
-                    op_token.source_line,
+                    op_token.span,
                     "comparison operators cannot be chained",
                 ));
             }
@@ -993,7 +993,7 @@ impl Parser {
                 Ok(SimpleSelector::InterpolSelector(interpol))
             }
             _ => Err(ParseError::new(
-                self.current.source_line,
+                self.current.span,
                 "expected selector",
             )),
         }
@@ -1022,7 +1022,7 @@ impl Parser {
             Token::TDoubleQuote => self.parse_simple_string(),
             Token::TDoubleSingleQuote => self.parse_indented_string(),
             _ => Err(ParseError::new(
-                self.current.source_line,
+                self.current.span,
                 format!("unexpected token: {:?}", self.current.value),
             )),
         }?;
@@ -1079,7 +1079,7 @@ impl Parser {
     /// Parse path: ./foo/bar or ~/foo or /foo
     /// Based on Haskell's path parser
     fn parse_path(&mut self) -> Result<Term> {
-        let start_pos = self.current.source_line;
+        let start_pos = self.current.span;
         let pre_trivia = self.current.pre_trivia.clone();
         let mut parts = Vec::new();
 
@@ -1178,7 +1178,7 @@ impl Parser {
 
         let ann = Ann {
             pre_trivia,
-            source_line: start_pos,
+            span: start_pos,
             value: parts,
             trail_comment,
         };
@@ -1223,7 +1223,7 @@ impl Parser {
     /// Parse URI as a SimpleString
     /// Based on nixfmt's uri parser
     fn parse_uri(&mut self) -> Result<Term> {
-        let start_pos = self.current.source_line;
+        let start_pos = self.current.span;
         let pre_trivia = self.current.pre_trivia.clone();
 
         // Get the scheme (already tokenized as identifier)
@@ -1260,7 +1260,7 @@ impl Parser {
         let parts = vec![vec![StringPart::TextPart(uri_text)]];
         let ann = Ann {
             pre_trivia,
-            source_line: start_pos,
+            span: start_pos,
             value: parts,
             trail_comment,
         };
@@ -1370,7 +1370,7 @@ impl Parser {
 
     /// Parse simple string literal and return annotated string structure
     fn parse_simple_string_literal(&mut self) -> Result<Ann<Vec<Vec<StringPart>>>> {
-        let open_quote_pos = self.current.source_line;
+        let open_quote_pos = self.current.span;
         let pre_trivia = self.current.pre_trivia.clone();
 
         // DON'T advance - just verify we're at a quote
@@ -1416,7 +1416,7 @@ impl Parser {
 
         Ok(Ann {
             pre_trivia,
-            source_line: open_quote_pos,
+            span: open_quote_pos,
             value: lines,
             trail_comment,
         })
@@ -1499,7 +1499,7 @@ impl Parser {
         // Verify we're at }
         if !matches!(self.current.value, Token::TBraceClose) {
             return Err(ParseError::new(
-                self.current.source_line,
+                self.current.span,
                 format!(
                     "expected }} in interpolation, found {:?}",
                     self.current.value
@@ -1524,7 +1524,7 @@ impl Parser {
     /// Parse indented string: ''...''
     /// Based on Haskell's indentedString parser
     fn parse_indented_string(&mut self) -> Result<Term> {
-        let open_quote_pos = self.current.source_line;
+        let open_quote_pos = self.current.span;
         let pre_trivia = self.current.pre_trivia.clone();
 
         // Take the opening '' token (don't advance - just take it)
@@ -1553,7 +1553,7 @@ impl Parser {
 
         let ann = Ann {
             pre_trivia,
-            source_line: open_quote_pos,
+            span: open_quote_pos,
             value: lines,
             trail_comment,
         };
@@ -1793,7 +1793,7 @@ impl Parser {
         // Create a dummy token to replace current
         let dummy = Ann {
             pre_trivia: Trivia::new(),
-            source_line: Pos(1),
+            span: Span::point(0),
             value: Token::SOF,
             trail_comment: None,
         };
@@ -1848,7 +1848,7 @@ impl Parser {
             Ok(token)
         } else {
             Err(ParseError::new(
-                self.current.source_line,
+                self.current.span,
                 format!("unexpected token: {:?}", self.current.value),
             ))
         }
@@ -1860,7 +1860,7 @@ impl Parser {
             Ok(())
         } else {
             Err(ParseError::new(
-                self.current.source_line,
+                self.current.span,
                 format!("expected end of file, found: {:?}", self.current.value),
             ))
         }
@@ -1885,7 +1885,7 @@ impl Parser {
 
         Ok(Ann {
             pre_trivia: open.pre_trivia,
-            source_line: open.source_line,
+            span: open.span,
             value: StringPart::Interpolation(Box::new(Whole {
                 value: expr,
                 trailing_trivia: close.pre_trivia.clone(),

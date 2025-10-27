@@ -34,7 +34,7 @@ fn main() {
         Ok(file) => {
             if dump_ast {
                 // Output AST with colors matching nixfmt
-                let mut writer = ColoredWriter::new();
+                let mut writer = ColoredWriter::new(&source);
                 file.format(&mut writer);
                 print!("{}", writer.finish());
             } else {

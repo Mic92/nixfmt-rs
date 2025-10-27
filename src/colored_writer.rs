@@ -22,26 +22,22 @@ const DELIM_COLORS: &[&str] = &[
 
 const ERROR_COLOR: &str = "\x1b[0;91;1m";
 
-pub struct ColoredWriter {
+pub struct ColoredWriter<'a> {
     depth: usize,
     color_depth: usize,
     output: String,
     line_start: bool,
+    source: &'a str,
 }
 
-impl Default for ColoredWriter {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
-impl ColoredWriter {
-    pub fn new() -> Self {
+impl<'a> ColoredWriter<'a> {
+    pub fn new(source: &'a str) -> Self {
         Self {
             depth: 0,
             color_depth: 0,
             output: String::new(),
             line_start: true,
+            source,
         }
     }
 
@@ -57,7 +53,7 @@ impl ColoredWriter {
     }
 }
 
-impl Writer for ColoredWriter {
+impl<'a> Writer for ColoredWriter<'a> {
     fn write_plain(&mut self, text: &str) {
         self.indent();
         self.output.push_str(text);
@@ -102,5 +98,9 @@ impl Writer for ColoredWriter {
         let result = f(self);
         self.depth -= 1;
         result
+    }
+
+    fn source(&self) -> &str {
+        self.source
     }
 }

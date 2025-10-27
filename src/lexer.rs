@@ -111,12 +111,15 @@ impl Lexer {
             let _ = self.skip_hspace();
         }
 
+        // Record start position BEFORE parsing the token
+        let token_start = self.pos;
+
         // Parse the token (note: next_token() also skips hspace, but that's ok since we already did)
         let token = self.next_token()?;
 
-        // Record position AFTER next_token() has consumed any leading trivia
-        // This ensures sourceLine reflects where the token actually appears
-        let token_pos = self.current_pos();
+        // Record position AFTER parsing token to create span
+        let token_end = self.pos;
+        let token_span = crate::types::Span::new(token_start, token_end);
 
         // For string/path delimiters, don't parse trivia immediately
         // The parser needs to access raw source content
@@ -142,7 +145,7 @@ impl Lexer {
         // Return annotated token
         Ok(crate::types::Ann {
             pre_trivia: leading_trivia,
-            source_line: token_pos,
+            span: token_span,
             value: token,
             trail_comment: trailing_comment,
         })
@@ -161,9 +164,9 @@ impl Lexer {
         std::mem::take(&mut self.trivia_buffer)
     }
 
-    /// Get current position
-    pub(crate) fn current_pos(&self) -> crate::types::Pos {
-        crate::types::Pos(self.line)
+    /// Get current position as a zero-length span
+    pub(crate) fn current_pos(&self) -> crate::types::Span {
+        crate::types::Span::point(self.pos)
     }
 
     /// Parse next token (without trivia handling)

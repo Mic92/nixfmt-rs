@@ -1,12 +1,31 @@
 //! AST types matching nixfmt Haskell's Types.hs
 
-/// Source position (line number, 1-indexed to match Haskell Pos)
+/// A byte offset range in the source
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
-pub struct Pos(pub usize);
+pub struct Span {
+    pub start: usize, // byte offset
+    pub end: usize,   // byte offset
+}
 
-impl Pos {
-    pub fn new(line: usize) -> Self {
-        Pos(line)
+impl Span {
+    pub fn new(start: usize, end: usize) -> Self {
+        Self { start, end }
+    }
+
+    /// Create a zero-length span at the given offset
+    pub fn point(offset: usize) -> Self {
+        Self {
+            start: offset,
+            end: offset,
+        }
+    }
+
+    /// Extend this span to include another position
+    pub fn extend_to(self, end: usize) -> Self {
+        Self {
+            start: self.start,
+            end,
+        }
     }
 }
 
@@ -90,22 +109,22 @@ pub struct TrailingComment(pub String);
 
 /// Annotated wrapper - every AST node has:
 /// - pre_trivia: Comments/whitespace before the token
-/// - source_line: Line number in source
+/// - span: Byte range in source
 /// - value: The actual value
 /// - trail_comment: Optional trailing comment on same line
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Ann<T> {
     pub pre_trivia: Trivia,
-    pub source_line: Pos,
+    pub span: Span,
     pub value: T,
     pub trail_comment: Option<TrailingComment>,
 }
 
 impl<T> Ann<T> {
-    pub fn new(value: T, line: Pos) -> Self {
+    pub fn new(value: T, span: Span) -> Self {
         Ann {
             pre_trivia: Trivia::new(),
-            source_line: line,
+            span,
             value,
             trail_comment: None,
         }
