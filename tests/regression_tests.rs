@@ -400,3 +400,19 @@ fn regression_utf8_identifier() {
     // Note: This file is "parse-fail" in Nix itself, but nixfmt still parses it to show AST
     test_ast_format("utf8_identifier", "123 é 4");
 }
+
+#[test]
+fn regression_multiline_string_unicode_line_numbers() {
+    // Line numbers for tokens after multiline strings containing special Unicode chars
+    // Bug: Our parser reports different line numbers than nixfmt for TSemicolon and TBraceClose
+    // From nix/tests/functional/nar-access.nix lines 6-20
+    test_ast_format(
+        "multiline_unicode_lines",
+        r#"{
+  x = ''
+    line1
+ä"§
+  '';
+}"#,
+    );
+}
