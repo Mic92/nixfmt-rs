@@ -191,10 +191,10 @@ impl Lexer {
 
         let ch = self.peek().unwrap();
 
-        // Check for identifiers/keywords (Unicode alphabetic or underscore)
-        // This must come before the match to handle non-ASCII alphabetic characters
-        // which can't be matched in patterns
-        if ch.is_alphabetic() || ch == '_' {
+        // Check for identifiers/keywords (ASCII alphabetic or underscore)
+        // Nix only allows ASCII letters: [a-zA-Z_][a-zA-Z0-9_'-]*
+        // This must come before the match to handle checking for valid identifier starts
+        if ch.is_ascii_alphabetic() || ch == '_' {
             return self.parse_ident_or_keyword();
         }
 
@@ -389,7 +389,9 @@ impl Lexer {
         let mut ident = String::new();
 
         while let Some(ch) = self.peek() {
-            if ch.is_alphanumeric() || ch == '_' || ch == '-' || ch == '\'' {
+            // Nix identifiers must be ASCII-only: [a-zA-Z_][a-zA-Z0-9_'-]*
+            // Use is_ascii_alphanumeric() instead of is_alphanumeric() to reject Unicode
+            if ch.is_ascii_alphanumeric() || ch == '_' || ch == '-' || ch == '\'' {
                 ident.push(ch);
                 self.advance();
             } else {

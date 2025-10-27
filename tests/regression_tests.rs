@@ -394,11 +394,14 @@ fn regression_chained_comparison_operators() {
 
 #[test]
 fn regression_utf8_identifier() {
-    // Identifiers can contain UTF-8/Unicode alphabetic characters
-    // nixfmt uses isAlpha which accepts Unicode, not just ASCII a-z
+    // UPDATED: This was incorrectly expecting UTF-8 identifiers to be accepted.
+    // Nix identifiers must be ASCII-only: [a-zA-Z_][a-zA-Z0-9_'-]*
     // From nix/tests/functional/lang/parse-fail-utf8.nix
-    // Note: This file is "parse-fail" in Nix itself, but nixfmt still parses it to show AST
-    test_ast_format("utf8_identifier", "123 é 4");
+    // nix-instantiate correctly rejects this with "unexpected invalid token"
+    assert!(
+        nixfmt_rs::parse("123 é 4").is_err(),
+        "expected non-ASCII character to be rejected"
+    );
 }
 
 #[test]
