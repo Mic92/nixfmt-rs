@@ -41,6 +41,10 @@ pub(crate) struct Lexer {
     trivia_start_pos: Option<usize>,
     trivia_start_line: Option<usize>,
     trivia_start_column: Option<usize>,
+    /// Scratch buffer reused while collecting `#` comments
+    line_comment_buffer: String,
+    /// Scratch buffer reused while collecting block comments
+    block_comment_buffer: String,
 }
 
 impl Lexer {
@@ -56,6 +60,8 @@ impl Lexer {
             trivia_start_pos: None,
             trivia_start_line: None,
             trivia_start_column: None,
+            line_comment_buffer: String::new(),
+            block_comment_buffer: String::new(),
         }
     }
 
@@ -617,16 +623,22 @@ impl Lexer {
         let col = self.column;
         self.advance(); // consume '#'
 
-        let mut text = String::new();
+        self.line_comment_buffer.clear();
         while let Some(ch) = self.peek() {
             if matches!(ch, '\n' | '\r') {
                 break;
             }
-            text.push(self.advance().unwrap());
+            let advanced = self.advance().unwrap();
+            self.line_comment_buffer.push(advanced);
         }
 
         ParseTrivium::LineComment {
-            text: text.trim_end().to_string(),
+            text: {
+                let trimmed = self.line_comment_buffer.trim_end();
+                let result = trimmed.to_string();
+                self.line_comment_buffer.clear();
+                result
+            },
             col,
         }
     }
@@ -643,18 +655,20 @@ impl Lexer {
             self.advance();
         }
 
-        let mut chars = String::new();
+        self.block_comment_buffer.clear();
         while !self.is_eof() {
             if matches!((self.peek(), self.peek_ahead(1)), (Some('*'), Some('/'))) {
                 self.advance(); // consume '*'
                 self.advance(); // consume '/'
                 break;
             }
-            chars.push(self.advance().unwrap());
+            let advanced = self.advance().unwrap();
+            self.block_comment_buffer.push(advanced);
         }
 
         // Normalize the comment according to Haskell logic
-        let lines = Self::split_lines(&chars);
+        let lines = Self::split_lines(&self.block_comment_buffer);
+        self.block_comment_buffer.clear();
         let lines = Self::remove_stars(start_col, lines);
         let lines = Self::fix_indent(start_col, lines);
 
