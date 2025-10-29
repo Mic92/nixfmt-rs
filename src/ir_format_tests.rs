@@ -24,3 +24,10 @@ use crate::tests_common::test_ir_format;
 fn test_simple_parameter_pattern() {
     test_ir_format("{ a, b }: x");
 }
+
+#[test]
+fn test_let_binding_structure() {
+    // Minimal reproducer: even the simplest let binding loses the inner group + spacing
+    // structure that nixfmt emits for the binding body and the `in` branch.
+    test_ir_format("let a = 1; in a");
+}

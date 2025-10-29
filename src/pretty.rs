@@ -106,8 +106,10 @@ fn push_absorb_rhs(doc: &mut Doc, expr: &Expression) {
         // Non-absorbable terms: start on new line
         Expression::Term(_) => {
             push_nested(doc, |d| {
-                d.push(line());
-                push_group(d, |inner| expr.pretty(inner));
+                push_group(d, |inner| {
+                    inner.push(line());
+                    expr.pretty(inner);
+                });
             });
         }
         // Function application: try to absorb
@@ -340,9 +342,11 @@ impl Pretty for Binder {
             Binder::Assignment(selectors, assign, expr, semicolon) => {
                 push_group(doc, |d| {
                     push_hcat(d, selectors.clone());
-                    d.push(hardspace());
-                    assign.pretty(d);
-                    push_absorb_rhs(d, expr);
+                    push_nested(d, |inner| {
+                        inner.push(hardspace());
+                        assign.pretty(inner);
+                        push_absorb_rhs(inner, expr);
+                    });
                     semicolon.pretty(d);
                 });
             }
@@ -684,15 +688,30 @@ impl Pretty for Expression {
                 expr.pretty(doc);
             }
             Expression::Let(let_kw, binders, in_kw, expr) => {
-                let_kw.pretty(doc);
-                push_nested(doc, |inner| {
-                    inner.push(hardline());
-                    push_pretty_items(inner, binders);
+                let mut in_kw_clean = in_kw.clone();
+                in_kw_clean.pre_trivia = Trivia::new();
+                in_kw_clean.trail_comment = None;
+
+                let mut moved_trivia_vec: Vec<Trivium> = in_kw.pre_trivia.clone().into();
+                if let Some(trailing) = &in_kw.trail_comment {
+                    moved_trivia_vec.push(Trivium::LineComment(format!(" {}", trailing.0)));
+                }
+                let moved_trivia: Trivia = moved_trivia_vec.into();
+
+                push_group(doc, |doc| {
+                    let_kw.pretty(doc);
+                    doc.push(hardline());
+                    push_nested(doc, |inner| {
+                        push_pretty_items(inner, binders);
+                    });
                 });
                 doc.push(hardline());
-                in_kw.pretty(doc);
-                doc.push(hardline());
-                expr.pretty(doc);
+                push_group(doc, |doc| {
+                    in_kw_clean.pretty(doc);
+                    doc.push(hardline());
+                    moved_trivia.pretty(doc);
+                    expr.pretty(doc);
+                });
             }
             Expression::If(if_kw, cond, then_kw, then_expr, else_kw, else_expr) => {
                 if_kw.pretty(doc);
