@@ -18,9 +18,13 @@ fn is_absorbable_term(term: &Term) -> bool {
         // Non-empty sets and lists
         Term::Set(_, _, items, _) if !items.0.is_empty() => true,
         Term::List(_, items, _) if !items.0.is_empty() => true,
-        // Empty sets/lists - always absorbable for now (TODO: check line breaks)
-        Term::Set(_, _, items, _) if items.0.is_empty() => true,
-        Term::List(_, items, _) if items.0.is_empty() => true,
+        // Empty sets/lists - absorbable only if braces/brackets span multiple lines
+        Term::Set(_, open, items, close) if items.0.is_empty() => {
+            open.span.start_line != close.span.start_line
+        }
+        Term::List(open, items, close) if items.0.is_empty() => {
+            open.span.start_line != close.span.start_line
+        }
         // Parenthesized absorbable terms
         Term::Parenthesized(_, expr, _) => is_absorbable_expr(expr),
         _ => false,
@@ -76,8 +80,10 @@ fn push_absorb_rhs(doc: &mut Doc, expr: &Expression) {
             }
             // Non-absorbable: new line
             push_nested(doc, |d| {
-                d.push(line());
-                push_group(d, |inner| expr.pretty(inner));
+                push_group(d, |inner| {
+                    inner.push(line());
+                    expr.pretty(inner);
+                });
             });
         }
         // Absorbable expressions
@@ -137,6 +143,74 @@ fn text_width(s: &str) -> usize {
 /// Check if a string contains only whitespace
 fn is_spaces(s: &str) -> bool {
     s.chars().all(|c| c.is_whitespace())
+}
+
+/// Render the nested document that appears between parentheses.
+/// Mirrors `inner` in nixfmt's `prettyTerm (Parenthesized ...)`.
+fn push_parenthesized_inner(doc: &mut Doc, expr: &Expression) {
+    match expr {
+        _ if is_absorbable_expr(expr) => {
+            push_group(doc, |inner| {
+                expr.pretty(inner);
+            });
+        }
+        Expression::Application(_, _) => {
+            push_group(doc, |inner| {
+                expr.pretty(inner);
+            });
+        }
+        Expression::Term(Term::Selection(term, _, _)) if is_absorbable_term(term) => {
+            doc.push(line_prime());
+            push_group(doc, |inner| {
+                expr.pretty(inner);
+            });
+            doc.push(line_prime());
+        }
+        Expression::Term(Term::Selection(_, _, _)) => {
+            push_group(doc, |inner| {
+                expr.pretty(inner);
+            });
+            doc.push(line_prime());
+        }
+        _ => {
+            doc.push(line_prime());
+            push_group(doc, |inner| {
+                expr.pretty(inner);
+            });
+            doc.push(line_prime());
+        }
+    }
+}
+
+/// Pretty print a parenthesized expression following nixfmt's structure.
+fn push_pretty_parenthesized(
+    doc: &mut Doc,
+    open: &Ann<Token>,
+    expr: &Expression,
+    close: &Ann<Token>,
+) {
+    let mut open_clean = open.clone();
+    let trailing = open_clean.trail_comment.take();
+
+    let close_pre = close.pre_trivia.clone();
+    let mut close_clean = close.clone();
+    close_clean.pre_trivia = Trivia::new();
+
+    push_group(doc, |group_doc| {
+        open_clean.pretty(group_doc);
+
+        push_nested(group_doc, |nested| {
+            if let Some(trailing_comment) = trailing {
+                let comment: Trivia =
+                    vec![Trivium::LineComment(format!(" {}", trailing_comment.0))].into();
+                comment.pretty(nested);
+            }
+            push_parenthesized_inner(nested, expr);
+            close_pre.pretty(nested);
+        });
+
+        close_clean.pretty(group_doc);
+    });
 }
 
 // Pretty instances
@@ -579,9 +653,7 @@ impl Pretty for Term {
                 p.trail_comment.pretty(doc);
             }
             Term::Parenthesized(open, expr, close) => {
-                open.pretty(doc);
-                expr.pretty(doc);
-                close.pretty(doc);
+                push_pretty_parenthesized(doc, open, expr, close);
             }
             Term::List(open, items, close) => {
                 // Empty list

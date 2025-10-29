@@ -48,6 +48,30 @@ fn test_selection_with_default_structure() {
 
 #[test]
 fn test_update_absorbable_rhs_structure() {
-    // Update expression with absorbable RHS currently diverges from reference IR (known mismatch)
+    // Update expression with absorbable RHS currently diverges from reference IR
     test_ir_format("attrs // { inherit value; }");
+}
+
+#[test]
+fn test_inherit_many_identifiers_structure() {
+    // Many identifiers trigger the hardline-based spacing path for inherits
+    test_ir_format("let inherit foo bar baz qux; in foo");
+}
+
+#[test]
+fn test_inherit_with_source_structure() {
+    // Inherit with explicit source exercises nested grouping and spacing branch
+    test_ir_format("let inherit (inputs) foo bar; in foo");
+}
+
+#[test]
+fn test_selection_from_parenthesized_term_structure() {
+    // Selection starting from a parenthesized term forces softline_prime separator
+    test_ir_format("({ inherit foo; }).foo or true");
+}
+
+#[test]
+fn test_selection_from_record_term_structure() {
+    // Selection from a record term forces line_prime separator before selectors
+    test_ir_format("rec { nested = { }; }.nested or { }");
 }
