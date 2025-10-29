@@ -4,10 +4,10 @@ pub mod colored_writer;
 pub mod error;
 pub mod lexer;
 pub mod parser;
+pub mod predoc;
+pub mod pretty;
 pub mod pretty_simple;
 pub mod types;
-// pub mod pretty; // TODO
-// pub mod predoc; // TODO
 
 pub use error::{ParseError, Result};
 pub use pretty_simple::PrettySimple;
@@ -20,7 +20,12 @@ pub fn parse(source: &str) -> Result<File> {
 }
 
 /// Format a Nix file
-pub fn format(_source: &str) -> Result<String> {
-    // TODO: implement full pipeline: parse -> pretty -> render
-    todo!("formatter not yet implemented")
+pub fn format(source: &str) -> Result<String> {
+    use predoc::{render_with_config, Pretty, RenderConfig};
+
+    let ast = parse(source)?;
+    let doc = ast.pretty();
+    let config = RenderConfig::default();
+    let output = render_with_config(&doc, &config);
+    Ok(output)
 }

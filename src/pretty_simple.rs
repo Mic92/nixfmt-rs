@@ -292,6 +292,7 @@ where
 /// Based on pretty-simple's: Parens (CommaSeparated [[Other "Constructor", arg1, arg2, ...]])
 /// Uses subExpr logic: simple elements get space before, complex get newline
 /// Usage: format_constructor!(w, "ConstructorName", [arg1, arg2, arg3])
+#[macro_export]
 macro_rules! format_constructor {
     // Constructor with no arguments
     ($w:expr, $name:expr, []) => {
@@ -312,6 +313,7 @@ macro_rules! format_constructor {
 /// From Haskell: Braces xss -> list "{" "}" xss
 ///
 /// Usage: format_record!(w, [("field1", &value1), ("field2", &value2), ...])
+#[macro_export]
 macro_rules! format_record {
     ($w:expr, [ $(($name:expr, $value:expr)),+ $(,)? ]) => {{
         // Capture current color, then newline and increment depth
@@ -363,6 +365,7 @@ macro_rules! format_record {
 ///       Variant1(field) => [field],
 ///       _ => { w.write_plain(&format!("{:?}", self)); }
 ///   });
+#[macro_export]
 macro_rules! format_enum {
     // Version without wildcard
     ($self:expr, $w:expr, {

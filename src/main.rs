@@ -4,19 +4,30 @@ use nixfmt_rs::colored_writer::ColoredWriter;
 use nixfmt_rs::error::context::ErrorContext;
 use nixfmt_rs::error::format::ErrorFormatter;
 use nixfmt_rs::pretty_simple::PrettySimple;
+use nixfmt_rs::ParseError;
 use std::io::{self, Read};
 use std::process::exit;
+
+fn handle_error(source: &str, filename: Option<&str>, e: ParseError) -> ! {
+    let context = ErrorContext::new(source, filename);
+    let formatter = ErrorFormatter::new(&context);
+    eprintln!("{}", formatter.format(&e));
+    exit(1)
+}
 
 fn main() {
     let args: Vec<String> = std::env::args().collect();
 
     let mut dump_ast = false;
+    let mut dump_ir = false;
     let mut files = Vec::new();
 
     // Parse arguments
     for arg in &args[1..] {
         if arg == "--ast" {
             dump_ast = true;
+        } else if arg == "--ir" {
+            dump_ir = true;
         } else if !arg.starts_with('-') {
             files.push(arg.clone());
         }
@@ -42,26 +53,23 @@ fn main() {
         }
     };
 
-    // Parse the file
-    match nixfmt_rs::parse(&source) {
-        Ok(file) => {
-            if dump_ast {
-                // Output AST with colors matching nixfmt
-                let mut writer = ColoredWriter::new(&source);
-                file.format(&mut writer);
-                print!("{}", writer.finish());
-            } else {
-                eprintln!("nixfmt_rs: formatting not yet implemented");
-                eprintln!("Use --ast to dump AST");
-                exit(1);
-            }
-        }
-        Err(e) => {
-            // Use the new beautiful error formatter
-            let context = ErrorContext::new(&source, filename);
-            let formatter = ErrorFormatter::new(&context);
-            eprintln!("{}", formatter.format(&e));
-            exit(1);
-        }
+    // Process based on mode
+    if dump_ast {
+        let file = nixfmt_rs::parse(&source).unwrap_or_else(|e| handle_error(&source, filename, e));
+        let mut writer = ColoredWriter::new(&source);
+        file.format(&mut writer);
+        print!("{}", writer.finish());
+    } else if dump_ir {
+        use nixfmt_rs::predoc::{fixup, Pretty};
+        let file = nixfmt_rs::parse(&source).unwrap_or_else(|e| handle_error(&source, filename, e));
+        let doc = file.pretty();
+        let doc = fixup(&doc);
+        let mut writer = ColoredWriter::new(&source);
+        doc.format(&mut writer);
+        print!("{}", writer.finish());
+    } else {
+        let formatted =
+            nixfmt_rs::format(&source).unwrap_or_else(|e| handle_error(&source, filename, e));
+        print!("{}", formatted);
     }
 }

@@ -70,9 +70,9 @@ impl From<Vec<Trivium>> for Trivia {
     }
 }
 
-impl Into<Vec<Trivium>> for Trivia {
-    fn into(self) -> Vec<Trivium> {
-        self.0
+impl From<Trivia> for Vec<Trivium> {
+    fn from(val: Trivia) -> Self {
+        val.0
     }
 }
 
