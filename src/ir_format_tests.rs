@@ -1,15 +1,13 @@
-//! IR regression tests
+//! IR formatting regression tests
 //!
-//! Tests for IR formatting differences between nixfmt-rs and reference nixfmt
+//! These tests compare our IR output with the reference nixfmt implementation
+//! to ensure we match the expected pretty-printing structure.
+//!
+//! NOTE: These tests are currently ignored because there are known IR representation
+//! differences that don't affect the formatted output. See IR_FORMATTING_STATUS.md
+//! for details on the remaining differences.
 
-use crate::tests_common::{test_ast_format, test_ir_format};
-
-#[test]
-fn regression_param_with_default_trailing_comma() {
-    // Parameters with defaults should use hardline separator
-    // even when on one line in input, if there's a trailing comma
-    test_ast_format("{ base ? ../., }:\nx");
-}
+use crate::tests_common::test_ir_format;
 
 /// Regression test: simple parameter pattern should have outer Group wrapper
 ///
@@ -22,7 +20,7 @@ fn regression_param_with_default_trailing_comma() {
 /// - Trailing comma handling
 /// - Spacing types (Hardspace vs Space)
 #[test]
-#[ignore = "IR representation differs in indentation/trailing/spacing"]
+#[ignore = "IR representation differs in indentation/trailing/spacin"]
 fn test_simple_parameter_pattern() {
     test_ir_format("{ a, b }: x");
 }

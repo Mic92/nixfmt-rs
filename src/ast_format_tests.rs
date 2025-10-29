@@ -37,8 +37,7 @@ fn test_block_comment() {
 
 #[test]
 fn test_multiline_block_comment() {
-    test_ast_format("/* line 1\n   line 2\n   line 3 */\n42",
-    );
+    test_ast_format("/* line 1\n   line 2\n   line 3 */\n42");
 }
 
 #[test]
@@ -407,19 +406,18 @@ fn test_parenthesized() {
 
 #[test]
 fn test_complex_nested() {
-    test_ast_format("let\n  f = x: x + 1;\n  g = {y}: y * 2;\nin\n  f (g {y=5;})",
-    );
+    test_ast_format("let\n  f = x: x + 1;\n  g = {y}: y * 2;\nin\n  f (g {y=5;})");
 }
 
 #[test]
 fn test_complex_with_comments() {
-    test_ast_format("{\n  # First binding\n  a = 1;\n  /* Block comment */\n  b = 2;\n}",
-    );
+    test_ast_format("{\n  # First binding\n  a = 1;\n  /* Block comment */\n  b = 2;\n}");
 }
 
 #[test]
 fn test_realistic_package() {
-    test_ast_format(r#"{
+    test_ast_format(
+        r#"{
   pname = "example";
   version = "1.0.0";
 
@@ -442,7 +440,8 @@ fn test_realistic_package() {
 fn test_string_hash_not_comment() {
     // Inside multi-line strings, # starts literal text, not a comment
     // The hash and text should be a TextPart, not LineComment trivia
-    test_ast_format(r#"''
+    test_ast_format(
+        r#"''
 foo ${bar}
 
 # TODO: comment

@@ -66,7 +66,8 @@ fn regression_import_relative_path() {
     // Bug 3: "x = foo-bar/baz.nix" was parsed as division with selection
     // Bug 4: "metaCommon // { ... }" was incorrectly detected as path "metaCommon//"
     // Bug 5: "(a / b)" was incorrectly detected as path starting with "a/"
-    test_ast_format(r#"{
+    test_ast_format(
+        r#"{
   a = import common/acme/server/snakeoil-certs.nix;
   b = common/file.nix;
   c = foo-bar/baz.nix;
@@ -157,7 +158,8 @@ fn regression_comment_before_and_with_selectors() {
     // Comments before && operators are dropped when expressions contain
     // interpolation selectors like self.packages.${system}.isLinux
     // The third && operator is missing its preTrivia comment
-    test_ast_format(r#"{
+    test_ast_format(
+        r#"{
   x =
     lib.optionalAttrs
       (
@@ -209,7 +211,8 @@ fn regression_mixed_add_sub_associativity() {
 fn regression_chained_string_concatenation() {
     // Chained + operators should create nested Operation nodes
     // From nixpkgs/nixos/modules/config/resolvconf.nix lines 18-37
-    test_ast_format(r#"''
+    test_ast_format(
+        r#"''
   line1
 ''
 + lib.optionalString cond1 ''
@@ -259,7 +262,8 @@ fn regression_ansi_escape_codes_in_strings() {
 fn regression_dot_selector_on_newline() {
     // Parser should accept dot selector on a newline after closing brace
     // From nixpkgs/nixos/release.nix line 262-267
-    test_ast_format(r#"{
+    test_ast_format(
+        r#"{
   armv6l-linux = ./foo.nix;
 }
 .${system}"#,
@@ -280,7 +284,8 @@ fn regression_inline_comments_after_strings_and_paths() {
     // Bug: The lexer would encounter '#' after manually parsing these constructs
     // and fail with "unexpected character: '#'"
     // From nixpkgs/nixos/tests/public-inbox.nix line 97
-    test_ast_format(r#"[
+    test_ast_format(
+        r#"[
   "simple" # comment after simple string
   ''
     indented
@@ -331,7 +336,8 @@ fn regression_unquoted_url() {
 fn regression_decorated_multiline_comment() {
     // Decorated multiline comments should strip leading "* " from each line
     // From nix/tests/functional/lang/eval-okay-comments.nix lines 42-45
-    test_ast_format(r#"/*
+    test_ast_format(
+        r#"/*
  * Multiline, decorated comments
  * # This ain't a nest'd comm'nt
  */
@@ -395,7 +401,8 @@ fn regression_multiline_string_unicode_line_numbers() {
     // Line numbers for tokens after multiline strings containing special Unicode chars
     // Bug: Our parser reports different line numbers than nixfmt for TSemicolon and TBraceClose
     // From nix/tests/functional/nar-access.nix lines 6-20
-    test_ast_format(r#"{
+    test_ast_format(
+        r#"{
   x = ''
     line1
 ä"§

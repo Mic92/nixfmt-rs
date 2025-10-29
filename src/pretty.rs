@@ -776,20 +776,107 @@ impl Pretty for Parameter {
         match self {
             Parameter::ID(id) => id.pretty(doc),
             Parameter::Set(open, attrs, close) => {
-                open.pretty(doc);
-
-                if !attrs.is_empty() {
-                    doc.push(hardspace());
-                    for (i, attr) in attrs.iter().enumerate() {
-                        if i > 0 {
-                            doc.push(hardspace());
+                // Determine separator based on nixfmt logic:
+                // sep = if sourceLine bopen /= sourceLine bclose
+                //         then hardline
+                //         else case attrs of
+                //           [ParamEllipsis _] -> line
+                //           -- Attributes must be without default
+                //           [ParamAttr _ Nothing _] -> line
+                //           [ParamAttr _ Nothing _, ParamEllipsis _] -> line
+                //           [ParamAttr _ Nothing _, ParamAttr _ Nothing _] -> line
+                //           [ParamAttr _ Nothing _, ParamAttr _ Nothing _, ParamEllipsis _] -> line
+                //           _ -> hardline
+                let multiline = open.span.start_line != close.span.start_line;
+                let sep = if multiline {
+                    hardline()
+                } else {
+                    // Check pattern of attributes to determine if we can use line (soft) or must use hardline (hard)
+                    match attrs.as_slice() {
+                        // Single ellipsis
+                        [ParamAttr::ParamEllipsis(_)] => line(),
+                        // Single param without default
+                        [ParamAttr::ParamAttr(_, default, _)] if default.is_none() => line(),
+                        // Single param without default + ellipsis
+                        [ParamAttr::ParamAttr(_, default1, _), ParamAttr::ParamEllipsis(_)]
+                            if default1.is_none() =>
+                        {
+                            line()
                         }
-                        attr.pretty(doc);
+                        // Two params without defaults
+                        [ParamAttr::ParamAttr(_, default1, _), ParamAttr::ParamAttr(_, default2, _)]
+                            if default1.is_none() && default2.is_none() =>
+                        {
+                            line()
+                        }
+                        // Two params without defaults + ellipsis
+                        [ParamAttr::ParamAttr(_, default1, _), ParamAttr::ParamAttr(_, default2, _), ParamAttr::ParamEllipsis(_)]
+                            if default1.is_none() && default2.is_none() =>
+                        {
+                            line()
+                        }
+                        // All other cases (params with defaults, 3+ params, etc): use hardline
+                        _ => hardline(),
                     }
-                    doc.push(hardspace());
-                }
+                };
 
-                close.pretty(doc);
+                // Wrap set parameters in a group
+                // Matches nixfmt: pretty (SetParameter bopen attrs bclose) = group $ ...
+                push_group(doc, |doc| {
+                    open.pretty(doc);
+
+                    if !attrs.is_empty() {
+                        let format_attrs = |doc: &mut Doc| {
+                            for (i, attr) in attrs.iter().enumerate() {
+                                if i > 0 {
+                                    doc.push(sep.clone());
+                                }
+
+                                // Check if this is the last item and has a trailing comma
+                                let is_last = i == attrs.len() - 1;
+                                if is_last {
+                                    // For the last item, check if it has a trailing comma
+                                    // and render it specially using trailing()
+                                    match attr {
+                                        ParamAttr::ParamAttr(name, maybe_default, Some(_comma)) => {
+                                            // Render without the comma
+                                            let attr_no_comma = ParamAttr::ParamAttr(
+                                                name.clone(),
+                                                maybe_default.clone(),
+                                                None,
+                                            );
+                                            attr_no_comma.pretty(doc);
+                                            // Add comma as trailing (will only appear in expanded/multi-line form)
+                                            push_trailing(doc, ",");
+                                        }
+                                        _ => attr.pretty(doc),
+                                    }
+                                } else {
+                                    attr.pretty(doc);
+                                }
+                            }
+                        };
+
+                        // Determine if we need nesting: nest if sep is hardline (not line/hardspace)
+                        // This matches nixfmt's surroundWith which nests when using hardline separator
+                        let needs_nesting = matches!(sep, DocE::Spacing(Spacing::Hardline));
+
+                        if needs_nesting {
+                            // For multi-line parameters, nest the items
+                            // Matches nixfmt: surroundWith sep (nest $ sepBy sep $ ...)
+                            doc.push(sep.clone());
+                            push_nested(doc, format_attrs);
+                            doc.push(sep.clone());
+                        } else {
+                            // For single-line parameters (using line/hardspace), no nesting
+                            doc.push(sep.clone());
+                            format_attrs(doc);
+                            doc.push(sep.clone());
+                        }
+                    }
+
+                    close.pretty(doc);
+                });
             }
             Parameter::Context(left, at, right) => {
                 left.pretty(doc);
@@ -804,7 +891,11 @@ impl Pretty for Parameter {
 
 impl<T: Pretty> Pretty for Whole<T> {
     fn pretty(&self, doc: &mut Doc) {
-        self.value.pretty(doc);
-        self.trailing_trivia.pretty(doc);
+        // Wrap the entire content in a group
+        // This matches nixfmt's: pretty (Whole x finalTrivia) = group $ pretty x <> pretty finalTrivia
+        push_group(doc, |doc| {
+            self.value.pretty(doc);
+            self.trailing_trivia.pretty(doc);
+        });
     }
 }

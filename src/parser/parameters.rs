@@ -198,7 +198,11 @@ impl Parser {
 
     /// Validate context parameter: check that pattern name doesn't shadow a formal
     /// For id@{formals} or {formals}@id patterns
-    pub(super) fn validate_context_parameter(&self, first: &Parameter, second: &Parameter) -> Result<()> {
+    pub(super) fn validate_context_parameter(
+        &self,
+        first: &Parameter,
+        second: &Parameter,
+    ) -> Result<()> {
         // Extract the pattern name and formals from the context parameter
         match (first, second) {
             // Case 1: args@{x, y, z} - pattern name is first, set is second

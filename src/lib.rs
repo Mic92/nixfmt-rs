@@ -84,6 +84,9 @@ mod string_path_tests;
 mod ast_format_tests;
 
 #[cfg(test)]
+mod ir_format_tests;
+
+#[cfg(test)]
 mod coverage_test;
 
 #[cfg(test)]

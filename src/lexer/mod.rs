@@ -119,15 +119,18 @@ impl Lexer {
             let _ = self.skip_hspace();
         }
 
-        // Record start position BEFORE parsing the token (in byte offsets)
+        // Record start position BEFORE parsing the token (in byte offsets and line numbers)
         let token_start = self.char_offset_to_byte(self.pos);
+        let start_line = self.line;
 
         // Parse the token (note: next_token() also skips hspace, but that's ok since we already did)
         let token = self.next_token()?;
 
-        // Record position AFTER parsing token to create span (in byte offsets)
+        // Record position AFTER parsing token to create span (in byte offsets and line numbers)
         let token_end = self.char_offset_to_byte(self.pos);
-        let token_span = crate::types::Span::new(token_start, token_end);
+        let end_line = self.line;
+        let token_span =
+            crate::types::Span::with_lines(token_start, token_end, start_line, end_line);
 
         // For string/path delimiters, don't parse trivia immediately
         // The parser needs to access raw source content
@@ -605,4 +608,3 @@ impl Lexer {
         self.trivia_buffer.clear();
     }
 }
-

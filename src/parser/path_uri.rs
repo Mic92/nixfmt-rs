@@ -148,10 +148,7 @@ impl Parser {
             if text.ends_with('/') {
                 // Point to the trailing slash, not the start of the path
                 let current_pos = self.lexer.current_pos().start;
-                let slash_pos = Span {
-                    start: current_pos.saturating_sub(1),
-                    end: current_pos,
-                };
+                let slash_pos = Span::new(current_pos.saturating_sub(1), current_pos);
                 return Err(ParseError {
                     span: slash_pos,
                     kind: ErrorKind::InvalidSyntax {

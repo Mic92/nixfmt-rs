@@ -1,15 +1,32 @@
 //! AST types matching nixfmt Haskell's Types.hs
 
-/// A byte offset range in the source
+/// A byte offset range in the source with line information
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub struct Span {
-    pub start: usize, // byte offset
-    pub end: usize,   // byte offset
+    pub start: usize,      // byte offset
+    pub end: usize,        // byte offset
+    pub start_line: usize, // line number (1-indexed)
+    pub end_line: usize,   // line number (1-indexed)
 }
 
 impl Span {
     pub fn new(start: usize, end: usize) -> Self {
-        Self { start, end }
+        Self {
+            start,
+            end,
+            start_line: 1,
+            end_line: 1,
+        }
+    }
+
+    /// Create a new span with line information
+    pub fn with_lines(start: usize, end: usize, start_line: usize, end_line: usize) -> Self {
+        Self {
+            start,
+            end,
+            start_line,
+            end_line,
+        }
     }
 
     /// Create a zero-length span at the given offset
@@ -17,6 +34,8 @@ impl Span {
         Self {
             start: offset,
             end: offset,
+            start_line: 1,
+            end_line: 1,
         }
     }
 
@@ -25,6 +44,8 @@ impl Span {
         Self {
             start: self.start,
             end,
+            start_line: self.start_line,
+            end_line: self.end_line,
         }
     }
 }
