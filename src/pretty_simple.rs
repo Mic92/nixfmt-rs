@@ -497,11 +497,18 @@ impl PrettySimple for Selector {
 
 impl PrettySimple for SimpleSelector {
     fn format<W: Writer>(&self, w: &mut W) {
-        format_enum!(self, w, {
-            IDSelector(leaf) => [leaf],
-            InterpolSelector(part) => [part],
-            StringSelector(string) => [string],
-        });
+        // Use Haskell constructor names for compatibility with nixfmt --ast output
+        match self {
+            Self::ID(leaf) => {
+                format_constructor!(w, "IDSelector", [leaf]);
+            }
+            Self::Interpol(part) => {
+                format_constructor!(w, "InterpolSelector", [part]);
+            }
+            Self::String(string) => {
+                format_constructor!(w, "StringSelector", [string]);
+            }
+        }
     }
 }
 
@@ -570,11 +577,18 @@ impl PrettySimple for Trivia {
 
 impl PrettySimple for Parameter {
     fn format<W: Writer>(&self, w: &mut W) {
-        format_enum!(self, w, {
-            IDParameter(leaf) => [leaf],
-            SetParameter(open, attrs, close) => [open, attrs, close],
-            ContextParameter(left, at, right) => [&**left, at, &**right],
-        });
+        // Use Haskell constructor names for compatibility with nixfmt --ast output
+        match self {
+            Self::ID(leaf) => {
+                format_constructor!(w, "IDParameter", [leaf]);
+            }
+            Self::Set(open, attrs, close) => {
+                format_constructor!(w, "SetParameter", [open, attrs, close]);
+            }
+            Self::Context(left, at, right) => {
+                format_constructor!(w, "ContextParameter", [&**left, at, &**right]);
+            }
+        }
     }
 }
 

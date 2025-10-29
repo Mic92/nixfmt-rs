@@ -161,9 +161,9 @@ pub type NixString = Ann<Vec<Vec<StringPart>>>;
 /// Simple selector (no dot prefix)
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum SimpleSelector {
-    IDSelector(Leaf),
-    InterpolSelector(Ann<StringPart>),
-    StringSelector(NixString),
+    ID(Leaf),
+    Interpol(Ann<StringPart>),
+    String(NixString),
 }
 
 /// Selector with optional dot
@@ -210,10 +210,10 @@ pub enum ParamAttr {
 /// Lambda parameter
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Parameter {
-    IDParameter(Leaf),
-    SetParameter(Leaf, Vec<ParamAttr>, Leaf),
+    ID(Leaf),
+    Set(Leaf, Vec<ParamAttr>, Leaf),
     /// a @ b or a @ { b }
-    ContextParameter(Box<Parameter>, Leaf, Box<Parameter>),
+    Context(Box<Parameter>, Leaf, Box<Parameter>),
 }
 
 /// Expressions
@@ -319,7 +319,7 @@ pub enum Token {
     TPipeForward,       // |>
     TPipeBackward,      // <|
 
-    SOF,    // Start of file
+    Sof,    // Start of file
     TTilde, // ~ (for paths)
 }
 
@@ -373,25 +373,39 @@ impl Token {
             Token::TUnequal => "!=",
             Token::TPipeForward => "|>",
             Token::TPipeBackward => "<|",
-            Token::SOF => "end of file",
+            Token::Sof => "end of file",
             _ => "",
         }
     }
 }
 
-/// Operator fixity
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum Fixity {
-    Prefix,
-    InfixL,
-    InfixN,
-    InfixR,
-    Postfix,
-}
+impl Token {
+    /// Check if this token is an operator that can be used in infix position
+    pub fn is_infix_op(&self) -> bool {
+        matches!(
+            self,
+            Token::TConcat
+                | Token::TMul
+                | Token::TDiv
+                | Token::TPlus
+                | Token::TMinus
+                | Token::TUpdate
+                | Token::TLess
+                | Token::TGreater
+                | Token::TLessEqual
+                | Token::TGreaterEqual
+                | Token::TEqual
+                | Token::TUnequal
+                | Token::TAnd
+                | Token::TOr
+                | Token::TImplies
+                | Token::TPipeForward
+                | Token::TPipeBackward
+        )
+    }
 
-/// Operators
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum Operator {
-    Op(Fixity, Token),
-    Apply,
+    /// Check if this is an update, concat, or plus operator (for special formatting)
+    pub fn is_update_concat_plus(&self) -> bool {
+        matches!(self, Token::TUpdate | Token::TConcat | Token::TPlus)
+    }
 }

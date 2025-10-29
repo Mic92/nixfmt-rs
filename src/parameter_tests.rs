@@ -6,7 +6,7 @@ use crate::{parse, Expression, Parameter};
 fn test_id_parameter() {
     let file = parse("x: x").unwrap();
     match &file.value {
-        Expression::Abstraction(Parameter::IDParameter(_), _, _) => {}
+        Expression::Abstraction(Parameter::ID(_), _, _) => {}
         _ => panic!("expected id parameter"),
     }
 }
@@ -15,7 +15,7 @@ fn test_id_parameter() {
 fn test_set_parameter_simple() {
     let file = parse("{ x }: x").unwrap();
     match &file.value {
-        Expression::Abstraction(Parameter::SetParameter(_, attrs, _), _, _) => {
+        Expression::Abstraction(Parameter::Set(_, attrs, _), _, _) => {
             assert_eq!(attrs.len(), 1);
         }
         _ => panic!("expected set parameter"),
@@ -26,7 +26,7 @@ fn test_set_parameter_simple() {
 fn test_set_parameter_multiple() {
     let file = parse("{ x, y }: x + y").unwrap();
     match &file.value {
-        Expression::Abstraction(Parameter::SetParameter(_, attrs, _), _, _) => {
+        Expression::Abstraction(Parameter::Set(_, attrs, _), _, _) => {
             assert_eq!(attrs.len(), 2);
         }
         _ => panic!("expected set parameter with 2 attrs"),
@@ -37,7 +37,7 @@ fn test_set_parameter_multiple() {
 fn test_set_parameter_with_default() {
     let file = parse("{ x ? 1 }: x").unwrap();
     match &file.value {
-        Expression::Abstraction(Parameter::SetParameter(_, attrs, _), _, _) => {
+        Expression::Abstraction(Parameter::Set(_, attrs, _), _, _) => {
             assert_eq!(attrs.len(), 1);
         }
         _ => panic!("expected set parameter with default"),
@@ -48,7 +48,7 @@ fn test_set_parameter_with_default() {
 fn test_set_parameter_with_ellipsis() {
     let file = parse("{ x, ... }: x").unwrap();
     match &file.value {
-        Expression::Abstraction(Parameter::SetParameter(_, attrs, _), _, _) => {
+        Expression::Abstraction(Parameter::Set(_, attrs, _), _, _) => {
             assert_eq!(attrs.len(), 2);
         }
         _ => panic!("expected set parameter with ellipsis"),
@@ -59,7 +59,7 @@ fn test_set_parameter_with_ellipsis() {
 fn test_context_parameter_id_at_set() {
     let file = parse("args @ { x }: x").unwrap();
     match &file.value {
-        Expression::Abstraction(Parameter::ContextParameter(_, _, _), _, _) => {}
+        Expression::Abstraction(Parameter::Context(_, _, _), _, _) => {}
         _ => panic!("expected context parameter"),
     }
 }
@@ -68,7 +68,7 @@ fn test_context_parameter_id_at_set() {
 fn test_context_parameter_set_at_id() {
     let file = parse("{ x } @ args: x").unwrap();
     match &file.value {
-        Expression::Abstraction(Parameter::ContextParameter(_, _, _), _, _) => {}
+        Expression::Abstraction(Parameter::Context(_, _, _), _, _) => {}
         _ => panic!("expected context parameter"),
     }
 }
@@ -96,7 +96,7 @@ fn test_empty_set_literal() {
 fn test_nested_context_parameters() {
     let file = parse("a @ b @ { x }: x").unwrap();
     match &file.value {
-        Expression::Abstraction(Parameter::ContextParameter(_, _, _), _, _) => {}
+        Expression::Abstraction(Parameter::Context(_, _, _), _, _) => {}
         _ => panic!("expected nested context parameters"),
     }
 }

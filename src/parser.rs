@@ -9,7 +9,6 @@ use crate::types::*;
 /// Characters allowed in URI schemes (in addition to alphanumeric)
 /// Based on nixfmt's schemeChar: "-.+"
 const URI_SCHEME_SPECIAL_CHARS: &[char] = &['-', '.', '+'];
-
 /// Characters allowed in URIs (in addition to alphanumeric)
 /// Based on nixfmt's uriChar: "~!@$%&*-=_+:',./?"
 const URI_SPECIAL_CHARS: &[char] = &[
@@ -114,7 +113,7 @@ impl Parser {
                     let colon = self.take_and_advance()?;
                     let body = self.parse_expression()?;
                     Ok(Expression::Abstraction(
-                        Parameter::IDParameter(ident),
+                        Parameter::ID(ident),
                         colon,
                         Box::new(body),
                     ))
@@ -138,13 +137,13 @@ impl Parser {
                     }
 
                     // Validate that pattern name doesn't shadow a formal
-                    let first_param = Parameter::IDParameter(ident.clone());
+                    let first_param = Parameter::ID(ident.clone());
                     self.validate_context_parameter(&first_param, &second_param)?;
 
                     let colon = self.expect_token_match(|t| matches!(t, Token::TColon))?;
                     let body = self.parse_expression()?;
                     Ok(Expression::Abstraction(
-                        Parameter::ContextParameter(
+                        Parameter::Context(
                             Box::new(first_param),
                             at_tok,
                             Box::new(second_param),
@@ -196,7 +195,7 @@ impl Parser {
                     let colon = self.take_and_advance()?;
                     let body = self.parse_expression()?;
                     Ok(Expression::Abstraction(
-                        Parameter::SetParameter(open_brace, Vec::new(), close_brace),
+                        Parameter::Set(open_brace, Vec::new(), close_brace),
                         colon,
                         Box::new(body),
                     ))
@@ -206,7 +205,7 @@ impl Parser {
                     let second_param = self.parse_full_parameter()?;
 
                     // Validate that pattern name doesn't shadow a formal
-                    let first_param = Parameter::SetParameter(
+                    let first_param = Parameter::Set(
                         open_brace.clone(),
                         Vec::new(),
                         close_brace.clone(),
@@ -216,7 +215,7 @@ impl Parser {
                     let colon = self.expect_token_match(|t| matches!(t, Token::TColon))?;
                     let body = self.parse_expression()?;
                     Ok(Expression::Abstraction(
-                        Parameter::ContextParameter(
+                        Parameter::Context(
                             Box::new(first_param),
                             at_tok,
                             Box::new(second_param),
@@ -250,7 +249,7 @@ impl Parser {
                             let colon = self.take_and_advance()?;
                             let body = self.parse_expression()?;
                             Ok(Expression::Abstraction(
-                                Parameter::SetParameter(open_brace, attrs, close_brace),
+                                Parameter::Set(open_brace, attrs, close_brace),
                                 colon,
                                 Box::new(body),
                             ))
@@ -260,7 +259,7 @@ impl Parser {
                             let second_param = self.parse_full_parameter()?;
 
                             // Validate that pattern name doesn't shadow a formal
-                            let first_param = Parameter::SetParameter(
+                            let first_param = Parameter::Set(
                                 open_brace.clone(),
                                 attrs.clone(),
                                 close_brace.clone(),
@@ -270,7 +269,7 @@ impl Parser {
                             let colon = self.expect_token_match(|t| matches!(t, Token::TColon))?;
                             let body = self.parse_expression()?;
                             Ok(Expression::Abstraction(
-                                Parameter::ContextParameter(
+                                Parameter::Context(
                                     Box::new(first_param),
                                     at_tok,
                                     Box::new(second_param),
@@ -321,7 +320,7 @@ impl Parser {
                     let colon = self.take_and_advance()?;
                     let body = self.parse_expression()?;
                     Ok(Expression::Abstraction(
-                        Parameter::SetParameter(open_brace, attrs, close_brace),
+                        Parameter::Set(open_brace, attrs, close_brace),
                         colon,
                         Box::new(body),
                     ))
@@ -331,7 +330,7 @@ impl Parser {
                     let second_param = self.parse_full_parameter()?;
 
                     // Validate that pattern name doesn't shadow a formal
-                    let first_param = Parameter::SetParameter(
+                    let first_param = Parameter::Set(
                         open_brace.clone(),
                         attrs.clone(),
                         close_brace.clone(),
@@ -341,7 +340,7 @@ impl Parser {
                     let colon = self.expect_token_match(|t| matches!(t, Token::TColon))?;
                     let body = self.parse_expression()?;
                     Ok(Expression::Abstraction(
-                        Parameter::ContextParameter(
+                        Parameter::Context(
                             Box::new(first_param),
                             at_tok,
                             Box::new(second_param),
@@ -414,7 +413,7 @@ impl Parser {
                 // Validate that pattern name doesn't shadow a formal
                 self.validate_context_parameter(&first_param, &second_param)?;
 
-                let param = Parameter::ContextParameter(
+                let param = Parameter::Context(
                     Box::new(first_param),
                     at_tok,
                     Box::new(second_param),
@@ -477,7 +476,7 @@ impl Parser {
         match expr {
             Expression::Term(Term::Token(ann)) => {
                 if matches!(ann.value, Token::Identifier(_)) {
-                    Ok(Parameter::IDParameter(ann))
+                    Ok(Parameter::ID(ann))
                 } else {
                     Err(ParseError {
                         span: ann.span,
@@ -493,7 +492,7 @@ impl Parser {
                 // Convert set literal to set parameter
                 // This happens for: { x, y }: or { x ? 1 }: patterns
                 let attrs = self.items_to_param_attrs(items)?;
-                Ok(Parameter::SetParameter(open, attrs, close))
+                Ok(Parameter::Set(open, attrs, close))
             }
             _ => Err(ParseError {
                 span: Span::point(0),
@@ -520,7 +519,7 @@ impl Parser {
                             if sels.len() == 1 {
                                 if let Some(Selector {
                                     dot: None,
-                                    selector: SimpleSelector::IDSelector(name),
+                                    selector: SimpleSelector::ID(name),
                                 }) = sels.pop()
                                 {
                                     // Check if expr indicates a default (x ? default pattern)
@@ -590,16 +589,16 @@ impl Parser {
                 let second = self.parse_full_parameter()?;
 
                 // Validate that pattern name doesn't shadow a formal
-                let first_param = Parameter::IDParameter(ident.clone());
+                let first_param = Parameter::ID(ident.clone());
                 self.validate_context_parameter(&first_param, &second)?;
 
-                Ok(Parameter::ContextParameter(
+                Ok(Parameter::Context(
                     Box::new(first_param),
                     at_tok,
                     Box::new(second),
                 ))
             } else {
-                Ok(Parameter::IDParameter(ident))
+                Ok(Parameter::ID(ident))
             }
         } else {
             Err(ParseError {
@@ -625,7 +624,7 @@ impl Parser {
 
         let close_brace = self.expect_token_match(|t| matches!(t, Token::TBraceClose))?;
 
-        let set_param = Parameter::SetParameter(open_brace, attrs, close_brace);
+        let set_param = Parameter::Set(open_brace, attrs, close_brace);
 
         // Check for @ (context parameter)
         if matches!(self.current.value, Token::TAt) {
@@ -635,7 +634,7 @@ impl Parser {
             // Validate that pattern name doesn't shadow a formal
             self.validate_context_parameter(&set_param, &second)?;
 
-            Ok(Parameter::ContextParameter(
+            Ok(Parameter::Context(
                 Box::new(set_param),
                 at_tok,
                 Box::new(second),
@@ -650,7 +649,7 @@ impl Parser {
     fn parse_param_attrs(&mut self) -> Result<Vec<ParamAttr>> {
         let mut attrs = Vec::new();
 
-        while !matches!(self.current.value, Token::TBraceClose | Token::SOF) {
+        while !matches!(self.current.value, Token::TBraceClose | Token::Sof) {
             if matches!(self.current.value, Token::TEllipsis) {
                 // Ellipsis
                 let dots = self.take_and_advance()?;
@@ -765,13 +764,13 @@ impl Parser {
         // Extract the pattern name and formals from the context parameter
         match (first, second) {
             // Case 1: args@{x, y, z} - pattern name is first, set is second
-            (Parameter::IDParameter(pattern_leaf), Parameter::SetParameter(_, attrs, _)) => {
+            (Parameter::ID(pattern_leaf), Parameter::Set(_, attrs, _)) => {
                 if let Token::Identifier(pattern_name) = &pattern_leaf.value {
                     self.check_pattern_shadows_formal(pattern_name, attrs)?;
                 }
             }
             // Case 2: {x, y, z}@args - set is first, pattern name is second
-            (Parameter::SetParameter(_, attrs, _), Parameter::IDParameter(pattern_leaf)) => {
+            (Parameter::Set(_, attrs, _), Parameter::ID(pattern_leaf)) => {
                 if let Token::Identifier(pattern_name) = &pattern_leaf.value {
                     self.check_pattern_shadows_formal(pattern_name, attrs)?;
                 }
@@ -1024,7 +1023,7 @@ impl Parser {
                 | Token::TParenClose
                 | Token::TBraceClose
                 | Token::TBrackClose
-                | Token::SOF
+                | Token::Sof
         )
     }
 
@@ -1184,7 +1183,7 @@ impl Parser {
 
         while !matches!(
             self.current.value,
-            Token::KIn | Token::TBraceClose | Token::SOF
+            Token::KIn | Token::TBraceClose | Token::Sof
         ) {
             // Check for comments before binding
             self.collect_trivia_as_comments(&mut items);
@@ -1287,7 +1286,7 @@ impl Parser {
             let semi = self.take_current();
             self.advance()?;
             Ok(Binder::Assignment(selectors, eq, expr, semi))
-        } else if matches!(self.current.value, Token::SOF) {
+        } else if matches!(self.current.value, Token::Sof) {
             // EOF found - check if this is an unclosed nested set
             // If the expression is a set, the closing brace might have belonged to an outer scope
             if let Expression::Term(Term::Set(_, open_brace, _, close_brace)) = &expr {
@@ -1338,15 +1337,15 @@ impl Parser {
             Token::Identifier(_) => {
                 let ident = self.take_current();
                 self.advance()?;
-                Ok(SimpleSelector::IDSelector(ident))
+                Ok(SimpleSelector::ID(ident))
             }
             Token::TDoubleQuote => {
                 let string = self.parse_simple_string_literal()?;
-                Ok(SimpleSelector::StringSelector(string))
+                Ok(SimpleSelector::String(string))
             }
             Token::TInterOpen => {
                 let interpol = self.parse_selector_interpolation()?;
-                Ok(SimpleSelector::InterpolSelector(interpol))
+                Ok(SimpleSelector::Interpol(interpol))
             }
             _ => Err(ParseError {
                 span: self.current.span,
@@ -2193,7 +2192,7 @@ impl Parser {
     fn parse_list_items(&mut self) -> Result<Items<Term>> {
         let mut items = Vec::new();
 
-        while !matches!(self.current.value, Token::TBrackClose | Token::SOF) {
+        while !matches!(self.current.value, Token::TBrackClose | Token::Sof) {
             // Check for commas (not valid in Nix lists)
             if matches!(self.current.value, Token::TComma) {
                 return Err(ParseError {
@@ -2289,7 +2288,7 @@ impl Parser {
         let dummy = Ann {
             pre_trivia: Trivia::new(),
             span: Span::point(0),
-            value: Token::SOF,
+            value: Token::Sof,
             trail_comment: None,
         };
         std::mem::replace(&mut self.current, dummy)
@@ -2382,9 +2381,9 @@ impl Parser {
     /// Get the ending span of a simple selector
     fn simple_selector_end_span(sel: &SimpleSelector) -> Span {
         match sel {
-            SimpleSelector::IDSelector(leaf) => leaf.span,
-            SimpleSelector::InterpolSelector(ann) => ann.span,
-            SimpleSelector::StringSelector(s) => s.span,
+            SimpleSelector::ID(leaf) => leaf.span,
+            SimpleSelector::Interpol(ann) => ann.span,
+            SimpleSelector::String(s) => s.span,
         }
     }
 
@@ -2399,7 +2398,7 @@ impl Parser {
             let token = self.take_current();
             self.advance()?;
             Ok(token)
-        } else if matches!(self.current.value, Token::SOF) {
+        } else if matches!(self.current.value, Token::Sof) {
             // EOF reached without closing delimiter
             Err(ParseError {
                 span: self.current.span,
@@ -2457,7 +2456,7 @@ impl Parser {
 
     /// Expect EOF
     fn expect_eof(&self) -> Result<()> {
-        if matches!(self.current.value, Token::SOF) {
+        if matches!(self.current.value, Token::Sof) {
             Ok(())
         } else {
             Err(ParseError {

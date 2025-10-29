@@ -186,7 +186,7 @@ impl Lexer {
         let _ = self.skip_hspace();
 
         if self.is_eof() {
-            return Ok(Token::SOF); // Use SOF as EOF token
+            return Ok(Token::Sof); // Use SOF as EOF token
         }
 
         let ch = self.peek().unwrap();

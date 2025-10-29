@@ -41,7 +41,7 @@ fn is_absorbable_expr(expr: &Expression) -> bool {
             }
         }
         // Simple lambda with absorbable body: x: { }
-        Expression::Abstraction(Parameter::IDParameter(_), _, body) => match &**body {
+        Expression::Abstraction(Parameter::ID(_), _, body) => match &**body {
             Expression::Term(t) => is_absorbable_term(t),
             Expression::Abstraction(_, _, _) => is_absorbable_expr(body),
             _ => false,
@@ -405,7 +405,7 @@ impl Pretty for Token {
             TUnequal => "!=",
             TPipeForward => "|>",
             TPipeBackward => "<|",
-            SOF => "",
+            Sof => "",
             TTilde => "~",
         };
         push_text(doc, s);
@@ -415,14 +415,14 @@ impl Pretty for Token {
 impl Pretty for SimpleSelector {
     fn pretty(&self, doc: &mut Doc) {
         match self {
-            SimpleSelector::IDSelector(id) => id.pretty(doc),
-            SimpleSelector::StringSelector(ann) => {
+            SimpleSelector::ID(id) => id.pretty(doc),
+            SimpleSelector::String(ann) => {
                 ann.pre_trivia.pretty(doc);
                 // TODO: implement prettySimpleString
                 push_text(doc, "\"...\"");
                 ann.trail_comment.pretty(doc);
             }
-            SimpleSelector::InterpolSelector(interp) => interp.pretty(doc),
+            SimpleSelector::Interpol(interp) => interp.pretty(doc),
         }
     }
 }
@@ -636,6 +636,30 @@ impl Pretty for Expression {
                 a.pretty(doc);
             }
             Expression::Operation(left, op, right) => {
+                // Special case: absorbable RHS with update/concat/plus operator
+                // Based on Haskell prettyApp (Pretty.hs:665-667)
+                if let Expression::Term(t) = &**right {
+                    if is_absorbable_term(t) && op.value.is_update_concat_plus() {
+                        push_nested(doc, |d| {
+                            push_group(d, |inner| {
+                                inner.push(line());
+                                left.pretty(inner);
+                                inner.push(line());
+                                push_group_ann(inner, GroupAnn::Transparent, |trans| {
+                                    op.pretty(trans);
+                                    trans.push(hardspace());
+                                    push_group_ann(trans, GroupAnn::Priority, |prio| {
+                                        // prettyTermWide
+                                        t.pretty(prio);
+                                    });
+                                });
+                            });
+                        });
+                        return;
+                    }
+                }
+
+                // Default case
                 left.pretty(doc);
                 doc.push(hardspace());
                 op.pretty(doc);
@@ -697,7 +721,11 @@ impl Pretty for Expression {
                 env.pretty(doc);
                 semicolon.pretty(doc);
                 doc.push(hardspace());
-                expr.pretty(doc);
+                // Use Priority group for the body expression
+                // Based on Haskell prettyWith (Pretty.hs:553-567)
+                push_group_ann(doc, GroupAnn::Priority, |d| {
+                    expr.pretty(d);
+                });
             }
             Expression::Abstraction(param, colon, body) => {
                 param.pretty(doc);
@@ -746,8 +774,8 @@ impl Pretty for ParamAttr {
 impl Pretty for Parameter {
     fn pretty(&self, doc: &mut Doc) {
         match self {
-            Parameter::IDParameter(id) => id.pretty(doc),
-            Parameter::SetParameter(open, attrs, close) => {
+            Parameter::ID(id) => id.pretty(doc),
+            Parameter::Set(open, attrs, close) => {
                 open.pretty(doc);
 
                 if !attrs.is_empty() {
@@ -763,7 +791,7 @@ impl Pretty for Parameter {
 
                 close.pretty(doc);
             }
-            Parameter::ContextParameter(left, at, right) => {
+            Parameter::Context(left, at, right) => {
                 left.pretty(doc);
                 doc.push(hardspace());
                 at.pretty(doc);
