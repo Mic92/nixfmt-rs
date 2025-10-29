@@ -133,6 +133,6 @@ impl PrettySimple for DocE {
     }
 
     fn is_simple(&self) -> bool {
-        matches!(self, DocE::Spacing(_))
+        matches!(self, DocE::Spacing(_) | DocE::Text(_, _, _, _))
     }
 }

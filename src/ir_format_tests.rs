@@ -14,13 +14,7 @@ use crate::tests_common::test_ir_format;
 /// Issue: nixfmt-rs was missing the outer `Group RegularG` wrapper that the
 /// reference implementation adds when pretty-printing a Whole Expression (File).
 /// This has been fixed by wrapping Whole<T>::pretty in push_group().
-///
-/// Known remaining differences (see IR_FORMATTING_STATUS.md):
-/// - Indentation levels (0 vs 1)
-/// - Trailing comma handling
-/// - Spacing types (Hardspace vs Space)
 #[test]
-#[ignore = "IR representation differs in indentation/trailing/spacin"]
 fn test_simple_parameter_pattern() {
     test_ir_format("{ a, b }: x");
 }
@@ -30,4 +24,18 @@ fn test_let_binding_structure() {
     // Minimal reproducer: even the simplest let binding loses the inner group + spacing
     // structure that nixfmt emits for the binding body and the `in` branch.
     test_ir_format("let a = 1; in a");
+}
+
+#[test]
+fn test_with_binding_structure() {
+    // Simple with-expression: reference nixfmt groups the keyword, environment, and semicolon,
+    // but nixfmt-rs currently flattens them into a single chunk.
+    test_ir_format("with a; b");
+}
+
+#[test]
+fn test_assert_structure() {
+    // Simple assert expression: nixfmt keeps the keyword and condition separated in the IR,
+    // whereas nixfmt-rs currently emits them as a single text token.
+    test_ir_format("assert true; 42");
 }

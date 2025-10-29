@@ -449,3 +449,9 @@ badFiles=$(find ${filteredHead})
 ''"#,
     );
 }
+
+#[test]
+fn test_parameter_patterns() {
+    test_ast_format("{a ? 1, b, ...}: a + b");
+    test_ast_format("args@{foo ? \"x\", bar, baz, ...}: foo");
+}
