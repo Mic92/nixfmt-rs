@@ -9,6 +9,7 @@ pub mod pretty;
 pub mod pretty_simple;
 pub mod types;
 
+use predoc::{render_with_config, Doc, Pretty, RenderConfig};
 pub use error::{ParseError, Result};
 pub use pretty_simple::PrettySimple;
 pub use types::*;
@@ -21,10 +22,9 @@ pub fn parse(source: &str) -> Result<File> {
 
 /// Format a Nix file
 pub fn format(source: &str) -> Result<String> {
-    use predoc::{render_with_config, Pretty, RenderConfig};
-
     let ast = parse(source)?;
-    let doc = ast.pretty();
+    let mut doc = Doc::new();
+    ast.pretty(&mut doc);
     let config = RenderConfig::default();
     let output = render_with_config(&doc, &config);
     Ok(output)

@@ -53,72 +53,77 @@ fn is_absorbable_expr(expr: &Expression) -> bool {
 
 /// Format the right-hand side of an assignment with absorption rules
 /// Based on Haskell absorbRHS (Pretty.hs:631-658)
-fn absorb_rhs(expr: &Expression) -> Doc {
+fn push_absorb_rhs(doc: &mut Doc, expr: &Expression) {
     match expr {
         // Special case: set with single inherit
         Expression::Term(Term::Set(_, _, binders, _)) => {
             if binders.0.len() == 1 {
                 if let Item::Item(Binder::Inherit(_, _, _, _)) = &binders.0[0] {
-                    return nest({
-                        let mut doc = vec![hardspace()];
-                        doc.extend(group(expr.pretty()));
-                        doc
+                    push_nested(doc, |d| {
+                        d.push(hardspace());
+                        push_group(d, |inner| expr.pretty(inner));
                     });
+                    return;
                 }
             }
             // Absorbable set: force expand
             if is_absorbable_expr(expr) {
-                return nest({
-                    let mut doc = vec![hardspace()];
-                    doc.extend(group(expr.pretty()));
-                    doc
+                push_nested(doc, |d| {
+                    d.push(hardspace());
+                    push_group(d, |inner| expr.pretty(inner));
                 });
+                return;
             }
             // Non-absorbable: new line
-            nest({
-                let mut doc = vec![line()];
-                doc.extend(group(expr.pretty()));
-                doc
-            })
+            push_nested(doc, |d| {
+                d.push(line());
+                push_group(d, |inner| expr.pretty(inner));
+            });
         }
         // Absorbable expressions
-        _ if is_absorbable_expr(expr) => nest({
-            let mut doc = vec![hardspace()];
-            doc.extend(group(expr.pretty()));
-            doc
-        }),
+        _ if is_absorbable_expr(expr) => {
+            push_nested(doc, |d| {
+                d.push(hardspace());
+                push_group(d, |inner| expr.pretty(inner));
+            });
+        }
         // Parenthesized expressions
-        Expression::Term(Term::Parenthesized(_, _, _)) => nest({
-            let mut doc = vec![hardspace()];
-            doc.extend(expr.pretty());
-            doc
-        }),
+        Expression::Term(Term::Parenthesized(_, _, _)) => {
+            push_nested(doc, |d| {
+                d.push(hardspace());
+                expr.pretty(d);
+            });
+        }
         // Strings and paths: always keep on same line
         Expression::Term(Term::SimpleString(_))
         | Expression::Term(Term::IndentedString(_))
-        | Expression::Term(Term::Path(_)) => nest({
-            let mut doc = vec![hardspace()];
-            doc.extend(group(expr.pretty()));
-            doc
-        }),
+        | Expression::Term(Term::Path(_)) => {
+            push_nested(doc, |d| {
+                d.push(hardspace());
+                push_group(d, |inner| expr.pretty(inner));
+            });
+        }
         // Non-absorbable terms: start on new line
-        Expression::Term(_) => nest({
-            let mut doc = vec![line()];
-            doc.extend(group(expr.pretty()));
-            doc
-        }),
+        Expression::Term(_) => {
+            push_nested(doc, |d| {
+                d.push(line());
+                push_group(d, |inner| expr.pretty(inner));
+            });
+        }
         // Function application: try to absorb
-        Expression::Application(_, _) => nest({
-            let mut doc = vec![line()];
-            doc.extend(expr.pretty());
-            doc
-        }),
+        Expression::Application(_, _) => {
+            push_nested(doc, |d| {
+                d.push(line());
+                expr.pretty(d);
+            });
+        }
         // Everything else: new line
-        _ => nest({
-            let mut doc = vec![line()];
-            doc.extend(group(expr.pretty()));
-            doc
-        }),
+        _ => {
+            push_nested(doc, |d| {
+                d.push(line());
+                push_group(d, |inner| expr.pretty(inner));
+            });
+        }
     }
 }
 
@@ -135,111 +140,110 @@ fn is_spaces(s: &str) -> bool {
 // Pretty instances
 
 impl Pretty for TrailingComment {
-    fn pretty(&self) -> Doc {
-        let mut doc = vec![hardspace()];
-        doc.extend(trailing_comment(format!("# {}", self.0)));
+    fn pretty(&self, doc: &mut Doc) {
+        doc.push(hardspace());
+        push_trailing_comment(doc, format!("# {}", self.0));
         doc.push(hardline());
-        doc
     }
 }
 
 impl Pretty for Trivium {
-    fn pretty(&self) -> Doc {
+    fn pretty(&self, doc: &mut Doc) {
         match self {
-            Trivium::EmptyLine() => vec![emptyline()],
+            Trivium::EmptyLine() => doc.push(emptyline()),
             Trivium::LineComment(c) => {
-                let mut doc = comment(format!("#{}", c));
+                push_comment(doc, format!("#{}", c));
                 doc.push(hardline());
-                doc
             }
             Trivium::BlockComment(is_doc, lines) => {
-                let mut doc = comment(if *is_doc { "/**" } else { "/*" });
+                push_comment(doc, if *is_doc { "/**" } else { "/*" });
                 doc.push(hardline());
                 // TODO: implement offset for block comment indentation
                 for line in lines {
                     if line.is_empty() {
                         doc.push(emptyline());
                     } else {
-                        doc.extend(comment(line));
+                        push_comment(doc, line);
                         doc.push(hardline());
                     }
                 }
-                doc.extend(comment("*/"));
+                push_comment(doc, "*/");
                 doc.push(hardline());
-                doc
             }
             Trivium::LanguageAnnotation(lang) => {
-                let mut doc = comment(format!("/* {} */", lang));
+                push_comment(doc, format!("/* {} */", lang));
                 doc.push(hardspace());
-                doc
             }
         }
     }
 }
 
 impl Pretty for Trivia {
-    fn pretty(&self) -> Doc {
+    fn pretty(&self, doc: &mut Doc) {
         if self.0.is_empty() {
-            return Vec::new();
+            return;
         }
 
         // Special case: single language annotation renders inline
         if self.0.len() == 1 {
             if let Trivium::LanguageAnnotation(_) = &self.0[0] {
-                return self.0[0].pretty();
+                self.0[0].pretty(doc);
+                return;
             }
         }
 
-        let mut doc = vec![hardline()];
+        doc.push(hardline());
         for trivium in &self.0 {
-            doc.extend(trivium.pretty());
+            trivium.pretty(doc);
         }
-        doc
     }
 }
 
 impl<T: Pretty> Pretty for Ann<T> {
-    fn pretty(&self) -> Doc {
-        let mut doc = self.pre_trivia.pretty();
-        doc.extend(self.value.pretty());
-        doc.extend(self.trail_comment.pretty());
-        doc
+    fn pretty(&self, doc: &mut Doc) {
+        self.pre_trivia.pretty(doc);
+        self.value.pretty(doc);
+        self.trail_comment.pretty(doc);
     }
 }
 
 // Pretty for Item - wraps items in groups, passes through comments
 impl<T: Pretty> Pretty for Item<T> {
-    fn pretty(&self) -> Doc {
+    fn pretty(&self, doc: &mut Doc) {
         match self {
-            Item::Comments(trivia) => trivia.pretty(),
-            Item::Item(x) => group(x.pretty()),
+            Item::Comments(trivia) => trivia.pretty(doc),
+            Item::Item(x) => push_group(doc, |d| x.pretty(d)),
         }
     }
 }
 
 /// Format an attribute set with optional rec keyword
 /// Based on Haskell prettySet (Pretty.hs:185-205)
-fn pretty_set(wide: bool, krec: &Option<Ann<Token>>, open: &Ann<Token>, items: &Items<Binder>, close: &Ann<Token>) -> Doc {
+fn push_pretty_set(
+    doc: &mut Doc,
+    wide: bool,
+    krec: &Option<Ann<Token>>,
+    open: &Ann<Token>,
+    items: &Items<Binder>,
+    close: &Ann<Token>,
+) {
     // Empty attribute set
     if items.0.is_empty() && open.trail_comment.is_none() && close.pre_trivia.0.is_empty() {
-        let mut doc = Vec::new();
         // Pretty print optional `rec` keyword with hardspace
         if let Some(rec) = krec {
-            doc.extend(rec.pretty());
+            rec.pretty(doc);
             doc.push(hardspace());
         }
-        doc.extend(open.pretty());
+        open.pretty(doc);
         doc.push(hardspace());
-        doc.extend(close.pretty());
-        return doc;
+        close.pretty(doc);
+        return;
     }
 
     // General set with items
-    let mut doc = Vec::new();
-
     // Pretty print optional `rec` keyword with hardspace
     if let Some(rec) = krec {
-        doc.extend(rec.pretty());
+        rec.pretty(doc);
         doc.push(hardspace());
     }
 
@@ -250,7 +254,7 @@ fn pretty_set(wide: bool, krec: &Option<Ann<Token>>, open: &Ann<Token>, items: &
         trail_comment: None,
         value: open.value.clone(),
     };
-    doc.extend(open_without_trail.pretty());
+    open_without_trail.pretty(doc);
 
     // Separator: use hardline if wide and has items, else use line
     let sep = if wide && !items.0.is_empty() {
@@ -259,24 +263,23 @@ fn pretty_set(wide: bool, krec: &Option<Ann<Token>>, open: &Ann<Token>, items: &
         vec![line()]
     };
 
-    doc.extend(surround_with(sep, nest({
-        let mut inner = open.trail_comment.pretty();
-        inner.extend(pretty_items(items));
-        inner
-    })));
-    doc.extend(close.pretty());
-    doc
+    push_surrounded(doc, &sep, |d| {
+        push_nested(d, |inner| {
+            open.trail_comment.pretty(inner);
+            push_pretty_items(inner, items);
+        });
+    });
+    close.pretty(doc);
 }
 
 /// Format a list of items with interleaved comments
 /// Based on Haskell prettyItems (Pretty.hs:108-120)
-fn pretty_items<T: Pretty>(items: &Items<T>) -> Doc {
+fn push_pretty_items<T: Pretty>(doc: &mut Doc, items: &Items<T>) {
     let items = &items.0;
     match items.as_slice() {
-        [] => Vec::new(),
-        [item] => item.pretty(),
+        [] => {}
+        [item] => item.pretty(doc),
         items => {
-            let mut doc = Vec::new();
             let mut i = 0;
             while i < items.len() {
                 if i > 0 {
@@ -290,9 +293,9 @@ fn pretty_items<T: Pretty>(items: &Items<T>) -> Doc {
                             if let Trivium::LanguageAnnotation(lang) = &trivia.0[0] {
                                 if let Item::Item(string_item) = &items[i + 1] {
                                     // Language annotation + string on same line
-                                    doc.extend(Trivium::LanguageAnnotation(lang.clone()).pretty());
+                                    Trivium::LanguageAnnotation(lang.clone()).pretty(doc);
                                     doc.push(hardspace());
-                                    doc.extend(group(string_item.pretty()));
+                                    push_group(doc, |d| string_item.pretty(d));
                                     i += 2;
                                     continue;
                                 }
@@ -301,50 +304,54 @@ fn pretty_items<T: Pretty>(items: &Items<T>) -> Doc {
                     }
                 }
 
-                doc.extend(items[i].pretty());
+                items[i].pretty(doc);
                 i += 1;
             }
-            doc
         }
     }
 }
 
 impl Pretty for Binder {
-    fn pretty(&self) -> Doc {
+    fn pretty(&self, doc: &mut Doc) {
         match self {
             Binder::Inherit(inherit, source, ids, semicolon) => {
-                let mut doc = inherit.pretty();
+                push_group(doc, |d| {
+                    push_nested(d, |inner| {
+                        inherit.pretty(inner);
 
-                // If there's a source expression like (foo), add it
-                if let Some(src) = source {
-                    doc.push(line());
-                    doc.extend(group(src.pretty()));
-                }
+                        // If there's a source expression like (foo), add it
+                        if let Some(src) = source {
+                            inner.push(line());
+                            push_group(inner, |g| src.pretty(g));
+                        }
 
-                // Add the identifiers
-                if !ids.is_empty() {
-                    doc.push(hardline());
-                    doc.extend(sep_by(vec![hardline()], ids.clone()));
-                }
+                        // Add the identifiers
+                        if !ids.is_empty() {
+                            inner.push(hardline());
+                            let hardline_doc = vec![hardline()];
+                            push_sep_by(inner, &hardline_doc, ids.clone());
+                        }
 
-                doc.push(hardline());
-                doc.extend(semicolon.pretty());
-                group(nest(doc))
+                        inner.push(hardline());
+                        semicolon.pretty(inner);
+                    });
+                });
             }
             Binder::Assignment(selectors, assign, expr, semicolon) => {
-                let mut doc = hcat(selectors.clone());
-                doc.push(hardspace());
-                doc.extend(assign.pretty());
-                doc.extend(absorb_rhs(expr));
-                doc.extend(semicolon.pretty());
-                group(doc)
+                push_group(doc, |d| {
+                    push_hcat(d, selectors.clone());
+                    d.push(hardspace());
+                    assign.pretty(d);
+                    push_absorb_rhs(d, expr);
+                    semicolon.pretty(d);
+                });
             }
         }
     }
 }
 
 impl Pretty for Token {
-    fn pretty(&self) -> Doc {
+    fn pretty(&self, doc: &mut Doc) {
         use Token::*;
         let s = match self {
             Integer(s) => s.as_str(),
@@ -401,61 +408,57 @@ impl Pretty for Token {
             SOF => "",
             TTilde => "~",
         };
-        text(s)
+        push_text(doc, s);
     }
 }
 
 impl Pretty for SimpleSelector {
-    fn pretty(&self) -> Doc {
+    fn pretty(&self, doc: &mut Doc) {
         match self {
-            SimpleSelector::IDSelector(id) => id.pretty(),
+            SimpleSelector::IDSelector(id) => id.pretty(doc),
             SimpleSelector::StringSelector(ann) => {
-                let mut doc = ann.pre_trivia.pretty();
+                ann.pre_trivia.pretty(doc);
                 // TODO: implement prettySimpleString
-                doc.extend(text("\"...\""));
-                doc.extend(ann.trail_comment.pretty());
-                doc
+                push_text(doc, "\"...\"");
+                ann.trail_comment.pretty(doc);
             }
-            SimpleSelector::InterpolSelector(interp) => interp.pretty(),
+            SimpleSelector::InterpolSelector(interp) => interp.pretty(doc),
         }
     }
 }
 
 impl Pretty for Selector {
-    fn pretty(&self) -> Doc {
-        let mut doc = Vec::new();
+    fn pretty(&self, doc: &mut Doc) {
         if let Some(dot) = &self.dot {
-            doc.extend(dot.pretty());
+            dot.pretty(doc);
         }
-        doc.extend(self.selector.pretty());
-        doc
+        self.selector.pretty(doc);
     }
 }
 
 impl Pretty for StringPart {
-    fn pretty(&self) -> Doc {
+    fn pretty(&self, doc: &mut Doc) {
         match self {
-            StringPart::TextPart(s) => text(s),
+            StringPart::TextPart(s) => push_text(doc, s),
             StringPart::Interpolation(whole) => {
                 // For now, use a simple approach
                 // TODO: implement absorption and isSimple checks
-                let inner = {
-                    let mut doc = vec![line_prime()];
-                    doc.extend(group(whole.value.clone()));
-                    doc.push(line_prime());
-                    doc
-                };
-                let mut doc = text("${");
-                doc.extend(group_ann(GroupAnn::RegularG, nest(inner)));
-                doc.extend(text("}"));
-                doc
+                push_text(doc, "${");
+                push_group_ann(doc, GroupAnn::RegularG, |d| {
+                    push_nested(d, |inner| {
+                        inner.push(line_prime());
+                        push_group(inner, |g| whole.value.pretty(g));
+                        inner.push(line_prime());
+                    });
+                });
+                push_text(doc, "}");
             }
         }
     }
 }
 
 impl Pretty for Vec<StringPart> {
-    fn pretty(&self) -> Doc {
+    fn pretty(&self, doc: &mut Doc) {
         // Handle special case: single interpolation with leading whitespace
         if self.len() == 2 {
             if let (StringPart::TextPart(pre), StringPart::Interpolation(whole)) =
@@ -463,23 +466,19 @@ impl Pretty for Vec<StringPart> {
             {
                 if is_spaces(pre) && whole.trailing_trivia.0.is_empty() {
                     let indentation = text_width(pre);
-                    let mut doc = text(pre);
-                    let inner = {
-                        let mut doc = vec![line_prime()];
-                        doc.extend(group(whole.value.clone()));
-                        doc.push(line_prime());
-                        doc
-                    };
-                    doc.extend(offset(
-                        indentation,
-                        group_ann(GroupAnn::RegularG, {
-                            let mut d = text("${");
-                            d.extend(nest(inner));
-                            d.extend(text("}"));
-                            d
-                        }),
-                    ));
-                    return doc;
+                    push_text(doc, pre);
+                    push_offset(doc, indentation, |d| {
+                        push_group_ann(d, GroupAnn::RegularG, |g| {
+                            push_text(g, "${");
+                            push_nested(g, |inner| {
+                                inner.push(line_prime());
+                                push_group(inner, |ig| whole.value.pretty(ig));
+                                inner.push(line_prime());
+                            });
+                            push_text(g, "}");
+                        });
+                    });
+                    return;
                 }
             }
         }
@@ -492,76 +491,86 @@ impl Pretty for Vec<StringPart> {
                         .take_while(|c| c.is_whitespace())
                         .collect::<String>(),
                 );
-                let mut doc = text(t);
-                doc.extend(offset(indentation, hcat(self[1..].to_vec())));
-                return doc;
+                push_text(doc, t);
+                let rest = self[1..].to_vec();
+                push_offset(doc, indentation, |d| {
+                    for part in &rest {
+                        part.pretty(d);
+                    }
+                });
+                return;
             }
         }
 
         // Default: just concatenate
-        hcat(self.clone())
+        push_hcat(doc, self.clone());
     }
 }
 
 /// Format a simple string (with double quotes)
-fn pretty_simple_string(parts: &[Vec<StringPart>]) -> Doc {
-    let mut doc = text("\"");
-    // Use literal \n instead of newline() to avoid indentation
-    doc.extend(sep_by(text("\n"), parts.to_vec()));
-    doc.extend(text("\""));
-    group(doc)
+fn push_pretty_simple_string(doc: &mut Doc, parts: &[Vec<StringPart>]) {
+    push_group(doc, |d| {
+        push_text(d, "\"");
+        // Use literal \n instead of newline() to avoid indentation
+        let newline_doc = vec![DocE::Text(0, 0, TextAnn::RegularT, "\n".to_string())];
+        push_sep_by(d, &newline_doc, parts.to_vec());
+        push_text(d, "\"");
+    });
 }
 
 /// Format an indented string (with '')
-fn pretty_indented_string(parts: &[Vec<StringPart>]) -> Doc {
-    let mut doc = text("''");
-    // For multi-line strings, add a potential line break after opening ''
-    if parts.len() > 1 {
-        doc.push(line_prime());
-    }
-    doc.extend(nest(sep_by(vec![newline()], parts.to_vec())));
-    doc.extend(text("''"));
-    group(doc)
+fn push_pretty_indented_string(doc: &mut Doc, parts: &[Vec<StringPart>]) {
+    push_group(doc, |d| {
+        push_text(d, "''");
+        // For multi-line strings, add a potential line break after opening ''
+        if parts.len() > 1 {
+            d.push(line_prime());
+        }
+        push_nested(d, |inner| {
+            let newline_doc = vec![newline()];
+            push_sep_by(inner, &newline_doc, parts.to_vec());
+        });
+        push_text(d, "''");
+    });
 }
 
 impl Pretty for Term {
-    fn pretty(&self) -> Doc {
+    fn pretty(&self, doc: &mut Doc) {
         match self {
-            Term::Token(t) => t.pretty(),
+            Term::Token(t) => t.pretty(doc),
             Term::SimpleString(s) => {
-                let mut doc = s.pre_trivia.pretty();
-                doc.extend(pretty_simple_string(&s.value));
-                doc.extend(s.trail_comment.pretty());
-                doc
+                s.pre_trivia.pretty(doc);
+                push_pretty_simple_string(doc, &s.value);
+                s.trail_comment.pretty(doc);
             }
             Term::IndentedString(s) => {
-                let mut doc = s.pre_trivia.pretty();
-                doc.extend(pretty_indented_string(&s.value));
-                doc.extend(s.trail_comment.pretty());
-                doc
+                s.pre_trivia.pretty(doc);
+                push_pretty_indented_string(doc, &s.value);
+                s.trail_comment.pretty(doc);
             }
             Term::Path(p) => {
                 // Path is Ann<Vec<StringPart>>
-                let mut doc = p.pre_trivia.pretty();
+                p.pre_trivia.pretty(doc);
                 for part in &p.value {
-                    doc.extend(part.pretty());
+                    part.pretty(doc);
                 }
-                doc.extend(p.trail_comment.pretty());
-                doc
+                p.trail_comment.pretty(doc);
             }
             Term::Parenthesized(open, expr, close) => {
-                let mut doc = open.pretty();
-                doc.extend(expr.pretty());
-                doc.extend(close.pretty());
-                doc
+                open.pretty(doc);
+                expr.pretty(doc);
+                close.pretty(doc);
             }
             Term::List(open, items, close) => {
                 // Empty list
-                if items.0.is_empty() && open.trail_comment.is_none() && close.pre_trivia.0.is_empty() {
-                    let mut doc = open.pretty();
+                if items.0.is_empty()
+                    && open.trail_comment.is_none()
+                    && close.pre_trivia.0.is_empty()
+                {
+                    open.pretty(doc);
                     doc.push(hardspace());
-                    doc.extend(close.pretty());
-                    return doc;
+                    close.pretty(doc);
+                    return;
                 }
 
                 // General list with items
@@ -572,20 +581,21 @@ impl Pretty for Term {
                     value: open.value.clone(),
                 };
 
-                let mut doc = open_without_trail.pretty();
-                doc.extend(surround_with(vec![line()], nest({
-                    let mut inner = open.trail_comment.pretty();
-                    inner.extend(pretty_items(items));
-                    inner
-                })));
-                doc.extend(close.pretty());
-                doc
+                open_without_trail.pretty(doc);
+                let line_doc = vec![line()];
+                push_surrounded(doc, &line_doc, |d| {
+                    push_nested(d, |inner| {
+                        open.trail_comment.pretty(inner);
+                        push_pretty_items(inner, items);
+                    });
+                });
+                close.pretty(doc);
             }
             Term::Set(krec, open, binders, close) => {
-                pretty_set(false, krec, open, binders, close)
+                push_pretty_set(doc, false, krec, open, binders, close);
             }
             Term::Selection(term, selectors, default) => {
-                let mut doc = term.pretty();
+                term.pretty(doc);
 
                 // Add separator based on term type
                 let sep = match &**term {
@@ -599,157 +609,146 @@ impl Pretty for Term {
                 doc.extend(sep);
 
                 // Add selectors
-                doc.extend(hcat(selectors.clone()));
+                push_hcat(doc, selectors.clone());
 
                 // Add optional "or default" clause
                 if let Some((or_kw, def)) = default {
                     doc.push(softline());
-                    doc.extend(nest({
-                        let mut inner = or_kw.pretty();
+                    push_nested(doc, |inner| {
+                        or_kw.pretty(inner);
                         inner.push(hardspace());
-                        inner.extend(def.pretty());
-                        inner
-                    }));
+                        def.pretty(inner);
+                    });
                 }
-                doc
             }
         }
     }
 }
 
 impl Pretty for Expression {
-    fn pretty(&self) -> Doc {
+    fn pretty(&self, doc: &mut Doc) {
         match self {
-            Expression::Term(t) => t.pretty(),
+            Expression::Term(t) => t.pretty(doc),
             Expression::Application(f, a) => {
                 // Simplified for now
-                let mut doc = f.pretty();
+                f.pretty(doc);
                 doc.push(hardspace());
-                doc.extend(a.pretty());
-                doc
+                a.pretty(doc);
             }
             Expression::Operation(left, op, right) => {
-                let mut doc = left.pretty();
+                left.pretty(doc);
                 doc.push(hardspace());
-                doc.extend(op.pretty());
+                op.pretty(doc);
                 doc.push(hardspace());
-                doc.extend(right.pretty());
-                doc
+                right.pretty(doc);
             }
             Expression::MemberCheck(expr, question, selectors) => {
-                let mut doc = expr.pretty();
+                expr.pretty(doc);
                 doc.push(hardspace());
-                doc.extend(question.pretty());
+                question.pretty(doc);
                 doc.push(hardspace());
                 for sel in selectors {
-                    doc.extend(sel.pretty());
+                    sel.pretty(doc);
                 }
-                doc
             }
             Expression::Negation(minus, expr) => {
-                let mut doc = minus.pretty();
-                doc.extend(expr.pretty());
-                doc
+                minus.pretty(doc);
+                expr.pretty(doc);
             }
             Expression::Inversion(bang, expr) => {
-                let mut doc = bang.pretty();
-                doc.extend(expr.pretty());
-                doc
+                bang.pretty(doc);
+                expr.pretty(doc);
             }
             Expression::Let(let_kw, binders, in_kw, expr) => {
-                let mut doc = let_kw.pretty();
-                doc.extend(nest({
-                    let mut inner = vec![hardline()];
-                    inner.extend(pretty_items(binders));
-                    inner
-                }));
+                let_kw.pretty(doc);
+                push_nested(doc, |inner| {
+                    inner.push(hardline());
+                    push_pretty_items(inner, binders);
+                });
                 doc.push(hardline());
-                doc.extend(in_kw.pretty());
+                in_kw.pretty(doc);
                 doc.push(hardline());
-                doc.extend(expr.pretty());
-                doc
+                expr.pretty(doc);
             }
             Expression::If(if_kw, cond, then_kw, then_expr, else_kw, else_expr) => {
-                let mut doc = if_kw.pretty();
+                if_kw.pretty(doc);
                 doc.push(hardspace());
-                doc.extend(cond.pretty());
+                cond.pretty(doc);
                 doc.push(hardspace());
-                doc.extend(then_kw.pretty());
+                then_kw.pretty(doc);
                 doc.push(hardspace());
-                doc.extend(then_expr.pretty());
+                then_expr.pretty(doc);
                 doc.push(hardspace());
-                doc.extend(else_kw.pretty());
+                else_kw.pretty(doc);
                 doc.push(hardspace());
-                doc.extend(else_expr.pretty());
-                doc
+                else_expr.pretty(doc);
             }
             Expression::Assert(assert_kw, cond, semicolon, expr) => {
-                let mut doc = assert_kw.pretty();
+                assert_kw.pretty(doc);
                 doc.push(hardspace());
-                doc.extend(cond.pretty());
-                doc.extend(semicolon.pretty());
+                cond.pretty(doc);
+                semicolon.pretty(doc);
                 doc.push(hardspace());
-                doc.extend(expr.pretty());
-                doc
+                expr.pretty(doc);
             }
             Expression::With(with_kw, env, semicolon, expr) => {
-                let mut doc = with_kw.pretty();
+                with_kw.pretty(doc);
                 doc.push(hardspace());
-                doc.extend(env.pretty());
-                doc.extend(semicolon.pretty());
+                env.pretty(doc);
+                semicolon.pretty(doc);
                 doc.push(hardspace());
-                doc.extend(expr.pretty());
-                doc
+                expr.pretty(doc);
             }
             Expression::Abstraction(param, colon, body) => {
-                let mut doc = param.pretty();
-                doc.extend(colon.pretty());
+                param.pretty(doc);
+                colon.pretty(doc);
                 doc.push(hardspace());
-                doc.extend(body.pretty());
-                doc
+                body.pretty(doc);
             }
         }
     }
 }
 
 impl Pretty for ParamAttr {
-    fn pretty(&self) -> Doc {
+    fn pretty(&self, doc: &mut Doc) {
         match self {
             ParamAttr::ParamAttr(name, default, maybe_comma) => {
-                let mut doc = name.pretty();
+                let has_default = default.is_some();
+                let make_pretty = |d: &mut Doc| {
+                    name.pretty(d);
 
-                // If there's a default value (? expr)
-                if let Some((qmark, def)) = default.as_ref() {
-                    doc.push(hardspace());
-                    doc.extend(nest({
-                        let mut inner = qmark.pretty();
-                        inner.extend(absorb_rhs(def));
-                        inner
-                    }));
-                }
+                    // If there's a default value (? expr)
+                    if let Some((qmark, def)) = default.as_ref() {
+                        d.push(hardspace());
+                        push_nested(d, |inner| {
+                            qmark.pretty(inner);
+                            push_absorb_rhs(inner, def);
+                        });
+                    }
 
-                // Add optional comma
-                if let Some(comma) = maybe_comma {
-                    doc.extend(comma.pretty());
-                }
+                    // Add optional comma
+                    if let Some(comma) = maybe_comma {
+                        comma.pretty(d);
+                    }
+                };
 
-                if default.is_some() {
-                    group(doc)
+                if has_default {
+                    push_group(doc, make_pretty);
                 } else {
-                    doc
+                    make_pretty(doc);
                 }
             }
-            ParamAttr::ParamEllipsis(ellipsis) => ellipsis.pretty(),
+            ParamAttr::ParamEllipsis(ellipsis) => ellipsis.pretty(doc),
         }
     }
 }
 
 impl Pretty for Parameter {
-    fn pretty(&self) -> Doc {
+    fn pretty(&self, doc: &mut Doc) {
         match self {
-            Parameter::IDParameter(id) => id.pretty(),
+            Parameter::IDParameter(id) => id.pretty(doc),
             Parameter::SetParameter(open, attrs, close) => {
-                let mut doc = open.pretty();
+                open.pretty(doc);
 
                 if !attrs.is_empty() {
                     doc.push(hardspace());
@@ -757,30 +756,27 @@ impl Pretty for Parameter {
                         if i > 0 {
                             doc.push(hardspace());
                         }
-                        doc.extend(attr.pretty());
+                        attr.pretty(doc);
                     }
                     doc.push(hardspace());
                 }
 
-                doc.extend(close.pretty());
-                doc
+                close.pretty(doc);
             }
             Parameter::ContextParameter(left, at, right) => {
-                let mut doc = left.pretty();
+                left.pretty(doc);
                 doc.push(hardspace());
-                doc.extend(at.pretty());
+                at.pretty(doc);
                 doc.push(hardspace());
-                doc.extend(right.pretty());
-                doc
+                right.pretty(doc);
             }
         }
     }
 }
 
 impl<T: Pretty> Pretty for Whole<T> {
-    fn pretty(&self) -> Doc {
-        let mut doc = self.value.pretty();
-        doc.extend(self.trailing_trivia.pretty());
-        doc
+    fn pretty(&self, doc: &mut Doc) {
+        self.value.pretty(doc);
+        self.trailing_trivia.pretty(doc);
     }
 }

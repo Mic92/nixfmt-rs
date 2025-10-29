@@ -79,92 +79,108 @@ pub type Doc = Vec<DocE>;
 
 /// Pretty-printable trait
 pub trait Pretty {
-    fn pretty(&self) -> Doc;
+    fn pretty(&self, doc: &mut Doc);
 }
 
 impl Pretty for Doc {
-    fn pretty(&self) -> Doc {
-        self.clone()
+    fn pretty(&self, doc: &mut Doc) {
+        doc.extend(self.iter().cloned());
     }
 }
 
 impl<T: Pretty> Pretty for Option<T> {
-    fn pretty(&self) -> Doc {
-        match self {
-            None => Vec::new(),
-            Some(x) => x.pretty(),
+    fn pretty(&self, doc: &mut Doc) {
+        if let Some(x) = self {
+            x.pretty(doc);
         }
     }
 }
 
 impl<T: Pretty, U: Pretty> Pretty for (T, U) {
-    fn pretty(&self) -> Doc {
-        let mut doc = self.0.pretty();
-        doc.extend(self.1.pretty());
-        doc
+    fn pretty(&self, doc: &mut Doc) {
+        self.0.pretty(doc);
+        self.1.pretty(doc);
     }
 }
 
 // Helper functions for building documents
 
-/// Create a text element
-pub(crate) fn text(s: impl Into<String>) -> Doc {
+/// Push a text element
+pub(crate) fn push_text(doc: &mut Doc, s: impl Into<String>) {
     let s = s.into();
-    if s.is_empty() {
-        Vec::new()
-    } else {
-        vec![DocE::Text(0, 0, TextAnn::RegularT, s)]
+    if !s.is_empty() {
+        doc.push(DocE::Text(0, 0, TextAnn::RegularT, s));
     }
 }
 
-/// Create a comment element
-pub(crate) fn comment(s: impl Into<String>) -> Doc {
+/// Push a comment element
+pub(crate) fn push_comment(doc: &mut Doc, s: impl Into<String>) {
     let s = s.into();
-    if s.is_empty() {
-        Vec::new()
-    } else {
-        vec![DocE::Text(0, 0, TextAnn::Comment, s)]
+    if !s.is_empty() {
+        doc.push(DocE::Text(0, 0, TextAnn::Comment, s));
     }
 }
 
-/// Create a trailing comment element
-pub(crate) fn trailing_comment(s: impl Into<String>) -> Doc {
+/// Push a trailing comment element
+pub(crate) fn push_trailing_comment(doc: &mut Doc, s: impl Into<String>) {
     let s = s.into();
-    if s.is_empty() {
-        Vec::new()
-    } else {
-        vec![DocE::Text(0, 0, TextAnn::TrailingComment, s)]
+    if !s.is_empty() {
+        doc.push(DocE::Text(0, 0, TextAnn::TrailingComment, s));
     }
 }
 
-/// Create a trailing text element (only rendered in expanded groups)
+/// Push a trailing text element (only rendered in expanded groups)
 #[allow(dead_code)]
-pub(crate) fn trailing(s: impl Into<String>) -> Doc {
+pub(crate) fn push_trailing(doc: &mut Doc, s: impl Into<String>) {
     let s = s.into();
-    if s.is_empty() {
-        Vec::new()
-    } else {
-        vec![DocE::Text(0, 0, TextAnn::Trailing, s)]
+    if !s.is_empty() {
+        doc.push(DocE::Text(0, 0, TextAnn::Trailing, s));
     }
 }
 
-/// Create a group
-pub(crate) fn group<P: Pretty>(p: P) -> Doc {
-    vec![DocE::Group(GroupAnn::RegularG, p.pretty())]
+/// Push a grouped document using a closure
+pub(crate) fn push_group<F>(doc: &mut Doc, f: F)
+where
+    F: FnOnce(&mut Doc),
+{
+    let mut inner = Vec::new();
+    f(&mut inner);
+    doc.push(DocE::Group(GroupAnn::RegularG, inner));
 }
 
-/// Create a group with specific annotation
-pub(crate) fn group_ann<P: Pretty>(ann: GroupAnn, p: P) -> Doc {
-    vec![DocE::Group(ann, p.pretty())]
+/// Push a group with specific annotation using a closure
+pub(crate) fn push_group_ann<F>(doc: &mut Doc, ann: GroupAnn, f: F)
+where
+    F: FnOnce(&mut Doc),
+{
+    let mut inner = Vec::new();
+    f(&mut inner);
+    doc.push(DocE::Group(ann, inner));
 }
 
-/// Nest a document (increase indentation)
-pub(crate) fn nest<P: Pretty>(p: P) -> Doc {
-    p.pretty()
-        .into_iter()
+/// Push a nested document (increase indentation) using a closure
+pub(crate) fn push_nested<F>(doc: &mut Doc, f: F)
+where
+    F: FnOnce(&mut Doc),
+{
+    let mut inner = Vec::new();
+    f(&mut inner);
+
+    for elem in inner {
+        doc.push(match elem {
+            DocE::Text(i, o, ann, t) => DocE::Text(i + 1, o, ann, t),
+            DocE::Group(ann, inner) => DocE::Group(ann, nest_doc(inner)),
+            DocE::Spacing(s) => DocE::Spacing(s),
+        });
+    }
+}
+
+/// Helper for nesting a Doc recursively
+fn nest_doc(doc: Doc) -> Doc {
+    doc.into_iter()
         .map(|elem| match elem {
             DocE::Text(i, o, ann, t) => DocE::Text(i + 1, o, ann, t),
-            DocE::Group(ann, inner) => DocE::Group(ann, nest(inner)),
+            DocE::Group(ann, inner) => DocE::Group(ann, nest_doc(inner)),
             DocE::Spacing(s) => DocE::Spacing(s),
         })
         .collect()
@@ -212,41 +228,59 @@ pub(crate) fn newline() -> DocE {
     DocE::Spacing(Spacing::Newlines(1))
 }
 
-/// Separate documents with a separator
-pub(crate) fn sep_by<P: Pretty>(separator: Doc, docs: Vec<P>) -> Doc {
-    let mut result = Vec::new();
+/// Push documents separated by a separator
+pub(crate) fn push_sep_by<P: Pretty>(doc: &mut Doc, separator: &Doc, docs: Vec<P>) {
     let mut first = true;
-    for doc in docs {
+    for item in docs {
         if !first {
-            result.extend(separator.clone());
+            doc.extend(separator.iter().cloned());
         }
         first = false;
-        result.extend(doc.pretty());
+        item.pretty(doc);
     }
-    result
 }
 
-/// Concatenate documents horizontally without spacing
-pub(crate) fn hcat<P: Pretty>(docs: Vec<P>) -> Doc {
-    docs.into_iter().flat_map(|d| d.pretty()).collect()
+/// Push multiple documents horizontally without spacing
+pub(crate) fn push_hcat<P: Pretty>(doc: &mut Doc, docs: Vec<P>) {
+    for item in docs {
+        item.pretty(doc);
+    }
 }
 
-/// Surround a pretty-printable value with the same document on both sides
-pub(crate) fn surround_with<P: Pretty>(outside: Doc, inner: P) -> Doc {
-    let mut result = outside.clone();
-    result.extend(inner.pretty());
-    result.extend(outside);
-    result
+/// Push a document surrounded by the same elements on both sides using a closure
+pub(crate) fn push_surrounded<F>(doc: &mut Doc, outside: &Doc, f: F)
+where
+    F: FnOnce(&mut Doc),
+{
+    doc.extend(outside.iter().cloned());
+    f(doc);
+    doc.extend(outside.iter().cloned());
 }
 
-/// Add manual offset to all text elements in a document
+/// Push a document with manual offset to all text elements using a closure
 /// This is used for indented strings where we need to preserve the original indentation
-pub(crate) fn offset<P: Pretty>(level: usize, p: P) -> Doc {
-    p.pretty()
-        .into_iter()
+pub(crate) fn push_offset<F>(doc: &mut Doc, level: usize, f: F)
+where
+    F: FnOnce(&mut Doc),
+{
+    let mut inner = Vec::new();
+    f(&mut inner);
+
+    for elem in inner {
+        doc.push(match elem {
+            DocE::Text(i, o, ann, t) => DocE::Text(i, o + level, ann, t),
+            DocE::Group(ann, inner) => DocE::Group(ann, offset_doc(level, inner)),
+            DocE::Spacing(s) => DocE::Spacing(s),
+        });
+    }
+}
+
+/// Helper for offsetting a Doc recursively
+fn offset_doc(level: usize, doc: Doc) -> Doc {
+    doc.into_iter()
         .map(|elem| match elem {
             DocE::Text(i, o, ann, t) => DocE::Text(i, o + level, ann, t),
-            DocE::Group(ann, inner) => DocE::Group(ann, offset(level, inner)),
+            DocE::Group(ann, inner) => DocE::Group(ann, offset_doc(level, inner)),
             DocE::Spacing(s) => DocE::Spacing(s),
         })
         .collect()

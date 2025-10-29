@@ -3,6 +3,7 @@
 use nixfmt_rs::colored_writer::ColoredWriter;
 use nixfmt_rs::error::context::ErrorContext;
 use nixfmt_rs::error::format::ErrorFormatter;
+use nixfmt_rs::predoc::{fixup, Doc, Pretty};
 use nixfmt_rs::pretty_simple::PrettySimple;
 use nixfmt_rs::ParseError;
 use std::io::{self, Read};
@@ -60,9 +61,9 @@ fn main() {
         file.format(&mut writer);
         print!("{}", writer.finish());
     } else if dump_ir {
-        use nixfmt_rs::predoc::{fixup, Pretty};
         let file = nixfmt_rs::parse(&source).unwrap_or_else(|e| handle_error(&source, filename, e));
-        let doc = file.pretty();
+        let mut doc = Doc::new();
+        file.pretty(&mut doc);
         let doc = fixup(&doc);
         let mut writer = ColoredWriter::new(&source);
         doc.format(&mut writer);
