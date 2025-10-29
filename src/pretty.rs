@@ -332,8 +332,14 @@ fn push_pretty_set(
     };
     open_without_trail.pretty(doc);
 
-    // Separator: use hardline if wide and has items, else use line
-    let sep = if wide && !items.0.is_empty() {
+    // Separator: prefer hardline before close when items start with an empty line
+    let starts_with_emptyline = match items.0.first() {
+        Some(Item::Comments(trivia)) => trivia.0.iter().any(|t| matches!(t, Trivium::EmptyLine())),
+        _ => false,
+    };
+
+    // Separator: use hardline if wide, or when starting with an empty line; else use line
+    let sep = if !items.0.is_empty() && (wide || starts_with_emptyline) {
         vec![hardline()]
     } else {
         vec![line()]
@@ -993,5 +999,8 @@ impl<T: Pretty> Pretty for Whole<T> {
             self.value.pretty(doc);
             self.trailing_trivia.pretty(doc);
         });
+        // Do not force a final Hardline; reference nixfmt IR does not
+        // add a trailing newline at the top level in --ir output.
+        // Keeping parity avoids extra Spacing Hardline in diffs.
     }
 }

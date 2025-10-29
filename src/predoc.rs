@@ -132,7 +132,6 @@ pub(crate) fn push_trailing_comment(doc: &mut Doc, s: impl Into<String>) {
 }
 
 /// Push a trailing text element (only rendered in expanded groups)
-#[allow(dead_code)]
 pub(crate) fn push_trailing(doc: &mut Doc, s: impl Into<String>) {
     let s = s.into();
     if !s.is_empty() {
@@ -376,25 +375,20 @@ fn unexpand_spacing(doc: &Doc) -> Doc {
     result
 }
 
-/// Split list at end by predicate
-fn span_end<T, F>(pred: F, list: Vec<T>) -> (Vec<T>, Vec<T>)
+/// Split list into (prefix, trailing_suffix) where trailing_suffix
+/// contains all elements at the end that satisfy `pred`.
+fn span_end<T, F>(pred: F, mut list: Vec<T>) -> (Vec<T>, Vec<T>)
 where
     F: Fn(&T) -> bool,
 {
-    let mut rev: Vec<T> = list.into_iter().rev().collect();
-    let mut taken = Vec::new();
+    let split_point = list
+        .iter()
+        .rposition(|item| !pred(item))
+        .map(|i| i + 1)
+        .unwrap_or(0);
 
-    while let Some(item) = rev.last() {
-        if pred(item) {
-            taken.push(rev.pop().unwrap());
-        } else {
-            break;
-        }
-    }
-
-    taken.reverse();
-    rev.reverse();
-    (rev, taken)
+    let post = list.split_off(split_point);
+    (list, post)
 }
 
 /// Simplify groups with only one item
@@ -410,6 +404,50 @@ fn simplify_group(ann: GroupAnn, doc: Doc) -> Doc {
         }
     }
     doc
+}
+
+/// Check if an element is trailing spacing (hard spacing or groups containing only hard spacing)
+fn is_trailing_spacing_elem(elem: &DocE) -> bool {
+    if is_hard_spacing(elem) {
+        return true;
+    }
+    match elem {
+        DocE::Group(_, inner) => inner.iter().all(|e| match e {
+            DocE::Spacing(s) => matches!(
+                s,
+                Spacing::Hardspace | Spacing::Hardline | Spacing::Emptyline | Spacing::Newlines(_)
+            ),
+            _ => false,
+        }),
+        _ => false,
+    }
+}
+
+/// Recursively peel trailing spacing out of nested groups
+fn split_trailing(doc: Doc) -> (Doc, Doc) {
+    // First, peel any trailing spacing at this level
+    let (mut body, post) = span_end(is_trailing_spacing_elem, doc);
+    if !post.is_empty() {
+        return (body, post);
+    }
+
+    // If the last element is a group, try peeling from inside it
+    if let Some(last) = body.last().cloned() {
+        if let DocE::Group(last_ann, last_inner) = last {
+            let (new_inner, inner_post) = split_trailing(last_inner);
+            if !inner_post.is_empty() {
+                // Replace the last element with the updated group if not empty after peel
+                body.pop();
+                let new_inner = simplify_group(last_ann, new_inner);
+                if !new_inner.is_empty() {
+                    body.push(DocE::Group(last_ann, new_inner));
+                }
+                return (body, inner_post);
+            }
+        }
+    }
+
+    (body, post)
 }
 
 /// Fix up a Doc by:
@@ -469,8 +507,9 @@ pub(crate) fn fixup(doc: &Doc) -> Doc {
                     // Dissolve empty group
                     result.extend(pre);
                 } else {
-                    // Split out trailing hard spacings
-                    let (body, post) = span_end(is_hard_spacing, rest);
+                    // Split out trailing hard spacings, and also peel from nested groups
+                    let (body, post) = split_trailing(rest);
+
                     let body = simplify_group(ann, body);
 
                     if body.is_empty() {
@@ -780,8 +819,12 @@ type LayoutState = (usize, Vec<(usize, usize)>);
 
 /// Main layout algorithm
 fn layout_greedy(target_width: usize, indent_width: usize, doc: &Doc) -> String {
-    let doc = fixup(doc);
-    let doc = vec![DocE::Group(GroupAnn::RegularG, doc)];
+    // First, fix the inner document
+    let inner = fixup(doc);
+    // Wrap in a top-level group to mirror nixfmt's structure
+    let wrapped = vec![DocE::Group(GroupAnn::RegularG, inner)];
+    // Run fixup again so trailing spacing moves outside the top-level group
+    let doc = fixup(&wrapped);
 
     let mut state: LayoutState = (0, vec![(0, 0)]);
     let result = render_doc(&doc, &[], &mut state, target_width, indent_width);

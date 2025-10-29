@@ -75,3 +75,15 @@ fn test_selection_from_record_term_structure() {
     // Selection from a record term forces line_prime separator before selectors
     test_ir_format("rec { nested = { }; }.nested or { }");
 }
+
+#[test]
+fn test_comment_structure() {
+    // Comments generate Comment and TrailingComment annotations
+    test_ir_format("/* block comment */ let a = 1; in a # line comment");
+}
+
+#[test]
+fn test_empty_line_structure() {
+    // Empty lines generate Emptyline spacing, Priority and Transparent groups
+    test_ir_format("{\n\n  a = 1;\n}");
+}
