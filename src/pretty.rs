@@ -730,7 +730,7 @@ impl Pretty for Expression {
             Expression::Abstraction(param, colon, body) => {
                 param.pretty(doc);
                 colon.pretty(doc);
-                doc.push(hardspace());
+                doc.push(line()); // Use line (soft break) not hardspace, matching nixfmt
                 body.pretty(doc);
             }
         }
@@ -849,6 +849,11 @@ impl Pretty for Parameter {
                                             // Add comma as trailing (will only appear in expanded/multi-line form)
                                             push_trailing(doc, ",");
                                         }
+                                        ParamAttr::ParamAttr(_, _, None) => {
+                                            // No explicit comma in source, but add trailing comma for proper formatting
+                                            attr.pretty(doc);
+                                            push_trailing(doc, ",");
+                                        }
                                         _ => attr.pretty(doc),
                                     }
                                 } else {
@@ -857,22 +862,11 @@ impl Pretty for Parameter {
                             }
                         };
 
-                        // Determine if we need nesting: nest if sep is hardline (not line/hardspace)
-                        // This matches nixfmt's surroundWith which nests when using hardline separator
-                        let needs_nesting = matches!(sep, DocE::Spacing(Spacing::Hardline));
-
-                        if needs_nesting {
-                            // For multi-line parameters, nest the items
-                            // Matches nixfmt: surroundWith sep (nest $ sepBy sep $ ...)
-                            doc.push(sep.clone());
-                            push_nested(doc, format_attrs);
-                            doc.push(sep.clone());
-                        } else {
-                            // For single-line parameters (using line/hardspace), no nesting
-                            doc.push(sep.clone());
-                            format_attrs(doc);
-                            doc.push(sep.clone());
-                        }
+                        // Always nest parameters, matching nixfmt's surroundWith sep (nest $ ...)
+                        // The nesting provides proper indentation regardless of separator type
+                        doc.push(sep.clone());
+                        push_nested(doc, format_attrs);
+                        doc.push(sep.clone());
                     }
 
                     close.pretty(doc);

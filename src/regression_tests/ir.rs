@@ -11,18 +11,10 @@ fn regression_param_with_default_trailing_comma() {
     test_ast_format("{ base ? ../., }:\nx");
 }
 
-/// Regression test: simple parameter pattern should have outer Group wrapper
-///
-/// Issue: nixfmt-rs was missing the outer `Group RegularG` wrapper that the
-/// reference implementation adds when pretty-printing a Whole Expression (File).
-/// This has been fixed by wrapping Whole<T>::pretty in push_group().
-///
-/// Known remaining differences (see IR_FORMATTING_STATUS.md):
-/// - Indentation levels (0 vs 1)
-/// - Trailing comma handling
-/// - Spacing types (Hardspace vs Space)
 #[test]
-#[ignore = "IR representation differs in indentation/trailing/spacing"]
 fn test_simple_parameter_pattern() {
+    // Issue: nixfmt-rs was missing the outer `Group RegularG` wrapper that the
+    // reference implementation adds when pretty-printing a Whole Expression (File).
+    // This has been fixed by wrapping Whole<T>::pretty in push_group().
     test_ir_format("{ a, b }: x");
 }
