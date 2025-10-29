@@ -1,0 +1,156 @@
+//! Binder parsing utilities
+//!
+//! This module handles parsing of bindings in Nix attribute sets and let expressions,
+//! including both `inherit` statements and attribute assignments (name = value).
+
+use crate::error::{ErrorKind, ParseError, Result};
+use crate::types::*;
+
+use super::{spans, Parser};
+
+impl Parser {
+    /// Parse a list of binders (for let expressions and attribute sets)
+    pub(super) fn parse_binders(&mut self) -> Result<Items<Binder>> {
+        let mut items = Vec::new();
+
+        while !matches!(
+            self.current.value,
+            Token::KIn | Token::TBraceClose | Token::Sof
+        ) {
+            // Check for comments before binding
+            self.collect_trivia_as_comments(&mut items);
+
+            let binder = self.parse_binder()?;
+            items.push(Item::Item(binder));
+        }
+
+        if matches!(self.current.value, Token::KIn | Token::TBraceClose) {
+            self.collect_trivia_as_comments(&mut items);
+        }
+
+        Ok(Items(items))
+    }
+
+    /// Parse a single binder (inherit or assignment)
+    fn parse_binder(&mut self) -> Result<Binder> {
+        if matches!(self.current.value, Token::KInherit) {
+            self.parse_inherit()
+        } else {
+            self.parse_assignment()
+        }
+    }
+
+    /// Parse inherit statement: inherit [ (expr) ] names... ;
+    fn parse_inherit(&mut self) -> Result<Binder> {
+        let inherit_tok = self.expect_token_match(|t| matches!(t, Token::KInherit))?;
+
+        // Check for optional (expr)
+        let from = if matches!(self.current.value, Token::TParenOpen) {
+            let open = self.take_current();
+            self.advance()?;
+            let expr = self.parse_expression()?;
+            let close = self.expect_token_match(|t| matches!(t, Token::TParenClose))?;
+            Some(Term::Parenthesized(open, Box::new(expr), close))
+        } else {
+            None
+        };
+
+        // Parse selectors (identifiers, strings, interpolations)
+        let mut selectors = Vec::new();
+        while self.is_simple_selector_start() {
+            let sel = self.parse_simple_selector()?;
+            selectors.push(sel);
+        }
+
+        let semi = self.expect_token_match(|t| matches!(t, Token::TSemicolon))?;
+
+        Ok(Binder::Inherit(inherit_tok, from, selectors, semi))
+    }
+
+    /// Parse assignment: selector = expr ;
+    fn parse_assignment(&mut self) -> Result<Binder> {
+        // Parse left-hand side (selector path)
+        let mut selectors = Vec::new();
+
+        // Parse at least one selector
+        let first_sel = self.parse_selector()?;
+        selectors.push(first_sel);
+
+        // Parse additional selectors if present
+        while matches!(self.current.value, Token::TDot) {
+            let dot = self.take_current();
+            self.advance()?;
+
+            // Parse simple selector after dot
+            let simple_sel = self.parse_simple_selector()?;
+            selectors.push(Selector {
+                dot: Some(dot),
+                selector: simple_sel,
+            });
+        }
+
+        // Check for common mistake: attribute path followed by semicolon (forgot = and value)
+        if matches!(self.current.value, Token::TSemicolon) {
+            return Err(ParseError {
+                span: self.current.span,
+                kind: ErrorKind::UnexpectedToken {
+                    expected: vec!["'='".to_string()],
+                    found: "';'".to_string(),
+                },
+                labels: vec![],
+            });
+        }
+
+        let eq = self.expect_token_match(|t| matches!(t, Token::TAssign))?;
+        let expr = self.parse_expression()?;
+
+        // Get the end of the expression for error reporting
+        // Special case: if the expression is an Application, the user likely forgot
+        // a semicolon and the parser treated the next line as a function argument.
+        // Point to the end of the LEFT side (the function) instead of the RIGHT side.
+        let expr_end_span = match &expr {
+            Expression::Application(func, _arg) => spans::expr_end(func),
+            _ => spans::expr_end(&expr),
+        };
+
+        // Expect semicolon with helpful error message
+        if matches!(self.current.value, Token::TSemicolon) {
+            let semi = self.take_current();
+            self.advance()?;
+            Ok(Binder::Assignment(selectors, eq, expr, semi))
+        } else if matches!(self.current.value, Token::Sof) {
+            // EOF found - check if this is an unclosed nested set
+            // If the expression is a set, the closing brace might have belonged to an outer scope
+            if let Expression::Term(Term::Set(_, open_brace, _, close_brace)) = &expr {
+                Err(ParseError {
+                    span: close_brace.span,
+                    kind: ErrorKind::UnclosedDelimiter {
+                        delimiter: '{',
+                        opening_span: open_brace.span,
+                    },
+                    labels: vec![],
+                })
+            } else {
+                // Generic EOF error
+                Err(ParseError {
+                    span: expr_end_span,
+                    kind: ErrorKind::UnexpectedToken {
+                        expected: vec!["';'".to_string()],
+                        found: "'end of file'".to_string(),
+                    },
+                    labels: vec![],
+                })
+            }
+        } else {
+            // Missing semicolon - point to the END of the expression
+            Err(ParseError {
+                span: expr_end_span,
+                kind: ErrorKind::UnexpectedToken {
+                    expected: vec!["';'".to_string()],
+                    found: format!("'{}'", self.current.value.text()),
+                },
+                labels: vec![],
+            })
+        }
+    }
+}
