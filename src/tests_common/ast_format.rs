@@ -26,11 +26,11 @@ use std::process::Command;
 /// # Example
 ///
 /// ```rust
-/// test_ast_format("simple_let", "let x = 1; in x");
+/// test_ast_format("let x = 1; in x");
 /// ```
-pub fn test_ast_format(name: &str, input: &str) {
+pub fn test_ast_format(input: &str) {
     // Parse with our parser
-    let ast = crate::parse(input).expect(&format!("Failed to parse test '{}'", name));
+    let ast = crate::parse(input).expect("Failed to parse input");
 
     // Format with our trait-based formatter
     let mut writer = ColoredWriter::new(input);
@@ -50,17 +50,14 @@ pub fn test_ast_format(name: &str, input: &str) {
             child.stdin.as_mut().unwrap().write_all(input.as_bytes())?;
             child.wait_with_output()
         })
-        .expect(&format!("Failed to run nixfmt for test '{}'", name));
+        .expect("Failed to run nixfmt");
 
     // nixfmt --ast writes to stderr!
-    let expected = String::from_utf8(nixfmt_output.stderr).expect(&format!(
-        "nixfmt output is not valid UTF-8 for test '{}'",
-        name
-    ));
+    let expected = String::from_utf8(nixfmt_output.stderr).expect("nixfmt output is not valid UTF-8");
 
     // Compare
     if our_output != expected {
-        eprintln!("TEST FAILED: {}", name);
+        eprintln!("TEST FAILED");
         eprintln!("INPUT:\n{}", input);
         eprintln!("\n=== EXPECTED (nixfmt) ===");
         eprintln!("{}", expected);
@@ -71,6 +68,6 @@ pub fn test_ast_format(name: &str, input: &str) {
         // Show colored diff
         diff::print_colored_diff(&expected, &our_output);
 
-        panic!("Output mismatch for test '{}'", name);
+        panic!("Output mismatch");
     }
 }

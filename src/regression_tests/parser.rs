@@ -5,25 +5,25 @@ use crate::tests_common::test_ast_format;
 #[test]
 fn regression_string_selector() {
     // Minimal reproducer: x."y"
-    test_ast_format("string_selector", r#"x."y""#);
+    test_ast_format(r#"x."y""#);
 }
 
 #[test]
 fn regression_string_selector_interpolation_literal() {
     // Minimal reproducer: x.${"y"}
-    test_ast_format("string_selector_interp_literal", r#"x.${"y"}"#);
+    test_ast_format(r#"x.${"y"}"#);
 }
 
 #[test]
 fn regression_string_selector_interpolation_expr() {
     // Minimal reproducer: x.${foo}
-    test_ast_format("string_selector_interp_expr", r#"x.${foo}"#);
+    test_ast_format(r#"x.${foo}"#);
 }
 
 #[test]
 fn regression_or_as_identifier() {
     // Ensure `or` is treated as an identifier when used by itself
-    test_ast_format("or_standalone", "or");
+    test_ast_format("or");
 }
 
 #[test]
@@ -43,19 +43,19 @@ fn regression_or_operator_deprecated_syntax() {
 #[test]
 fn regression_float_no_leading_digit() {
     // Ensure parser accepts `.5` like nixfmt
-    test_ast_format("float_no_leading", ".5");
+    test_ast_format(".5");
 }
 
 #[test]
 fn regression_attrset_string_key() {
     // Minimal reproducer: {"a" = 1;}
-    test_ast_format("attrset_string_key", r#"{"a" = 1;}"#);
+    test_ast_format(r#"{"a" = 1;}"#);
 }
 
 #[test]
 fn regression_attrset_interpolated_key() {
     // Minimal reproducer: {${"a"} = 1;}
-    test_ast_format("attrset_interp_key", r#"{${"a"} = 1;}"#);
+    test_ast_format(r#"{${"a"} = 1;}"#);
 }
 
 #[test]
@@ -66,9 +66,7 @@ fn regression_import_relative_path() {
     // Bug 3: "x = foo-bar/baz.nix" was parsed as division with selection
     // Bug 4: "metaCommon // { ... }" was incorrectly detected as path "metaCommon//"
     // Bug 5: "(a / b)" was incorrectly detected as path starting with "a/"
-    test_ast_format(
-        "import_relative_path",
-        r#"{
+    test_ast_format(r#"{
   a = import common/acme/server/snakeoil-certs.nix;
   b = common/file.nix;
   c = foo-bar/baz.nix;
@@ -83,19 +81,19 @@ fn regression_import_relative_path() {
 #[test]
 fn regression_context_pattern() {
     // Minimal reproducer: {...}@args: args
-    test_ast_format("context_pattern", "{...}@args: args");
+    test_ast_format("{...}@args: args");
 }
 
 #[test]
 fn regression_let_string_key() {
     // Minimal reproducer: let "foo" = 1; in foo
-    test_ast_format("let_string_key", r#"let "foo" = 1; in foo"#);
+    test_ast_format(r#"let "foo" = 1; in foo"#);
 }
 
 #[test]
 fn regression_let_interpolated_key() {
     // Minimal reproducer: let ${"foo"} = 1; in foo
-    test_ast_format("let_interp_key", r#"let ${"foo"} = 1; in foo"#);
+    test_ast_format(r#"let ${"foo"} = 1; in foo"#);
 }
 
 #[test]
@@ -110,48 +108,48 @@ fn regression_comparison_chain_should_fail() {
 #[test]
 fn regression_import_path_application() {
     // `import ./foo.nix self` should parse and match nixfmt
-    test_ast_format("import_path_application", "import ./foo.nix self");
+    test_ast_format("import ./foo.nix self");
 }
 
 #[test]
 fn regression_float_trailing_dot() {
-    test_ast_format("float_trailing_dot", "5.");
+    test_ast_format("5.");
 }
 
 #[test]
 fn regression_float_with_exponent() {
-    test_ast_format("float_with_exponent", "1.0e2");
+    test_ast_format("1.0e2");
 }
 
 #[test]
 fn regression_float_leading_dot_exponent() {
-    test_ast_format("float_leading_dot_exponent", ".5e2");
+    test_ast_format(".5e2");
 }
 
 #[test]
 fn regression_float_double_zero_prefix() {
-    test_ast_format("float_double_zero_prefix", "00.5");
+    test_ast_format("00.5");
 }
 
 #[test]
 fn regression_attrset_trailing_empty_line() {
-    test_ast_format("attrset_trailing_empty_line", "{\n  foo = 1;\n\n}\n");
+    test_ast_format("{\n  foo = 1;\n\n}\n");
 }
 
 #[test]
 fn regression_multiline_string_indentation() {
-    test_ast_format("multiline_string_indentation", "''\n  case\n    ;;\n''\n");
+    test_ast_format("''\n  case\n    ;;\n''\n");
 }
 
 #[test]
 fn regression_trailing_comment() {
-    test_ast_format("trailing_comment", "{ test = foo; # trailing comment\n}");
+    test_ast_format("{ test = foo; # trailing comment\n}");
 }
 
 #[test]
 fn test_sourceline_multiline_list() {
     // Regression test: closing bracket should be on line 3, not line 2
-    test_ast_format("sourceline_multiline_list", "[\n  \"foo\"\n]");
+    test_ast_format("[\n  \"foo\"\n]");
 }
 
 #[test]
@@ -159,9 +157,7 @@ fn regression_comment_before_and_with_selectors() {
     // Comments before && operators are dropped when expressions contain
     // interpolation selectors like self.packages.${system}.isLinux
     // The third && operator is missing its preTrivia comment
-    test_ast_format(
-        "comment_before_and_selectors",
-        r#"{
+    test_ast_format(r#"{
   x =
     lib.optionalAttrs
       (
@@ -185,37 +181,35 @@ fn regression_emptyline_pretrivia_inline() {
     // EmptyLine in preTrivia should be formatted inline in AST output
     // Our output: { preTrivia =\n    [ EmptyLine ]\n, ...
     // nixfmt:     { preTrivia = [ EmptyLine ], ...
-    test_ast_format("emptyline_pretrivia", "\n\nlet x = 1; in x");
+    test_ast_format("\n\nlet x = 1; in x");
 }
 
 #[test]
 fn regression_not_member_check() {
     // FIXED: ? operator now has higher precedence than ! operator
     // Correct AST: Inversion(MemberCheck(a)...)
-    test_ast_format("not_member_check", "!a ? b");
+    test_ast_format("!a ? b");
 }
 
 #[test]
 fn regression_implies_precedence() {
     // FIXED: -> operator has lower precedence than ||
     // Should parse as: (a || b) -> c, not a || (b -> c)
-    test_ast_format("implies_precedence", "a || b -> c");
+    test_ast_format("a || b -> c");
 }
 
 #[test]
 fn regression_mixed_add_sub_associativity() {
     // Our AST: (1 + (2 - 3)), nixfmt AST: ((1 + 2) - 3)
     // Right-associative handling for + diverges when - appears
-    test_ast_format("mixed_add_sub", "1 + 2 - 3");
+    test_ast_format("1 + 2 - 3");
 }
 
 #[test]
 fn regression_chained_string_concatenation() {
     // Chained + operators should create nested Operation nodes
     // From nixpkgs/nixos/modules/config/resolvconf.nix lines 18-37
-    test_ast_format(
-        "chained_string_concat",
-        r#"''
+    test_ast_format(r#"''
   line1
 ''
 + lib.optionalString cond1 ''
@@ -234,7 +228,7 @@ fn regression_chained_string_concatenation() {
 #[test]
 fn regression_empty_set_with_comment() {
     // Comments inside empty sets should be separate Comments items, not in preTrivia
-    test_ast_format("empty_set_comment", "{\n  # comment\n}");
+    test_ast_format("{\n  # comment\n}");
 }
 
 #[test]
@@ -252,22 +246,20 @@ fn regression_ansi_escape_codes_in_strings() {
     // but nixfmt preserves them. The literal ESC character is 0x1b.
     // We create a test string with a real escape character followed by "[1;31m"
     let test_input = "\"\x1b[1;31mtest\x1b[0m\"";
-    test_ast_format("ansi_escape_codes", test_input);
+    test_ast_format(test_input);
 
     // Test that escape sequences are formatted without leading zeros
     // nixfmt outputs \x9 for tab, not \x09
     // From nixpkgs/lib/generators.nix
     let tab_test = "\"\t\"";
-    test_ast_format("tab_escape_sequence", tab_test);
+    test_ast_format(tab_test);
 }
 
 #[test]
 fn regression_dot_selector_on_newline() {
     // Parser should accept dot selector on a newline after closing brace
     // From nixpkgs/nixos/release.nix line 262-267
-    test_ast_format(
-        "dot_selector_newline",
-        r#"{
+    test_ast_format(r#"{
   armv6l-linux = ./foo.nix;
 }
 .${system}"#,
@@ -278,7 +270,7 @@ fn regression_dot_selector_on_newline() {
 fn regression_empty_set_context_parameter() {
     // Context parameter with empty set: { }@args: body
     // From nixpkgs/lib/generators.nix line 729
-    test_ast_format("empty_set_context_param", "{ }@args: args");
+    test_ast_format("{ }@args: args");
 }
 
 #[test]
@@ -288,9 +280,7 @@ fn regression_inline_comments_after_strings_and_paths() {
     // Bug: The lexer would encounter '#' after manually parsing these constructs
     // and fail with "unexpected character: '#'"
     // From nixpkgs/nixos/tests/public-inbox.nix line 97
-    test_ast_format(
-        "inline_comments_after_strings_and_paths",
-        r#"[
+    test_ast_format(r#"[
   "simple" # comment after simple string
   ''
     indented
@@ -304,21 +294,21 @@ fn regression_inline_comments_after_strings_and_paths() {
 #[test]
 fn regression_old_style_let() {
     // Minimal reproducer: let { body = 1; }
-    test_ast_format("old_style_let", "let { body = 1; }");
+    test_ast_format("let { body = 1; }");
 }
 
 #[test]
 fn regression_unicode_escape_in_string() {
     // Zero-width space (U+200B) should be displayed as \x200b in AST output
     // From nixpkgs/pkgs/by-name/li/libcaca/package.nix line 68
-    test_ast_format("unicode_escape", "\"famous \u{200B}AAlib library\"");
+    test_ast_format("\"famous \u{200B}AAlib library\"");
 }
 
 #[test]
 fn regression_soft_hyphen_escape() {
     // Soft hyphen (U+00AD) is a Format character (Cf category) and should be escaped as \xad
     // From nixpkgs/pkgs/tools/graphics/diagrams-builder/default.nix line 10
-    test_ast_format("soft_hyphen_escape", "\"\u{00AD}~~~\"");
+    test_ast_format("\"\u{00AD}~~~\"");
 }
 
 #[test]
@@ -326,7 +316,7 @@ fn regression_identifier_slash_path() {
     // Function application with path argument: mkDefault /tmp
     // Should parse as Application(mkDefault, /tmp), not Path("mkDefault/tmp")
     // From nixpkgs/nixos/modules/services/monitoring/prometheus/exporters.nix line 353
-    test_ast_format("identifier_slash_path", "mkDefault /tmp");
+    test_ast_format("mkDefault /tmp");
 }
 
 #[test]
@@ -334,16 +324,14 @@ fn regression_unquoted_url() {
     // Unquoted URLs should be parsed as strings, not as division/update operators
     // Bug: "http://example.com" was tokenized as "http:" followed by TUpdate ("//" operator)
     // From nix/tests/functional/lang/parse-okay-regression-20041027.nix line 6
-    test_ast_format("unquoted_url", "{ url = http://example.com/path; }");
+    test_ast_format("{ url = http://example.com/path; }");
 }
 
 #[test]
 fn regression_decorated_multiline_comment() {
     // Decorated multiline comments should strip leading "* " from each line
     // From nix/tests/functional/lang/eval-okay-comments.nix lines 42-45
-    test_ast_format(
-        "decorated_multiline_comment",
-        r#"/*
+    test_ast_format(r#"/*
  * Multiline, decorated comments
  * # This ain't a nest'd comm'nt
  */
@@ -355,7 +343,7 @@ fn regression_decorated_multiline_comment() {
 fn regression_trailing_empty_line_in_let() {
     // Empty line after last item but before closing brace should be preserved in AST
     // From nix/tests/functional/lang/parse-fail-dup-attrs-2.nix
-    test_ast_format("trailing_empty_line_let", "let {\n  x = 1;\n  \n}\n");
+    test_ast_format("let {\n  x = 1;\n  \n}\n");
 }
 
 #[test]
@@ -379,7 +367,7 @@ fn regression_or_operator_with_application() {
     // The `or` operator in Nix is binary and has lower precedence than function application
     // `fold or []` should parse as "fold or []" (using the or operator), not as "fold(or)([])"
     // From nix/tests/functional/lang/eval-okay-attrs5.nix line 20
-    test_ast_format("or_operator_application", "(fold or [] [true false false])");
+    test_ast_format("(fold or [] [true false false])");
 }
 
 #[test]
@@ -387,7 +375,7 @@ fn regression_chained_comparison_operators() {
     // Comparison operators can be "chained" when they're actually operands to equality/inequality
     // `2 > 1 == 1 < 2` should parse as `(2 > 1) == (1 < 2)` - comparing two boolean results
     // From nix/tests/functional/lang/eval-okay-arithmetic.nix line 50
-    test_ast_format("chained_comparison", "2 > 1 == 1 < 2");
+    test_ast_format("2 > 1 == 1 < 2");
 }
 
 #[test]
@@ -407,9 +395,7 @@ fn regression_multiline_string_unicode_line_numbers() {
     // Line numbers for tokens after multiline strings containing special Unicode chars
     // Bug: Our parser reports different line numbers than nixfmt for TSemicolon and TBraceClose
     // From nix/tests/functional/nar-access.nix lines 6-20
-    test_ast_format(
-        "multiline_unicode_lines",
-        r#"{
+    test_ast_format(r#"{
   x = ''
     line1
 ä"§

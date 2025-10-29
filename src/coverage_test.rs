@@ -9,7 +9,7 @@ use crate::tests_common::test_ast_format;
 
 #[test]
 fn test_empty_set_parameter() {
-    test_ast_format("empty_set_parameter", "{}: 42");
+    test_ast_format("{}: 42");
 }
 
 #[test]
@@ -28,7 +28,7 @@ fn test_at_without_colon_error() {
 
 #[test]
 fn test_pipe_forward_operator() {
-    test_ast_format("pipe_forward", "a |> b");
+    test_ast_format("a |> b");
 }
 
 #[test]
@@ -52,7 +52,7 @@ fn test_single_pipe_error() {
 #[test]
 fn test_pipe_backward_operator() {
     // Lines 284-285 in lexer.rs: <| operator
-    test_ast_format("pipe_backward", "a <| b");
+    test_ast_format("a <| b");
 }
 
 #[test]
@@ -97,7 +97,7 @@ fn test_unexpected_character_error() {
 #[test]
 fn test_member_check_on_operation() {
     // Lines 322-328 in parser.rs: member check via parse_operation_or_lambda
-    test_ast_format("member_check_operation", "(x + y) ? foo");
+    test_ast_format("(x + y) ? foo");
 }
 
 #[test]
