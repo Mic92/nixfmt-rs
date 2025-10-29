@@ -265,4 +265,49 @@ impl Parser {
         self.advance()?;
         Ok(Term::Token(token_ann))
     }
+
+    /// Check if there's path content at the given offset
+    /// Used to validate that what follows is a valid path component
+    pub(super) fn is_path_content_at(&self, offset: usize) -> bool {
+        match self.lexer.peek_ahead(offset) {
+            Some(c) if c.is_alphanumeric() || matches!(c, '.' | '_' | '-' | '+' | '~') => true,
+            Some('$') => self.lexer.peek_ahead(offset + 1) == Some('{'), // interpolation ${
+            _ => false,
+        }
+    }
+
+    /// Check if there's whitespace before current token
+    /// Used to distinguish paths from operators: "a/b" (path) vs "a / b" (division)
+    fn has_preceding_whitespace(&self) -> bool {
+        self.lexer.recent_hspace > 0 || self.lexer.recent_newlines > 0
+    }
+
+    /// Check if current position starts a path
+    /// Must check BEFORE consuming any tokens
+    pub(super) fn looks_like_path(&self) -> bool {
+        match &self.current.value {
+            // identifier/ → path (no space), identifier /path → application (space before /)
+            Token::Identifier(_) => {
+                self.lexer.peek() == Some('/')
+                    && self.lexer.peek_ahead(1) != Some('/') // not //
+                    && self.is_path_content_at(1)
+                    && !self.has_preceding_whitespace()
+            }
+
+            // ./ or ../
+            Token::TDot => match (self.lexer.peek(), self.lexer.peek_ahead(1)) {
+                (Some('/'), _) => self.is_path_content_at(1), // ./
+                (Some('.'), Some('/')) => self.is_path_content_at(2), // ../
+                _ => false,
+            },
+
+            // /path → path (no space before), expr /path → division (space before)
+            Token::TDiv => self.is_path_content_at(0) && !self.has_preceding_whitespace(),
+
+            // ~/
+            Token::TTilde => self.lexer.peek() == Some('/') && self.is_path_content_at(1),
+
+            _ => false,
+        }
+    }
 }

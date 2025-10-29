@@ -220,4 +220,107 @@ impl Parser {
 
         Ok(())
     }
+
+    /// Convert expression to parameter (for lambda detection)
+    pub(super) fn expr_to_parameter(&self, expr: Expression) -> Result<Parameter> {
+        match expr {
+            Expression::Term(Term::Token(ann)) => {
+                if matches!(ann.value, Token::Identifier(_)) {
+                    Ok(Parameter::ID(ann))
+                } else {
+                    Err(ParseError {
+                        span: ann.span,
+                        kind: ErrorKind::UnexpectedToken {
+                            expected: vec!["identifier".to_string()],
+                            found: format!("'{}'", ann.value.text()),
+                        },
+                        labels: vec![],
+                    })
+                }
+            }
+            Expression::Term(Term::Set(None, open, items, close)) => {
+                // Convert set literal to set parameter
+                // This happens for: { x, y }: or { x ? 1 }: patterns
+                let attrs = self.items_to_param_attrs(items)?;
+                Ok(Parameter::Set(open, attrs, close))
+            }
+            _ => Err(ParseError {
+                span: Span::point(0),
+                kind: ErrorKind::InvalidSyntax {
+                    description: "complex parameters not yet supported".to_string(),
+                    hint: Some("use simple identifiers or set patterns as parameters".to_string()),
+                },
+                labels: vec![],
+            }),
+        }
+    }
+
+    /// Convert Items<Binder> to Vec<ParamAttr>
+    pub(super) fn items_to_param_attrs(&self, items: Items<Binder>) -> Result<Vec<ParamAttr>> {
+        let mut attrs = Vec::new();
+
+        for item in items.0 {
+            match item {
+                Item::Item(binder) => {
+                    // Convert binder to param attr
+                    match binder {
+                        Binder::Assignment(mut sels, _eq, expr, comma_or_semi) => {
+                            // Should be single identifier selector
+                            if sels.len() == 1 {
+                                if let Some(Selector {
+                                    dot: None,
+                                    selector: SimpleSelector::ID(name),
+                                }) = sels.pop()
+                                {
+                                    // Check if expr indicates a default (x ? default pattern)
+                                    // For simplicity, we'll treat any assignment as x ? default
+                                    let default = Some((
+                                        Ann::new(Token::TQuestion, name.span), // Fake ? token
+                                        expr,
+                                    ));
+                                    let comma = Some(comma_or_semi);
+                                    attrs.push(ParamAttr::ParamAttr(
+                                        name,
+                                        Box::new(default),
+                                        comma,
+                                    ));
+                                } else {
+                                    return Err(ParseError {
+                                        span: Span::point(0),
+                                        kind: ErrorKind::InvalidSyntax {
+                                            description: "invalid parameter attribute".to_string(),
+                                            hint: Some(
+                                                "expected 'name' or 'name ? default'".to_string(),
+                                            ),
+                                        },
+                                        labels: vec![],
+                                    });
+                                }
+                            } else {
+                                return Err(ParseError {
+                                    span: Span::point(0),
+                                    kind: ErrorKind::InvalidSyntax {
+                                        description: "invalid parameter selector".to_string(),
+                                        hint: Some(
+                                            "expected identifier in parameter pattern".to_string(),
+                                        ),
+                                    },
+                                    labels: vec![],
+                                });
+                            }
+                        }
+                        Binder::Inherit(_, _, _, dots) => {
+                            // Might be ellipsis
+                            attrs.push(ParamAttr::ParamEllipsis(dots));
+                        }
+                    }
+                }
+                Item::Comments(_) => {
+                    // Skip comments in conversion
+                }
+            }
+        }
+
+        Ok(attrs)
+    }
 }

@@ -436,135 +436,6 @@ impl Parser {
         }
     }
 
-    /// Parse selector path: .attr or .attr.attr
-    fn parse_selector_path(&mut self) -> Result<Vec<Selector>> {
-        let mut selectors = Vec::new();
-
-        // First selector (no dot)
-        let first_sel = self.parse_simple_selector()?;
-        selectors.push(Selector {
-            dot: None,
-            selector: first_sel,
-        });
-
-        // Additional selectors with dots
-        while matches!(self.current.value, Token::TDot) {
-            let dot = self.take_current();
-            self.advance()?;
-
-            let simple_sel = self.parse_simple_selector()?;
-            selectors.push(Selector {
-                dot: Some(dot),
-                selector: simple_sel,
-            });
-        }
-
-        Ok(selectors)
-    }
-
-    /// Convert expression to parameter (for lambda detection)
-    fn expr_to_parameter(&self, expr: Expression) -> Result<Parameter> {
-        match expr {
-            Expression::Term(Term::Token(ann)) => {
-                if matches!(ann.value, Token::Identifier(_)) {
-                    Ok(Parameter::ID(ann))
-                } else {
-                    Err(ParseError {
-                        span: ann.span,
-                        kind: crate::error::ErrorKind::UnexpectedToken {
-                            expected: vec!["identifier".to_string()],
-                            found: format!("'{}'", ann.value.text()),
-                        },
-                        labels: vec![],
-                    })
-                }
-            }
-            Expression::Term(Term::Set(None, open, items, close)) => {
-                // Convert set literal to set parameter
-                // This happens for: { x, y }: or { x ? 1 }: patterns
-                let attrs = self.items_to_param_attrs(items)?;
-                Ok(Parameter::Set(open, attrs, close))
-            }
-            _ => Err(ParseError {
-                span: Span::point(0),
-                kind: crate::error::ErrorKind::InvalidSyntax {
-                    description: "complex parameters not yet supported".to_string(),
-                    hint: Some("use simple identifiers or set patterns as parameters".to_string()),
-                },
-                labels: vec![],
-            }),
-        }
-    }
-
-    /// Convert Items<Binder> to Vec<ParamAttr>
-    fn items_to_param_attrs(&self, items: Items<Binder>) -> Result<Vec<ParamAttr>> {
-        let mut attrs = Vec::new();
-
-        for item in items.0 {
-            match item {
-                Item::Item(binder) => {
-                    // Convert binder to param attr
-                    match binder {
-                        Binder::Assignment(mut sels, _eq, expr, comma_or_semi) => {
-                            // Should be single identifier selector
-                            if sels.len() == 1 {
-                                if let Some(Selector {
-                                    dot: None,
-                                    selector: SimpleSelector::ID(name),
-                                }) = sels.pop()
-                                {
-                                    // Check if expr indicates a default (x ? default pattern)
-                                    // For simplicity, we'll treat any assignment as x ? default
-                                    let default = Some((
-                                        Ann::new(Token::TQuestion, name.span), // Fake ? token
-                                        expr,
-                                    ));
-                                    let comma = Some(comma_or_semi);
-                                    attrs.push(ParamAttr::ParamAttr(
-                                        name,
-                                        Box::new(default),
-                                        comma,
-                                    ));
-                                } else {
-                                    return Err(ParseError {
-                                        span: Span::point(0),
-                                        kind: crate::error::ErrorKind::InvalidSyntax {
-                                            description: "invalid parameter attribute".to_string(),
-                                            hint: Some(
-                                                "expected 'name' or 'name ? default'".to_string(),
-                                            ),
-                                        },
-                                        labels: vec![],
-                                    });
-                                }
-                            } else {
-                                return Err(ParseError {
-                                    span: Span::point(0),
-                                    kind: crate::error::ErrorKind::InvalidSyntax {
-                                        description: "invalid parameter selector".to_string(),
-                                        hint: Some(
-                                            "expected identifier in parameter pattern".to_string(),
-                                        ),
-                                    },
-                                    labels: vec![],
-                                });
-                            }
-                        }
-                        Binder::Inherit(_, _, _, dots) => {
-                            // Might be ellipsis
-                            attrs.push(ParamAttr::ParamEllipsis(dots));
-                        }
-                    }
-                }
-                Item::Comments(_) => {
-                    // Skip comments in conversion
-                }
-            }
-        }
-
-        Ok(attrs)
-    }
-
     /// Parse function application (left-associative)
     /// Application only consumes TERMS, not unary expressions
     fn parse_application(&mut self) -> Result<Expression> {
@@ -820,46 +691,6 @@ impl Parser {
         )
     }
 
-    /// Parse a selector (with optional dot)
-    fn parse_selector(&mut self) -> Result<Selector> {
-        let simple_sel = self.parse_simple_selector()?;
-        Ok(Selector {
-            dot: None,
-            selector: simple_sel,
-        })
-    }
-
-    /// Parse simple selector (identifier, string, or interpolation)
-    fn parse_simple_selector(&mut self) -> Result<SimpleSelector> {
-        match &self.current.value {
-            Token::Identifier(_) => {
-                let ident = self.take_current();
-                self.advance()?;
-                Ok(SimpleSelector::ID(ident))
-            }
-            Token::TDoubleQuote => {
-                let string = self.parse_simple_string_literal()?;
-                Ok(SimpleSelector::String(string))
-            }
-            Token::TInterOpen => {
-                let interpol = self.parse_selector_interpolation()?;
-                Ok(SimpleSelector::Interpol(interpol))
-            }
-            _ => Err(ParseError {
-                span: self.current.span,
-                kind: crate::error::ErrorKind::UnexpectedToken {
-                    expected: vec![
-                        "identifier".to_string(),
-                        "string".to_string(),
-                        "interpolation".to_string(),
-                    ],
-                    found: format!("'{}'", self.current.value.text()),
-                },
-                labels: vec![],
-            }),
-        }
-    }
-
     /// Parse a term (atom), including postfix selection
     fn parse_term(&mut self) -> Result<Term> {
         // Check for URIs first (they look like identifiers followed by ":")
@@ -901,51 +732,6 @@ impl Parser {
 
         // Check for selection (.attr) or or-default
         self.parse_postfix_selection(base_term)
-    }
-
-    /// Check if character at given offset starts valid path content
-    /// Valid path content: alphanumeric, ., _, -, +, ~, or ${ for interpolation
-    fn is_path_content_at(&self, offset: usize) -> bool {
-        match self.lexer.peek_ahead(offset) {
-            Some(c) if c.is_alphanumeric() || matches!(c, '.' | '_' | '-' | '+' | '~') => true,
-            Some('$') => self.lexer.peek_ahead(offset + 1) == Some('{'), // interpolation ${
-            _ => false,
-        }
-    }
-
-    /// Check if there's whitespace before current token
-    /// Used to distinguish paths from operators: "a/b" (path) vs "a / b" (division)
-    fn has_preceding_whitespace(&self) -> bool {
-        self.lexer.recent_hspace > 0 || self.lexer.recent_newlines > 0
-    }
-
-    /// Check if current position starts a path
-    /// Must check BEFORE consuming any tokens
-    fn looks_like_path(&self) -> bool {
-        match &self.current.value {
-            // identifier/ → path (no space), identifier /path → application (space before /)
-            Token::Identifier(_) => {
-                self.lexer.peek() == Some('/')
-                    && self.lexer.peek_ahead(1) != Some('/') // not //
-                    && self.is_path_content_at(1)
-                    && !self.has_preceding_whitespace()
-            }
-
-            // ./ or ../
-            Token::TDot => match (self.lexer.peek(), self.lexer.peek_ahead(1)) {
-                (Some('/'), _) => self.is_path_content_at(1), // ./
-                (Some('.'), Some('/')) => self.is_path_content_at(2), // ../
-                _ => false,
-            },
-
-            // /path → path (no space before), expr /path → division (space before)
-            Token::TDiv => self.is_path_content_at(0) && !self.has_preceding_whitespace(),
-
-            // ~/
-            Token::TTilde => self.lexer.peek() == Some('/') && self.is_path_content_at(1),
-
-            _ => false,
-        }
     }
 
     /// Parse postfix selection: term.attr.attr or term.attr or term
@@ -1198,19 +984,5 @@ impl Parser {
                 labels: vec![],
             })
         }
-    }
-
-    /// Check if the current token can begin a simple selector
-    fn is_simple_selector_start(&self) -> bool {
-        matches!(
-            self.current.value,
-            Token::Identifier(_) | Token::TDoubleQuote | Token::TInterOpen
-        )
-    }
-
-    /// Check if the current token represents the `or` keyword (identifier or actual keyword)
-    fn is_or_token(&self) -> bool {
-        matches!(self.current.value, Token::KOr)
-            || matches!(&self.current.value, Token::Identifier(name) if name == "or")
     }
 }

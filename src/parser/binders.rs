@@ -153,4 +153,84 @@ impl Parser {
             })
         }
     }
+
+    /// Parse a selector (with optional dot)
+    pub(super) fn parse_selector(&mut self) -> Result<Selector> {
+        let simple_sel = self.parse_simple_selector()?;
+        Ok(Selector {
+            dot: None,
+            selector: simple_sel,
+        })
+    }
+
+    /// Parse simple selector (identifier, string, or interpolation)
+    pub(super) fn parse_simple_selector(&mut self) -> Result<SimpleSelector> {
+        match &self.current.value {
+            Token::Identifier(_) => {
+                let ident = self.take_current();
+                self.advance()?;
+                Ok(SimpleSelector::ID(ident))
+            }
+            Token::TDoubleQuote => {
+                let string = self.parse_simple_string_literal()?;
+                Ok(SimpleSelector::String(string))
+            }
+            Token::TInterOpen => {
+                let interpol = self.parse_selector_interpolation()?;
+                Ok(SimpleSelector::Interpol(interpol))
+            }
+            _ => Err(ParseError {
+                span: self.current.span,
+                kind: ErrorKind::UnexpectedToken {
+                    expected: vec![
+                        "identifier".to_string(),
+                        "string".to_string(),
+                        "interpolation".to_string(),
+                    ],
+                    found: format!("'{}'", self.current.value.text()),
+                },
+                labels: vec![],
+            }),
+        }
+    }
+
+    /// Parse selector path (used in ? member checks)
+    pub(super) fn parse_selector_path(&mut self) -> Result<Vec<Selector>> {
+        let mut selectors = Vec::new();
+
+        // First selector (no dot)
+        let first_sel = self.parse_simple_selector()?;
+        selectors.push(Selector {
+            dot: None,
+            selector: first_sel,
+        });
+
+        // Additional selectors with dots
+        while matches!(self.current.value, Token::TDot) {
+            let dot = self.take_current();
+            self.advance()?;
+
+            let simple_sel = self.parse_simple_selector()?;
+            selectors.push(Selector {
+                dot: Some(dot),
+                selector: simple_sel,
+            });
+        }
+
+        Ok(selectors)
+    }
+
+    /// Check if current token can start a simple selector
+    pub(super) fn is_simple_selector_start(&self) -> bool {
+        matches!(
+            self.current.value,
+            Token::Identifier(_) | Token::TDoubleQuote | Token::TInterOpen
+        )
+    }
+
+    /// Check if the current token represents the `or` keyword (identifier or actual keyword)
+    pub(super) fn is_or_token(&self) -> bool {
+        matches!(self.current.value, Token::KOr)
+            || matches!(&self.current.value, Token::Identifier(name) if name == "or")
+    }
 }
