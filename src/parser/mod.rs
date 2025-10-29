@@ -2,9 +2,7 @@
 //!
 //! Ports parsing logic from nixfmt's Parser.hs
 
-#[cfg(test)]
-mod tests;
-
+mod spans;
 mod string_processing;
 
 use crate::error::{ParseError, Result};
@@ -30,6 +28,31 @@ pub(crate) struct Parser {
 struct ParserState {
     lexer_state: crate::lexer::LexerState,
     current: Ann<Token>,
+}
+
+/// Check if character is valid in a URI scheme
+/// Based on nixfmt's schemeChar: "-.+" + alphanumeric
+fn is_scheme_char(c: char) -> bool {
+    c.is_alphanumeric() || URI_SCHEME_SPECIAL_CHARS.contains(&c)
+}
+
+/// Check if character is valid in URI
+/// Based on nixfmt's uriChar: "~!@$%&*-=_+:',./?" + alphanumeric
+fn is_uri_char(c: char) -> bool {
+    c.is_alphanumeric() || URI_SPECIAL_CHARS.contains(&c)
+}
+
+/// Check if a token is a comparison operator
+fn is_comparison_operator(token: &Token) -> bool {
+    matches!(
+        token,
+        Token::TEqual
+            | Token::TUnequal
+            | Token::TLess
+            | Token::TGreater
+            | Token::TLessEqual
+            | Token::TGreaterEqual
+    )
 }
 
 impl Parser {
@@ -1017,7 +1040,7 @@ impl Parser {
         let mut last_comparison_op: Option<String> = None;
         while self.is_binary_op() && self.get_precedence() >= min_prec {
             let op_token = self.take_current();
-            let is_comparison = Self::is_comparison_operator(&op_token.value);
+            let is_comparison = is_comparison_operator(&op_token.value);
             let prec = self.get_precedence_for(&op_token.value);
             let op_string = op_token.value.text().to_string(); // User-friendly format
 
@@ -1261,8 +1284,8 @@ impl Parser {
         // a semicolon and the parser treated the next line as a function argument.
         // Point to the end of the LEFT side (the function) instead of the RIGHT side.
         let expr_end_span = match &expr {
-            Expression::Application(func, _arg) => Self::expr_end_span(func),
-            _ => Self::expr_end_span(&expr),
+            Expression::Application(func, _arg) => spans::expr_end(func),
+            _ => spans::expr_end(&expr),
         };
 
         // Expect semicolon with helpful error message
@@ -1556,18 +1579,6 @@ impl Parser {
         Ok(Term::Path(ann))
     }
 
-    /// Check if character is valid in URI scheme
-    /// Based on nixfmt's schemeChar: "-.+" + alphanumeric
-    fn is_scheme_char(c: char) -> bool {
-        c.is_alphanumeric() || URI_SCHEME_SPECIAL_CHARS.contains(&c)
-    }
-
-    /// Check if character is valid in URI
-    /// Based on nixfmt's uriChar: "~!@$%&*-=_+:',./?" + alphanumeric
-    fn is_uri_char(c: char) -> bool {
-        c.is_alphanumeric() || URI_SPECIAL_CHARS.contains(&c)
-    }
-
     /// Check if current position starts a URI
     /// Pattern: scheme_chars ":" uri_chars (e.g., http://example.com)
     fn looks_like_uri(&self) -> bool {
@@ -1577,7 +1588,7 @@ impl Parser {
         };
 
         // All characters in scheme must be valid scheme chars
-        if !scheme.chars().all(Self::is_scheme_char) {
+        if !scheme.chars().all(is_scheme_char) {
             return false;
         }
 
@@ -1587,7 +1598,7 @@ impl Parser {
         }
 
         // Must be followed by at least one URI char after ":"
-        matches!(self.lexer.peek_ahead(1), Some(c) if Self::is_uri_char(c))
+        matches!(self.lexer.peek_ahead(1), Some(c) if is_uri_char(c))
     }
 
     /// Parse URI as a SimpleString
@@ -1626,7 +1637,7 @@ impl Parser {
 
         // Parse URI characters
         while let Some(ch) = self.lexer.peek() {
-            if Self::is_uri_char(ch) {
+            if is_uri_char(ch) {
                 uri_text.push(ch);
                 self.lexer.advance();
             } else {
@@ -2316,61 +2327,6 @@ impl Parser {
     }
 
     /// Get the ending span of an expression (the span of its last/rightmost token)
-    fn expr_end_span(expr: &Expression) -> Span {
-        match expr {
-            Expression::Term(term) => Self::term_end_span(term),
-            Expression::With(_, _, _, expr) => Self::expr_end_span(expr),
-            Expression::Let(_, _, _, expr) => Self::expr_end_span(expr),
-            Expression::Assert(_, _, _, expr) => Self::expr_end_span(expr),
-            Expression::If(_, _, _, _, _, expr) => Self::expr_end_span(expr),
-            Expression::Abstraction(_, _, expr) => Self::expr_end_span(expr),
-            Expression::Application(_, expr) => Self::expr_end_span(expr),
-            Expression::Operation(_, _, right) => Self::expr_end_span(right),
-            Expression::MemberCheck(_, _, selectors) => {
-                // Last selector's span
-                if let Some(last) = selectors.last() {
-                    Self::simple_selector_end_span(&last.selector)
-                } else {
-                    // No selectors - shouldn't happen
-                    Span::point(0)
-                }
-            }
-            Expression::Negation(_, expr) => Self::expr_end_span(expr),
-            Expression::Inversion(_, expr) => Self::expr_end_span(expr),
-        }
-    }
-
-    /// Get the ending span of a term
-    fn term_end_span(term: &Term) -> Span {
-        match term {
-            Term::Token(leaf) => leaf.span,
-            Term::SimpleString(s) | Term::IndentedString(s) => s.span,
-            Term::Path(p) => p.span,
-            Term::List(_, _, close) => close.span,
-            Term::Set(_, _, _, close) => close.span,
-            Term::Selection(base, selectors, default) => {
-                // Return the rightmost element: default > last selector > base
-                if let Some((_, default_expr)) = default {
-                    Self::term_end_span(default_expr)
-                } else if let Some(last) = selectors.last() {
-                    Self::simple_selector_end_span(&last.selector)
-                } else {
-                    Self::term_end_span(base)
-                }
-            }
-            Term::Parenthesized(_, _, close) => close.span,
-        }
-    }
-
-    /// Get the ending span of a simple selector
-    fn simple_selector_end_span(sel: &SimpleSelector) -> Span {
-        match sel {
-            SimpleSelector::ID(leaf) => leaf.span,
-            SimpleSelector::Interpol(ann) => ann.span,
-            SimpleSelector::String(s) => s.span,
-        }
-    }
-
     /// Expect a closing delimiter, providing helpful error if not found
     fn expect_closing_delimiter(
         &mut self,
@@ -2486,17 +2442,5 @@ impl Parser {
     fn is_or_token(&self) -> bool {
         matches!(self.current.value, Token::KOr)
             || matches!(&self.current.value, Token::Identifier(name) if name == "or")
-    }
-
-    fn is_comparison_operator(token: &Token) -> bool {
-        matches!(
-            token,
-            Token::TEqual
-                | Token::TUnequal
-                | Token::TLess
-                | Token::TGreater
-                | Token::TLessEqual
-                | Token::TGreaterEqual
-        )
     }
 }
