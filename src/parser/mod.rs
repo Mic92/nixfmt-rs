@@ -7,7 +7,6 @@ mod containers;
 mod parameters;
 mod path_uri;
 mod spans;
-mod string_processing;
 mod strings;
 
 use crate::error::{ParseError, Result};
