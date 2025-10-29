@@ -1,8 +1,7 @@
 // Tests to improve code coverage by hitting uncovered branches
 
-mod common;
-use common::test_ast_format;
-use nixfmt_rs::parse;
+use crate::parse;
+use crate::tests_common::test_ast_format;
 
 // ============================================================================
 // Parser coverage tests

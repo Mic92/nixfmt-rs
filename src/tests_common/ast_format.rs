@@ -4,8 +4,8 @@
 //! with the reference `nixfmt` implementation.
 
 use super::diff;
-use nixfmt_rs::colored_writer::ColoredWriter;
-use nixfmt_rs::pretty_simple::PrettySimple;
+use crate::colored_writer::ColoredWriter;
+use crate::pretty_simple::PrettySimple;
 use std::process::Command;
 
 /// Test helper: run nixfmt --ast and compare with our output
@@ -30,7 +30,7 @@ use std::process::Command;
 /// ```
 pub fn test_ast_format(name: &str, input: &str) {
     // Parse with our parser
-    let ast = nixfmt_rs::parse(input).expect(&format!("Failed to parse test '{}'", name));
+    let ast = crate::parse(input).expect(&format!("Failed to parse test '{}'", name));
 
     // Format with our trait-based formatter
     let mut writer = ColoredWriter::new(input);

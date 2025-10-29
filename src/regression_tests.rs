@@ -1,8 +1,6 @@
 //! Consolidated regression tests
 
-mod common;
-
-use common::test_ast_format;
+use crate::tests_common::test_ast_format;
 
 #[test]
 fn regression_string_selector() {
@@ -37,7 +35,7 @@ fn regression_or_operator_deprecated_syntax() {
     // Currently we INCORRECTLY parse this as 2 list items instead of 1.
     // TODO: Fix parser to treat `or` as binary operator in this context
     assert!(
-        nixfmt_rs::parse("let or = 1; in [ (x: x) or ]").is_ok(),
+        crate::parse("let or = 1; in [ (x: x) or ]").is_ok(),
         "we currently accept this but parse it incorrectly"
     );
 }
@@ -104,7 +102,7 @@ fn regression_let_interpolated_key() {
 fn regression_comparison_chain_should_fail() {
     // Chained comparisons should be rejected (nixfmt errors on `a == b == c`)
     assert!(
-        nixfmt_rs::parse("a == b == c").is_err(),
+        crate::parse("a == b == c").is_err(),
         "expected chained comparisons to be rejected"
     );
 }
@@ -243,7 +241,7 @@ fn regression_empty_set_with_comment() {
 fn regression_path_trailing_slash_current() {
     // nixfmt rejects `./` but we accept it
     assert!(
-        nixfmt_rs::parse("./").is_err(),
+        crate::parse("./").is_err(),
         "expected path with trailing slash to be rejected"
     );
 }
@@ -368,7 +366,7 @@ fn regression_crlf_line_endings() {
     // Note: The test file has a bare CR after a comment, which nixfmt (Haskell) fails to parse,
     // but we handle correctly for cross-platform robustness
     let input = "rec {\n  x =\n  # Comment\r  y;\n}\n";
-    let result = nixfmt_rs::parse(input);
+    let result = crate::parse(input);
     assert!(
         result.is_ok(),
         "Failed to parse input with CRLF/bare CR: {:?}",
@@ -399,7 +397,7 @@ fn regression_utf8_identifier() {
     // From nix/tests/functional/lang/parse-fail-utf8.nix
     // nix-instantiate correctly rejects this with "unexpected invalid token"
     assert!(
-        nixfmt_rs::parse("123 é 4").is_err(),
+        crate::parse("123 é 4").is_err(),
         "expected non-ASCII character to be rejected"
     );
 }
@@ -425,7 +423,7 @@ fn regression_duplicate_function_formals() {
     // Parser should reject duplicate formal parameters
     // From nix/tests/functional/lang/parse-fail-dup-formals.nix
     assert!(
-        nixfmt_rs::parse("{x, y, x}: x").is_err(),
+        crate::parse("{x, y, x}: x").is_err(),
         "expected duplicate formal parameters to be rejected"
     );
 }
@@ -435,7 +433,7 @@ fn regression_pattern_shadows_formal() {
     // Parser should reject when pattern name shadows a formal parameter
     // From nix/tests/functional/lang/parse-fail-patterns-1.nix
     assert!(
-        nixfmt_rs::parse("args@{args, x, y, z}: x").is_err(),
+        crate::parse("args@{args, x, y, z}: x").is_err(),
         "expected pattern name shadowing formal parameter to be rejected"
     );
 }
@@ -449,7 +447,7 @@ fn regression_non_utf8_input() {
 
     // Test with valid UTF-8 that contains a Unicode replacement character
     // This simulates what would be shown after reading non-UTF-8 bytes
-    let result = nixfmt_rs::parse("builtins.toJSON \"_invalid UTF-8: �_\"");
+    let result = crate::parse("builtins.toJSON \"_invalid UTF-8: �_\"");
     assert!(
         result.is_ok(),
         "Parser should handle Unicode replacement character"

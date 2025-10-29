@@ -1,7 +1,6 @@
 //! AST formatting tests - compare our output with nixfmt --ast
 
-mod common;
-use common::test_ast_format;
+use crate::tests_common::test_ast_format;
 
 // ============================================================================
 // Basic Literals - Tests Token formatting

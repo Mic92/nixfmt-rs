@@ -1,6 +1,6 @@
 //! Regression tests for strings and paths
 
-use nixfmt_rs::parse;
+use crate::parse;
 
 #[test]
 fn test_empty_string() {

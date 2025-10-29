@@ -3,8 +3,7 @@
 //! These tests verify that our parser produces the same AST structures as nixfmt
 //! for operators with different associativity rules.
 
-mod common;
-use common::test_ast_format;
+use crate::tests_common::test_ast_format;
 
 // =============================================================================
 // Right-associative operators: ++, //, +

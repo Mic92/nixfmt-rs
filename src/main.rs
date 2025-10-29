@@ -1,18 +1,10 @@
 //! nixfmt-rs2 CLI
 
-use nixfmt_rs::colored_writer::ColoredWriter;
-use nixfmt_rs::error::context::ErrorContext;
-use nixfmt_rs::error::format::ErrorFormatter;
-use nixfmt_rs::predoc::{fixup, Doc, Pretty};
-use nixfmt_rs::pretty_simple::PrettySimple;
-use nixfmt_rs::ParseError;
 use std::io::{self, Read};
 use std::process::exit;
 
-fn handle_error(source: &str, filename: Option<&str>, e: ParseError) -> ! {
-    let context = ErrorContext::new(source, filename);
-    let formatter = ErrorFormatter::new(&context);
-    eprintln!("{}", formatter.format(&e));
+fn handle_error(source: &str, filename: Option<&str>, e: nixfmt_rs::ParseError) -> ! {
+    eprintln!("{}", nixfmt_rs::format_error(source, filename, &e));
     exit(1)
 }
 
@@ -56,21 +48,16 @@ fn main() {
 
     // Process based on mode
     if dump_ast {
-        let file = nixfmt_rs::parse(&source).unwrap_or_else(|e| handle_error(&source, filename, e));
-        let mut writer = ColoredWriter::new(&source);
-        file.format(&mut writer);
-        print!("{}", writer.finish());
+        let output =
+            nixfmt_rs::format_ast(&source).unwrap_or_else(|e| handle_error(&source, filename, e));
+        print!("{}", output);
     } else if dump_ir {
-        let file = nixfmt_rs::parse(&source).unwrap_or_else(|e| handle_error(&source, filename, e));
-        let mut doc = Doc::new();
-        file.pretty(&mut doc);
-        let doc = fixup(&doc);
-        let mut writer = ColoredWriter::new(&source);
-        doc.format(&mut writer);
-        print!("{}", writer.finish());
+        let output =
+            nixfmt_rs::format_ir(&source).unwrap_or_else(|e| handle_error(&source, filename, e));
+        print!("{}", output);
     } else {
-        let formatted =
+        let output =
             nixfmt_rs::format(&source).unwrap_or_else(|e| handle_error(&source, filename, e));
-        print!("{}", formatted);
+        print!("{}", output);
     }
 }

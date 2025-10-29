@@ -10,7 +10,7 @@ use crate::pretty_simple::{PrettySimple, Writer};
 /// Sequential spacings are reduced to a single spacing by taking the maximum.
 /// This means that e.g. a Space followed by an Emptyline results in just an Emptyline.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
-pub enum Spacing {
+pub(crate) enum Spacing {
     /// Line break or nothing (soft)
     Softbreak,
     /// Line break or nothing
@@ -33,7 +33,7 @@ pub enum Spacing {
 ///
 /// Controls how groups are expanded during layout
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum GroupAnn {
+pub(crate) enum GroupAnn {
     /// Regular group - expand if doesn't fit
     RegularG,
     /// Priority group - try to keep compressed longer
@@ -48,7 +48,7 @@ pub enum GroupAnn {
 ///
 /// Controls how text contributes to line length calculations
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum TextAnn {
+pub(crate) enum TextAnn {
     /// Regular text
     RegularT,
     /// Comment (doesn't count towards line length limits)
@@ -63,7 +63,7 @@ pub enum TextAnn {
 ///
 /// Documents are represented as lists of these elements
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub enum DocE {
+pub(crate) enum DocE {
     /// Text element
     /// (nesting_depth, offset, annotation, text)
     Text(usize, usize, TextAnn, String),
@@ -75,10 +75,20 @@ pub enum DocE {
 }
 
 /// Document - a list of document elements
-pub type Doc = Vec<DocE>;
+pub(crate) type Doc = Vec<DocE>;
+
+/// Opaque wrapper for intermediate representation (for debugging)
+#[derive(Debug)]
+pub struct IR(pub(crate) Doc);
+
+impl PrettySimple for IR {
+    fn format<W: Writer>(&self, writer: &mut W) {
+        self.0.format(writer);
+    }
+}
 
 /// Pretty-printable trait
-pub trait Pretty {
+pub(crate) trait Pretty {
     fn pretty(&self, doc: &mut Doc);
 }
 
@@ -291,7 +301,7 @@ fn offset_doc(level: usize, doc: Doc) -> Doc {
 // Implementation of the Wadler/Leijen layout algorithm from nixfmt
 
 /// Configuration for rendering
-pub struct RenderConfig {
+pub(crate) struct RenderConfig {
     /// Maximum line width (default: 100)
     pub width: usize,
     /// Indentation width in spaces (default: 2)
@@ -414,7 +424,7 @@ fn simplify_group(ann: GroupAnn, doc: Doc) -> Doc {
 /// - Moving hard spacings and comments out of groups
 /// - Merging consecutive spacings
 /// - Removing empty groups
-pub fn fixup(doc: &Doc) -> Doc {
+pub(crate) fn fixup(doc: &Doc) -> Doc {
     if doc.is_empty() {
         return Vec::new();
     }

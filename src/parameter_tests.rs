@@ -1,6 +1,6 @@
 //! Regression tests for all parameter types
 
-use nixfmt_rs::{parse, Expression, Parameter};
+use crate::{parse, Expression, Parameter};
 
 #[test]
 fn test_id_parameter() {
