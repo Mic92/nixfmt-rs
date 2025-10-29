@@ -39,3 +39,15 @@ fn test_assert_structure() {
     // whereas nixfmt-rs currently emits them as a single text token.
     test_ir_format("assert true; 42");
 }
+
+#[test]
+fn test_selection_with_default_structure() {
+    // Member selection with default exercises selector spacing and "or" clause layout
+    test_ir_format("config.services.nginx.enable or false");
+}
+
+#[test]
+fn test_update_absorbable_rhs_structure() {
+    // Update expression with absorbable RHS currently diverges from reference IR (known mismatch)
+    test_ir_format("attrs // { inherit value; }");
+}

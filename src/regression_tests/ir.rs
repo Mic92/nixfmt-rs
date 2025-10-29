@@ -2,7 +2,7 @@
 //!
 //! Tests for IR formatting differences between nixfmt-rs and reference nixfmt
 
-use crate::tests_common::{test_ast_format, test_ir_format};
+use crate::tests_common::test_ir_format;
 
 /// Regression test: let expression should wrap letPart and inPart in groups
 ///
@@ -14,4 +14,3 @@ use crate::tests_common::{test_ast_format, test_ir_format};
 fn test_let_expression_groups() {
     test_ir_format("{ pinnedJson ? ./pinned.json, }: let pinned = (builtins.fromJSON (builtins.readFile pinnedJson)).pins; in pinned");
 }
-

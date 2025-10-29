@@ -317,26 +317,44 @@ impl Pretty for Binder {
     fn pretty(&self, doc: &mut Doc) {
         match self {
             Binder::Inherit(inherit, source, ids, semicolon) => {
+                // Determine spacing strategy based on original layout
+                let same_line = inherit.span.start_line == semicolon.span.start_line;
+                let few_ids = ids.len() < 4;
+                let (sep, nosep) = if same_line && few_ids {
+                    (line(), line_prime())
+                } else {
+                    (hardline(), hardline())
+                };
+                let sep_doc = vec![sep.clone()];
+
                 push_group(doc, |d| {
-                    push_nested(d, |inner| {
-                        inherit.pretty(inner);
-
-                        // If there's a source expression like (foo), add it
-                        if let Some(src) = source {
-                            inner.push(line());
-                            push_group(inner, |g| src.pretty(g));
+                    inherit.pretty(d);
+                    match source {
+                        None => {
+                            d.push(sep.clone());
+                            push_nested(d, |nested| {
+                                if !ids.is_empty() {
+                                    push_sep_by(nested, &sep_doc, ids.clone());
+                                }
+                                nested.push(nosep.clone());
+                                semicolon.pretty(nested);
+                            });
                         }
-
-                        // Add the identifiers
-                        if !ids.is_empty() {
-                            inner.push(hardline());
-                            let hardline_doc = vec![hardline()];
-                            push_sep_by(inner, &hardline_doc, ids.clone());
+                        Some(src) => {
+                            push_nested(d, |nested| {
+                                push_group(nested, |g| {
+                                    g.push(line());
+                                    src.pretty(g);
+                                });
+                                nested.push(sep);
+                                if !ids.is_empty() {
+                                    push_sep_by(nested, &sep_doc, ids.clone());
+                                }
+                                nested.push(nosep.clone());
+                                semicolon.pretty(nested);
+                            });
                         }
-
-                        inner.push(hardline());
-                        semicolon.pretty(inner);
-                    });
+                    }
                 });
             }
             Binder::Assignment(selectors, assign, expr, semicolon) => {
@@ -644,19 +662,13 @@ impl Pretty for Expression {
                 // Based on Haskell prettyApp (Pretty.hs:665-667)
                 if let Expression::Term(t) = &**right {
                     if is_absorbable_term(t) && op.value.is_update_concat_plus() {
-                        push_nested(doc, |d| {
-                            push_group(d, |inner| {
-                                inner.push(line());
-                                left.pretty(inner);
-                                inner.push(line());
-                                push_group_ann(inner, GroupAnn::Transparent, |trans| {
-                                    op.pretty(trans);
-                                    trans.push(hardspace());
-                                    push_group_ann(trans, GroupAnn::Priority, |prio| {
-                                        // prettyTermWide
-                                        t.pretty(prio);
-                                    });
-                                });
+                        push_group(doc, |inner| {
+                            left.pretty(inner);
+                            inner.push(line());
+                            op.pretty(inner);
+                            inner.push(hardspace());
+                            push_nested(inner, |nested| {
+                                t.pretty(nested);
                             });
                         });
                         return;
