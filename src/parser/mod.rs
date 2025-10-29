@@ -2,6 +2,11 @@
 //!
 //! Ports parsing logic from nixfmt's Parser.hs
 
+#[cfg(test)]
+mod tests;
+
+mod string_processing;
+
 use crate::error::{ParseError, Result};
 use crate::lexer::Lexer;
 use crate::types::*;
@@ -143,11 +148,7 @@ impl Parser {
                     let colon = self.expect_token_match(|t| matches!(t, Token::TColon))?;
                     let body = self.parse_expression()?;
                     Ok(Expression::Abstraction(
-                        Parameter::Context(
-                            Box::new(first_param),
-                            at_tok,
-                            Box::new(second_param),
-                        ),
+                        Parameter::Context(Box::new(first_param), at_tok, Box::new(second_param)),
                         colon,
                         Box::new(body),
                     ))
@@ -205,21 +206,14 @@ impl Parser {
                     let second_param = self.parse_full_parameter()?;
 
                     // Validate that pattern name doesn't shadow a formal
-                    let first_param = Parameter::Set(
-                        open_brace.clone(),
-                        Vec::new(),
-                        close_brace.clone(),
-                    );
+                    let first_param =
+                        Parameter::Set(open_brace.clone(), Vec::new(), close_brace.clone());
                     self.validate_context_parameter(&first_param, &second_param)?;
 
                     let colon = self.expect_token_match(|t| matches!(t, Token::TColon))?;
                     let body = self.parse_expression()?;
                     Ok(Expression::Abstraction(
-                        Parameter::Context(
-                            Box::new(first_param),
-                            at_tok,
-                            Box::new(second_param),
-                        ),
+                        Parameter::Context(Box::new(first_param), at_tok, Box::new(second_param)),
                         colon,
                         Box::new(body),
                     ))
@@ -330,21 +324,14 @@ impl Parser {
                     let second_param = self.parse_full_parameter()?;
 
                     // Validate that pattern name doesn't shadow a formal
-                    let first_param = Parameter::Set(
-                        open_brace.clone(),
-                        attrs.clone(),
-                        close_brace.clone(),
-                    );
+                    let first_param =
+                        Parameter::Set(open_brace.clone(), attrs.clone(), close_brace.clone());
                     self.validate_context_parameter(&first_param, &second_param)?;
 
                     let colon = self.expect_token_match(|t| matches!(t, Token::TColon))?;
                     let body = self.parse_expression()?;
                     Ok(Expression::Abstraction(
-                        Parameter::Context(
-                            Box::new(first_param),
-                            at_tok,
-                            Box::new(second_param),
-                        ),
+                        Parameter::Context(Box::new(first_param), at_tok, Box::new(second_param)),
                         colon,
                         Box::new(body),
                     ))
@@ -413,11 +400,8 @@ impl Parser {
                 // Validate that pattern name doesn't shadow a formal
                 self.validate_context_parameter(&first_param, &second_param)?;
 
-                let param = Parameter::Context(
-                    Box::new(first_param),
-                    at_tok,
-                    Box::new(second_param),
-                );
+                let param =
+                    Parameter::Context(Box::new(first_param), at_tok, Box::new(second_param));
                 let colon = self.expect_token_match(|t| matches!(t, Token::TColon))?;
                 let body = self.parse_expression()?;
                 return Ok(Expression::Abstraction(param, colon, Box::new(body)));
@@ -1823,7 +1807,7 @@ impl Parser {
         self.lexer.advance();
 
         let trail_comment = self.parse_trailing_trivia_and_advance()?;
-        let lines = fix_simple_string(parts);
+        let lines = string_processing::process_simple(parts);
 
         Ok(Ann {
             pre_trivia,
@@ -2006,7 +1990,7 @@ impl Parser {
         self.lexer.advance(); // '
 
         let trail_comment = self.parse_trailing_trivia_and_advance()?;
-        let lines = fix_indented_string(lines);
+        let lines = string_processing::process_indented(lines);
 
         let ann = Ann {
             pre_trivia,
@@ -2514,528 +2498,5 @@ impl Parser {
                 | Token::TLessEqual
                 | Token::TGreaterEqual
         )
-    }
-}
-
-fn fix_simple_string(parts: Vec<StringPart>) -> Vec<Vec<StringPart>> {
-    split_lines(parts).into_iter().map(normalize_line).collect()
-}
-
-fn fix_indented_string(lines: Vec<Vec<StringPart>>) -> Vec<Vec<StringPart>> {
-    let lines = fix_first_line(lines);
-    let lines = fix_last_line(lines);
-    let lines = strip_indentation(lines);
-    let lines = lines.into_iter().flat_map(split_lines).collect::<Vec<_>>();
-    lines.into_iter().map(normalize_line).collect()
-}
-
-fn split_lines(parts: Vec<StringPart>) -> Vec<Vec<StringPart>> {
-    let mut result: Vec<Vec<StringPart>> = Vec::new();
-    let mut current: Vec<StringPart> = Vec::new();
-
-    for part in parts {
-        match part {
-            StringPart::TextPart(text) => {
-                let mut remaining = text.as_str();
-                loop {
-                    if let Some(pos) = remaining.find('\n') {
-                        let segment = &remaining[..pos];
-                        if !segment.is_empty() {
-                            current.push(StringPart::TextPart(segment.to_string()));
-                        }
-                        result.push(current);
-                        current = Vec::new();
-                        remaining = &remaining[pos + 1..];
-                    } else {
-                        if !remaining.is_empty() {
-                            current.push(StringPart::TextPart(remaining.to_string()));
-                        }
-                        break;
-                    }
-                }
-            }
-            other => current.push(other),
-        }
-    }
-
-    result.push(current);
-    result
-}
-
-fn normalize_line(line: Vec<StringPart>) -> Vec<StringPart> {
-    let mut result: Vec<StringPart> = Vec::new();
-    for part in line {
-        match part {
-            StringPart::TextPart(text) => {
-                if text.is_empty() {
-                    continue;
-                }
-                if let Some(StringPart::TextPart(existing)) = result.last_mut() {
-                    existing.push_str(&text);
-                } else {
-                    result.push(StringPart::TextPart(text));
-                }
-            }
-            other => result.push(other),
-        }
-    }
-    result
-}
-
-fn is_spaces(text: &str) -> bool {
-    text.bytes().all(|b| b == b' ')
-}
-
-fn is_empty_line(line: &[StringPart]) -> bool {
-    line.is_empty() || matches!(line, [StringPart::TextPart(text)] if is_spaces(text))
-}
-
-fn fix_first_line(mut lines: Vec<Vec<StringPart>>) -> Vec<Vec<StringPart>> {
-    if let Some(first_line) = lines.first().cloned() {
-        let first = normalize_line(first_line);
-        if is_empty_line(&first) && lines.len() > 1 {
-            lines.remove(0);
-        } else {
-            lines[0] = first;
-        }
-    }
-    lines
-}
-
-fn fix_last_line(mut lines: Vec<Vec<StringPart>>) -> Vec<Vec<StringPart>> {
-    match lines.len() {
-        0 => lines,
-        1 => {
-            let last = normalize_line(lines[0].clone());
-            if is_empty_line(&last) {
-                vec![Vec::new()]
-            } else {
-                vec![last]
-            }
-        }
-        _ => {
-            let last_index = lines.len() - 1;
-            let last = normalize_line(lines[last_index].clone());
-            lines[last_index] = if is_empty_line(&last) {
-                Vec::new()
-            } else {
-                last
-            };
-            lines
-        }
-    }
-}
-
-fn line_head(line: &[StringPart]) -> Option<String> {
-    match line.first() {
-        None => None,
-        Some(StringPart::TextPart(text)) => Some(text.clone()),
-        Some(StringPart::Interpolation(_)) => Some(String::new()),
-    }
-}
-
-fn common_indentation(heads: Vec<String>) -> Option<String> {
-    if heads.is_empty() {
-        return None;
-    }
-
-    let mut prefix: String = heads[0].chars().take_while(|c| *c == ' ').collect();
-    for head in heads.iter().skip(1) {
-        let candidate: String = head.chars().take_while(|c| *c == ' ').collect();
-        let mut new_prefix = String::new();
-        for (a, b) in prefix.chars().zip(candidate.chars()) {
-            if a == b {
-                new_prefix.push(a);
-            } else {
-                break;
-            }
-        }
-        prefix = new_prefix;
-        if prefix.is_empty() {
-            break;
-        }
-    }
-    Some(prefix)
-}
-
-fn strip_parts(indentation: &str, mut line: Vec<StringPart>) -> Vec<StringPart> {
-    if indentation.is_empty() {
-        return line;
-    }
-
-    if let Some(StringPart::TextPart(text)) = line.first_mut() {
-        if let Some(stripped) = text.strip_prefix(indentation) {
-            *text = stripped.to_string();
-        }
-    }
-    line
-}
-
-fn strip_indentation(lines: Vec<Vec<StringPart>>) -> Vec<Vec<StringPart>> {
-    let heads: Vec<String> = lines.iter().filter_map(|line| line_head(line)).collect();
-
-    match common_indentation(heads) {
-        None => lines.into_iter().map(|_| Vec::new()).collect(),
-        Some(indentation) => lines
-            .into_iter()
-            .map(|line| strip_parts(&indentation, line))
-            .collect(),
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_parse_simple_int() {
-        let mut parser = Parser::new("42").unwrap();
-        let file = parser.parse_file().unwrap();
-
-        // Check it's a Term(Token(Integer))
-        match &file.value {
-            Expression::Term(Term::Token(ann)) => {
-                assert!(matches!(&ann.value, Token::Integer(s) if s == "42"));
-            }
-            _ => panic!("expected Term(Token(Integer))"),
-        }
-    }
-
-    #[test]
-    fn test_parse_identifier() {
-        let mut parser = Parser::new("foo").unwrap();
-        let file = parser.parse_file().unwrap();
-
-        match &file.value {
-            Expression::Term(Term::Token(ann)) => {
-                assert!(matches!(&ann.value, Token::Identifier(s) if s == "foo"));
-            }
-            _ => panic!("expected Term(Token(Identifier))"),
-        }
-    }
-
-    #[test]
-    fn test_parse_empty_set() {
-        let mut parser = Parser::new("{}").unwrap();
-        let file = parser.parse_file().unwrap();
-
-        match &file.value {
-            Expression::Term(Term::Set(None, _, items, _)) => {
-                assert_eq!(items.0.len(), 0);
-            }
-            _ => panic!("expected empty set"),
-        }
-    }
-
-    #[test]
-    fn test_parse_empty_list() {
-        let mut parser = Parser::new("[]").unwrap();
-        let file = parser.parse_file().unwrap();
-
-        match &file.value {
-            Expression::Term(Term::List(_, items, _)) => {
-                assert_eq!(items.0.len(), 0);
-            }
-            _ => panic!("expected empty list"),
-        }
-    }
-
-    #[test]
-    fn test_parse_parenthesized() {
-        let mut parser = Parser::new("(42)").unwrap();
-        let file = parser.parse_file().unwrap();
-
-        match &file.value {
-            Expression::Term(Term::Parenthesized(_, expr, _)) => match expr.as_ref() {
-                Expression::Term(Term::Token(ann)) => {
-                    assert!(matches!(&ann.value, Token::Integer(s) if s == "42"));
-                }
-                _ => panic!("expected integer inside parens"),
-            },
-            _ => panic!("expected parenthesized expression"),
-        }
-    }
-
-    #[test]
-    fn test_simple_string_trailing_space_preserved() {
-        let file = crate::parse("\"outer ${\"inner ${x}\"} end\"").unwrap();
-        match file.value {
-            Expression::Term(Term::SimpleString(ann)) => {
-                let line = &ann.value[0];
-                match &line[2] {
-                    StringPart::TextPart(text) => assert_eq!(text, " end"),
-                    _ => panic!("expected trailing text part"),
-                }
-            }
-            _ => panic!("unexpected parse result"),
-        }
-    }
-
-    #[test]
-    fn test_parse_set_with_binding() {
-        let mut parser = Parser::new("{ a = 1; }").unwrap();
-        let file = parser.parse_file().unwrap();
-
-        match &file.value {
-            Expression::Term(Term::Set(None, _, bindings, _)) => {
-                // Should have one binding
-                assert!(bindings.0.len() > 0);
-            }
-            _ => panic!("expected set with bindings"),
-        }
-    }
-
-    #[test]
-    fn test_parse_binary_op() {
-        let mut parser = Parser::new("1 + 2").unwrap();
-        let file = parser.parse_file().unwrap();
-
-        match &file.value {
-            Expression::Operation(_, op, _) => {
-                assert!(matches!(op.value, Token::TPlus));
-            }
-            _ => panic!("expected operation"),
-        }
-    }
-
-    #[test]
-    fn test_parse_let_in() {
-        let mut parser = Parser::new("let a = 1; in a").unwrap();
-        let file = parser.parse_file().unwrap();
-
-        match &file.value {
-            Expression::Let(_, _, _, _) => {
-                // Success
-            }
-            _ => panic!("expected let expression"),
-        }
-    }
-
-    #[test]
-    fn test_parse_if_then_else() {
-        let mut parser = Parser::new("if true then 1 else 2").unwrap();
-        let file = parser.parse_file().unwrap();
-
-        match &file.value {
-            Expression::If(_, _, _, _, _, _) => {
-                // Success
-            }
-            _ => panic!("expected if expression"),
-        }
-    }
-
-    #[test]
-    fn test_parse_lambda() {
-        let mut parser = Parser::new("x: x").unwrap();
-        let file = parser.parse_file().unwrap();
-
-        match &file.value {
-            Expression::Abstraction(_, _, _) => {
-                // Success
-            }
-            _ => panic!("expected lambda expression"),
-        }
-    }
-
-    #[test]
-    fn test_parse_application() {
-        let mut parser = Parser::new("f x").unwrap();
-        let file = parser.parse_file().unwrap();
-
-        match &file.value {
-            Expression::Application(_, _) => {
-                // Success
-            }
-            _ => panic!("expected application"),
-        }
-    }
-
-    #[test]
-    fn test_parse_list_with_items() {
-        let mut parser = Parser::new("[1 2 3]").unwrap();
-        let file = parser.parse_file().unwrap();
-
-        match &file.value {
-            Expression::Term(Term::List(_, items, _)) => {
-                // Should have 3 items
-                assert!(items.0.len() >= 3);
-            }
-            _ => panic!("expected list with items"),
-        }
-    }
-
-    #[test]
-    fn test_parse_empty_string() {
-        let mut parser = Parser::new(r#""""#).unwrap();
-        let file = parser.parse_file().unwrap();
-
-        match &file.value {
-            Expression::Term(Term::SimpleString(_)) => {
-                // Success
-            }
-            _ => panic!("expected simple string"),
-        }
-    }
-
-    #[test]
-    fn test_parse_rec_set() {
-        let mut parser = Parser::new("rec { a = 1; }").unwrap();
-        let file = parser.parse_file().unwrap();
-
-        match &file.value {
-            Expression::Term(Term::Set(Some(_), _, _, _)) => {
-                // Success - has rec token
-            }
-            _ => panic!("expected rec set"),
-        }
-    }
-
-    #[test]
-    fn test_parse_negation() {
-        let mut parser = Parser::new("-5").unwrap();
-        let file = parser.parse_file().unwrap();
-
-        match &file.value {
-            Expression::Negation(_, _) => {
-                // Success
-            }
-            _ => panic!("expected negation"),
-        }
-    }
-
-    #[test]
-    fn test_parse_double_negation() {
-        let mut parser = Parser::new("- -5").unwrap();
-        let file = parser.parse_file().unwrap();
-
-        match &file.value {
-            Expression::Negation(_, inner) => {
-                match inner.as_ref() {
-                    Expression::Negation(_, _) => {
-                        // Success - double negation
-                    }
-                    _ => panic!("expected nested negation"),
-                }
-            }
-            _ => panic!("expected negation"),
-        }
-    }
-
-    #[test]
-    fn test_parse_env_path() {
-        let mut parser = Parser::new("<nixpkgs>").unwrap();
-        let file = parser.parse_file().unwrap();
-
-        match &file.value {
-            Expression::Term(Term::Token(ann)) => {
-                assert!(matches!(&ann.value, Token::EnvPath(s) if s == "nixpkgs"));
-            }
-            _ => panic!("expected env path"),
-        }
-    }
-
-    #[test]
-    fn test_parse_subtraction_not_application() {
-        // f -5 should parse as (f - 5), NOT f(-5)
-        let mut parser = Parser::new("f -5").unwrap();
-        let file = parser.parse_file().unwrap();
-
-        match &file.value {
-            Expression::Operation(_, op, _) => {
-                assert!(matches!(op.value, Token::TMinus));
-            }
-            _ => panic!("expected operation (subtraction), not application"),
-        }
-    }
-
-    #[test]
-    fn test_parse_application_with_parens() {
-        // f (-5) should parse as Application(f, Negation(5))
-        let mut parser = Parser::new("f (-5)").unwrap();
-        let file = parser.parse_file().unwrap();
-
-        match &file.value {
-            Expression::Application(_, arg) => {
-                match arg.as_ref() {
-                    Expression::Term(Term::Parenthesized(_, inner, _)) => {
-                        match inner.as_ref() {
-                            Expression::Negation(_, _) => {
-                                // Success
-                            }
-                            _ => panic!("expected negation inside parens"),
-                        }
-                    }
-                    _ => panic!("expected parenthesized negation as argument"),
-                }
-            }
-            _ => panic!("expected application"),
-        }
-    }
-
-    #[test]
-    fn test_parse_selection() {
-        let mut parser = Parser::new("pkgs.gcc").unwrap();
-        let file = parser.parse_file().unwrap();
-
-        match &file.value {
-            Expression::Term(Term::Selection(_base, sels, None)) => {
-                // Should have one selector
-                assert!(sels.len() == 1);
-            }
-            _ => panic!("expected selection"),
-        }
-    }
-
-    #[test]
-    fn test_parse_selection_chain() {
-        let mut parser = Parser::new("a.b.c").unwrap();
-        let file = parser.parse_file().unwrap();
-
-        match &file.value {
-            Expression::Term(Term::Selection(_, sels, None)) => {
-                // Should have two selectors (b and c)
-                assert!(sels.len() == 2);
-            }
-            _ => panic!("expected selection chain"),
-        }
-    }
-
-    #[test]
-    fn test_parse_selection_with_default() {
-        let mut parser = Parser::new("x.y or z").unwrap();
-        let file = parser.parse_file().unwrap();
-
-        match &file.value {
-            Expression::Term(Term::Selection(_, sels, Some(_))) => {
-                assert!(sels.len() == 1);
-            }
-            _ => panic!("expected selection with or-default"),
-        }
-    }
-
-    #[test]
-    fn test_parse_member_check() {
-        let mut parser = Parser::new("x ? y").unwrap();
-        let file = parser.parse_file().unwrap();
-
-        match &file.value {
-            Expression::MemberCheck(_, _, sels) => {
-                assert!(sels.len() == 1);
-            }
-            _ => panic!("expected member check"),
-        }
-    }
-
-    #[test]
-    fn test_parse_member_check_chain() {
-        let mut parser = Parser::new("x ? y.z").unwrap();
-        let file = parser.parse_file().unwrap();
-
-        match &file.value {
-            Expression::MemberCheck(_, _, sels) => {
-                assert!(sels.len() == 2);
-            }
-            _ => panic!("expected member check with selector chain"),
-        }
     }
 }
