@@ -4,13 +4,13 @@ use crate::parse;
 
 #[test]
 fn test_empty_string() {
-    let file = parse(r#""""#).unwrap();
+    let _file = parse(r#""""#).unwrap();
     // Should parse successfully
 }
 
 #[test]
 fn test_simple_string_text() {
-    let file = parse(r#""hello world""#).unwrap();
+    let _file = parse(r#""hello world""#).unwrap();
     // Should parse successfully
 }
 
@@ -67,13 +67,13 @@ fn test_indented_string_escape_sequences() {
 
 #[test]
 fn test_path_relative_dot() {
-    let file = parse("./foo/bar").unwrap();
+    let _file = parse("./foo/bar").unwrap();
     // Should parse successfully
 }
 
 #[test]
 fn test_path_relative_dotdot() {
-    let file = parse("../foo").unwrap();
+    let _file = parse("../foo").unwrap();
     // Should parse successfully
 }
 
@@ -96,7 +96,7 @@ fn test_path_with_interpolation() {
 
 #[test]
 fn test_angle_bracket_path() {
-    let file = parse("<nixpkgs>").unwrap();
+    let _file = parse("<nixpkgs>").unwrap();
     // Should parse successfully
 }
 
