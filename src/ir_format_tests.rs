@@ -211,7 +211,6 @@ fn test_lambda_chain_structure() {
 }
 
 #[test]
-#[ignore]
 fn test_context_parameter() {
     // Test context parameter (left @ right pattern) (lines 1231-1237 in pretty.rs)
     test_ir_format("args@{ a, b }: a");

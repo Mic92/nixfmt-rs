@@ -278,7 +278,7 @@ fn pretty_complex_application(doc: &mut Doc, parts: &[&Expression]) {
             }
         }
         Some((only, _)) => only.pretty(doc), // Only one element
-        None => {}                            // Empty parts
+        None => {}                           // Empty parts
     }
 }
 
@@ -1282,10 +1282,10 @@ impl Pretty for Parameter {
                 });
             }
             Parameter::Context(left, at, right) => {
+                // Render without spacing - fixup will merge adjacent text elements
+                // This matches nixfmt reference: pretty param1 <> pretty at <> pretty param2
                 left.pretty(doc);
-                doc.push(hardspace());
                 at.pretty(doc);
-                doc.push(hardspace());
                 right.pretty(doc);
             }
         }
