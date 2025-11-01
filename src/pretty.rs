@@ -193,6 +193,95 @@ fn collect_application_parts<'a>(expr: &'a Expression, parts: &mut Vec<&'a Expre
     }
 }
 
+/// Render simple application with hardspace separators (nixfmt Pretty.hs:516)
+fn pretty_simple_application(doc: &mut Doc, parts: &[&Expression]) {
+    push_group(doc, |group_doc| {
+        match parts.split_first() {
+            Some((first, rest)) => {
+                first.pretty(group_doc);
+
+                match rest.split_last() {
+                    Some((last, middle)) => {
+                        // Render middle arguments
+                        for arg in middle {
+                            group_doc.push(hardspace());
+                            push_nested(group_doc, |nested| {
+                                arg.pretty(nested);
+                            });
+                        }
+
+                        // Render last argument wrapped in group (absorbLast, Pretty.hs:481)
+                        group_doc.push(hardspace());
+                        push_group(group_doc, |last_group| {
+                            push_nested(last_group, |nested| {
+                                last.pretty(nested);
+                            });
+                        });
+                    }
+                    None => {} // Only one element total
+                }
+            }
+            None => {} // Empty parts
+        }
+    });
+}
+
+/// Render complex application with Transparent/Priority groups
+fn pretty_complex_application(doc: &mut Doc, parts: &[&Expression]) {
+    match parts.split_first() {
+        Some((first, rest)) if !rest.is_empty() => {
+            match rest.split_last() {
+                Some((last, middle)) => {
+                    push_group(doc, |group_doc| {
+                        push_group_ann(group_doc, GroupAnn::Transparent, |outer| {
+                            push_group_ann(outer, GroupAnn::Transparent, |func_group| {
+                                first.pretty(func_group);
+                            });
+
+                            for arg in middle {
+                                outer.push(line());
+                                push_group_ann(outer, GroupAnn::Priority, |priority_group| {
+                                    push_group(priority_group, |arg_group| {
+                                        push_nested(arg_group, |nested| {
+                                            arg.pretty(nested);
+                                        });
+                                    });
+                                });
+                            }
+                        });
+
+                        group_doc.push(line());
+                        push_group(group_doc, |last_group| {
+                            push_nested(last_group, |nested| {
+                                last.pretty(nested);
+                            });
+                        });
+                    });
+                }
+                None => {
+                    // Only 1 element in rest, so 2 total (first + one in rest)
+                    push_group(doc, |group_doc| {
+                        push_group_ann(group_doc, GroupAnn::Transparent, |outer| {
+                            push_group_ann(outer, GroupAnn::Transparent, |func_group| {
+                                first.pretty(func_group);
+                            });
+                        });
+
+                        group_doc.push(line());
+                        push_group(group_doc, |last_group| {
+                            push_nested(last_group, |nested| {
+                                rest[0].pretty(nested);
+                            });
+                        });
+                    });
+                }
+            }
+        }
+        Some((only, _)) => only.pretty(doc), // Only one element
+        None => {}                            // Empty parts
+    }
+}
+
 fn flatten_operation_chain<'a>(
     target: &'a Leaf,
     expr: &'a Expression,
@@ -564,20 +653,23 @@ impl Pretty for Binder {
                 } else {
                     (hardline(), hardline())
                 };
-                let sep_doc = vec![sep.clone()];
 
                 push_group(doc, |d| {
                     inherit.pretty(d);
+
+                    let sep_doc = vec![sep.clone()];
+                    let finish_inherit = |nested: &mut Doc| {
+                        if !ids.is_empty() {
+                            push_sep_by(nested, &sep_doc, ids.clone());
+                        }
+                        nested.push(nosep.clone());
+                        semicolon.pretty(nested);
+                    };
+
                     match source {
                         None => {
                             d.push(sep.clone());
-                            push_nested(d, |nested| {
-                                if !ids.is_empty() {
-                                    push_sep_by(nested, &sep_doc, ids.clone());
-                                }
-                                nested.push(nosep.clone());
-                                semicolon.pretty(nested);
-                            });
+                            push_nested(d, finish_inherit);
                         }
                         Some(src) => {
                             push_nested(d, |nested| {
@@ -586,11 +678,7 @@ impl Pretty for Binder {
                                     src.pretty(g);
                                 });
                                 nested.push(sep);
-                                if !ids.is_empty() {
-                                    push_sep_by(nested, &sep_doc, ids.clone());
-                                }
-                                nested.push(nosep.clone());
-                                semicolon.pretty(nested);
+                                finish_inherit(nested);
                             });
                         }
                     }
@@ -710,21 +798,17 @@ impl Pretty for StringPart {
                 let trailing_empty = whole.trailing_trivia.0.is_empty();
                 let value = &whole.value;
 
+                // Check for absorbable term (e.g., sets, lists)
                 let absorbable_term = if trailing_empty {
-                    if let Expression::Term(term) = value {
-                        if is_absorbable_term(term) {
-                            Some(term)
-                        } else {
-                            None
-                        }
-                    } else {
-                        None
+                    match value {
+                        Expression::Term(term) if is_absorbable_term(term) => Some(term),
+                        _ => None,
                     }
                 } else {
                     None
                 };
-                let simple_value = trailing_empty && is_simple_expression(value);
 
+                // Handle absorbable term: ${ { ... } } or ${ [ ... ] }
                 if let Some(term) = absorbable_term {
                     push_group(doc, |group_doc| {
                         push_text(group_doc, "${");
@@ -734,13 +818,15 @@ impl Pretty for StringPart {
                     return;
                 }
 
-                if simple_value {
+                // Handle simple value: ${ x } without trailing trivia
+                if trailing_empty && is_simple_expression(value) {
                     push_text(doc, "${");
                     value.pretty(doc);
                     push_text(doc, "}");
                     return;
                 }
 
+                // Handle complex interpolation with line breaks
                 push_group(doc, |group_doc| {
                     push_text(group_doc, "${");
                     push_nested(group_doc, |nested| {
@@ -757,51 +843,44 @@ impl Pretty for StringPart {
 
 impl Pretty for Vec<StringPart> {
     fn pretty(&self, doc: &mut Doc) {
-        // Handle special case: single interpolation with leading whitespace
-        if self.len() == 2 {
-            if let (StringPart::TextPart(pre), StringPart::Interpolation(whole)) =
-                (&self[0], &self[1])
+        match self.as_slice() {
+            // Handle special case: single interpolation with leading whitespace
+            [StringPart::TextPart(pre), StringPart::Interpolation(whole)]
+                if is_spaces(pre) && whole.trailing_trivia.0.is_empty() =>
             {
-                if is_spaces(pre) && whole.trailing_trivia.0.is_empty() {
-                    let indentation = text_width(pre);
-                    push_text(doc, pre);
-                    push_offset(doc, indentation, |d| {
-                        push_group_ann(d, GroupAnn::RegularG, |g| {
-                            push_text(g, "${");
-                            push_nested(g, |inner| {
-                                inner.push(line_prime());
-                                push_group(inner, |ig| whole.value.pretty(ig));
-                                inner.push(line_prime());
-                            });
-                            push_text(g, "}");
+                let indentation = text_width(pre);
+                push_text(doc, pre);
+                push_offset(doc, indentation, |d| {
+                    push_group_ann(d, GroupAnn::RegularG, |g| {
+                        push_text(g, "${");
+                        push_nested(g, |inner| {
+                            inner.push(line_prime());
+                            push_group(inner, |ig| whole.value.pretty(ig));
+                            inner.push(line_prime());
                         });
+                        push_text(g, "}");
                     });
-                    return;
-                }
+                });
             }
-        }
-
-        // Handle leading TextPart with offset
-        if !self.is_empty() {
-            if let StringPart::TextPart(t) = &self[0] {
+            // Handle leading TextPart with offset
+            [StringPart::TextPart(t), rest @ ..] => {
                 let indentation = text_width(
                     &t.chars()
                         .take_while(|c| c.is_whitespace())
                         .collect::<String>(),
                 );
                 push_text(doc, t);
-                let rest = self[1..].to_vec();
                 push_offset(doc, indentation, |d| {
-                    for part in &rest {
+                    for part in rest {
                         part.pretty(d);
                     }
                 });
-                return;
+            }
+            // Default: just concatenate
+            _ => {
+                push_hcat(doc, self.clone());
             }
         }
-
-        // Default: just concatenate
-        push_hcat(doc, self.clone());
     }
 }
 
@@ -871,15 +950,12 @@ impl Pretty for Term {
 
                 // General list with items
                 let open_without_trail = Ann {
-                    pre_trivia: open.pre_trivia.clone(),
-                    span: open.span,
                     trail_comment: None,
-                    value: open.value.clone(),
+                    ..open.clone()
                 };
 
                 open_without_trail.pretty(doc);
-                let needs_hardline = open.span.start_line != close.span.start_line;
-                let separator = if needs_hardline {
+                let separator = if open.span.start_line != close.span.start_line {
                     vec![hardline()]
                 } else {
                     vec![line()]
@@ -899,15 +975,14 @@ impl Pretty for Term {
                 term.pretty(doc);
 
                 // Add separator based on term type
-                let sep = match &**term {
+                match &**term {
                     // If it is an ident, keep it all together
-                    Term::Token(_) => Vec::new(),
+                    Term::Token(_) => {}
                     // If it is a parenthesized expression, maybe add a line break
-                    Term::Parenthesized(_, _, _) => vec![softline_prime()],
+                    Term::Parenthesized(_, _, _) => doc.push(softline_prime()),
                     // Otherwise, very likely add a line break
-                    _ => vec![line_prime()],
+                    _ => doc.push(line_prime()),
                 };
-                doc.extend(sep);
 
                 // Add selectors
                 push_hcat(doc, selectors.clone());
@@ -931,77 +1006,13 @@ impl Pretty for Expression {
         match self {
             Expression::Term(t) => t.pretty(doc),
             Expression::Application(_, _) => {
-                // Check if this is a "simple" application (simple terms, arity < 3)
-                // If so, render with hardspace separators (nixfmt Pretty.hs:516)
+                let mut parts = Vec::new();
+                collect_application_parts(self, &mut parts);
+
                 if is_simple_expression(self) {
-                    // Render simple application with hardspace separators (nixfmt Pretty.hs:516)
-                    let mut parts = Vec::new();
-                    collect_application_parts(self, &mut parts);
-
-                    push_group(doc, |group_doc| {
-                        if let Some((first, rest)) = parts.split_first() {
-                            first.pretty(group_doc);
-
-                            if let Some((last_arg, middle_args)) = rest.split_last() {
-                                // Render middle arguments
-                                for arg in middle_args.iter() {
-                                    group_doc.push(hardspace());
-                                    push_nested(group_doc, |nested| {
-                                        arg.pretty(nested);
-                                    });
-                                }
-
-                                // Render last argument wrapped in group (absorbLast, Pretty.hs:481)
-                                group_doc.push(hardspace());
-                                push_group(group_doc, |last_group| {
-                                    push_nested(last_group, |nested| {
-                                        last_arg.pretty(nested);
-                                    });
-                                });
-                            }
-                        }
-                    });
+                    pretty_simple_application(doc, &parts);
                 } else {
-                    // Complex application: use the standard rendering with Transparent/Priority groups
-                    let mut parts = Vec::new();
-                    collect_application_parts(self, &mut parts);
-
-                    if parts.len() >= 2 {
-                        let (first, tail) = parts.split_first().unwrap();
-                        let (leading_args, last_arg) = tail.split_at(tail.len() - 1);
-
-                        push_group(doc, |group_doc| {
-                            push_group_ann(group_doc, GroupAnn::Transparent, |outer| {
-                                push_group_ann(outer, GroupAnn::Transparent, |func_group| {
-                                    first.pretty(func_group);
-                                });
-
-                                for (_idx, arg) in leading_args.iter().enumerate() {
-                                    outer.push(line());
-                                    let arg_expr = *arg;
-                                    push_group_ann(outer, GroupAnn::Priority, |priority_group| {
-                                        push_group(priority_group, |arg_group| {
-                                            push_nested(arg_group, |nested| {
-                                                arg_expr.pretty(nested);
-                                            });
-                                        });
-                                    });
-                                }
-                            });
-
-                            if let Some(last) = last_arg.first() {
-                                let last_expr = *last;
-                                group_doc.push(line());
-                                push_group(group_doc, |last_group| {
-                                    push_nested(last_group, |nested| {
-                                        last_expr.pretty(nested);
-                                    });
-                                });
-                            }
-                        });
-                    } else if let Some(only) = parts.first() {
-                        only.pretty(doc);
-                    }
+                    pretty_complex_application(doc, &parts);
                 }
             }
             Expression::Operation(left, op, right) => {
@@ -1069,33 +1080,31 @@ impl Pretty for Expression {
                 });
             }
             Expression::If(if_kw, cond, then_kw, then_expr, else_kw, else_expr) => {
-                push_group(doc, |doc| {
-                    push_group(doc, |inner| {
-                        push_group(inner, |head| {
-                            if_kw.pretty(head);
-                            head.push(line());
-                            push_nested(head, |nested| {
-                                cond.pretty(nested);
-                            });
-                            head.push(line());
-                            then_kw.pretty(head);
+                push_group(doc, |inner| {
+                    push_group(inner, |head| {
+                        if_kw.pretty(head);
+                        head.push(line());
+                        push_nested(head, |nested| {
+                            cond.pretty(nested);
                         });
+                        head.push(line());
+                        then_kw.pretty(head);
+                    });
 
-                        inner.push(line());
-                        push_group(inner, |then_group| {
-                            push_nested(then_group, |nested| {
-                                then_expr.pretty(nested);
-                            });
+                    inner.push(line());
+                    push_group(inner, |then_group| {
+                        push_nested(then_group, |nested| {
+                            then_expr.pretty(nested);
                         });
+                    });
 
-                        inner.push(line());
-                        else_kw.pretty(inner);
+                    inner.push(line());
+                    else_kw.pretty(inner);
 
-                        inner.push(line());
-                        push_group(inner, |else_group| {
-                            push_nested(else_group, |nested| {
-                                else_expr.pretty(nested);
-                            });
+                    inner.push(line());
+                    push_group(inner, |else_group| {
+                        push_nested(else_group, |nested| {
+                            else_expr.pretty(nested);
                         });
                     });
                 });
