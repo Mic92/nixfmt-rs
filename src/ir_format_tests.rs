@@ -95,7 +95,6 @@ fn test_multiline_string_structure() {
 }
 
 #[test]
-#[ignore]
 fn test_string_interpolation_structure() {
     // String interpolation exercises nested grouping with line_prime
     test_ir_format("\"prefix ${expr} suffix\"");

@@ -145,6 +145,57 @@ fn is_spaces(s: &str) -> bool {
     s.chars().all(|c| c.is_whitespace())
 }
 
+fn is_lone_ann<T>(ann: &Ann<T>) -> bool {
+    ann.pre_trivia.0.is_empty() && ann.trail_comment.is_none()
+}
+
+fn is_simple_selector(selector: &Selector) -> bool {
+    matches!(selector.selector, SimpleSelector::ID(_))
+}
+
+fn is_simple_term(term: &Term) -> bool {
+    match term {
+        Term::SimpleString(s) | Term::IndentedString(s) => is_lone_ann(s),
+        Term::Path(p) => is_lone_ann(p),
+        Term::Token(leaf)
+            if is_lone_ann(leaf)
+                && matches!(
+                    leaf.value,
+                    Token::Identifier(_) | Token::Integer(_) | Token::Float(_) | Token::EnvPath(_)
+                ) =>
+        {
+            true
+        }
+        Term::Selection(term, selectors, def) => {
+            is_simple_term(term) && selectors.iter().all(is_simple_selector) && def.is_none()
+        }
+        Term::Parenthesized(open, expr, close) => {
+            is_lone_ann(open) && is_lone_ann(close) && is_simple_expression(expr)
+        }
+        _ => false,
+    }
+}
+
+fn application_arity(expr: &Expression) -> usize {
+    match expr {
+        Expression::Application(f, _) => 1 + application_arity(f),
+        _ => 0,
+    }
+}
+
+fn is_simple_expression(expr: &Expression) -> bool {
+    match expr {
+        Expression::Term(term) => is_simple_term(term),
+        Expression::Application(f, a) => {
+            if application_arity(expr) >= 3 {
+                return false;
+            }
+            is_simple_expression(f) && is_simple_expression(a)
+        }
+        _ => false,
+    }
+}
+
 /// Render the nested document that appears between parentheses.
 /// Mirrors `inner` in nixfmt's `prettyTerm (Parenthesized ...)`.
 fn push_parenthesized_inner(doc: &mut Doc, expr: &Expression) {
@@ -543,17 +594,49 @@ impl Pretty for StringPart {
         match self {
             StringPart::TextPart(s) => push_text(doc, s),
             StringPart::Interpolation(whole) => {
-                // For now, use a simple approach
-                // TODO: implement absorption and isSimple checks
-                push_text(doc, "${");
-                push_group_ann(doc, GroupAnn::RegularG, |d| {
-                    push_nested(d, |inner| {
-                        inner.push(line_prime());
-                        push_group(inner, |g| whole.value.pretty(g));
-                        inner.push(line_prime());
+                let trailing_empty = whole.trailing_trivia.0.is_empty();
+                let value = &whole.value;
+
+                let absorbable_term = if trailing_empty {
+                    if let Expression::Term(term) = value {
+                        if is_absorbable_term(term) {
+                            Some(term)
+                        } else {
+                            None
+                        }
+                    } else {
+                        None
+                    }
+                } else {
+                    None
+                };
+                let simple_value = trailing_empty && is_simple_expression(value);
+
+                if let Some(term) = absorbable_term {
+                    push_group(doc, |group_doc| {
+                        push_text(group_doc, "${");
+                        term.pretty(group_doc);
+                        push_text(group_doc, "}");
                     });
+                    return;
+                }
+
+                if simple_value {
+                    push_text(doc, "${");
+                    value.pretty(doc);
+                    push_text(doc, "}");
+                    return;
+                }
+
+                push_group(doc, |group_doc| {
+                    push_text(group_doc, "${");
+                    push_nested(group_doc, |nested| {
+                        nested.push(line_prime());
+                        whole.pretty(nested);
+                        nested.push(line_prime());
+                    });
+                    push_text(group_doc, "}");
                 });
-                push_text(doc, "}");
             }
         }
     }
