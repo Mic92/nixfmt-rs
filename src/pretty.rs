@@ -309,14 +309,19 @@ fn pretty_simple_application(doc: &mut Doc, parts: &[&Expression]) {
 
 /// Render complex application with Transparent/Priority groups
 fn pretty_complex_application(doc: &mut Doc, parts: &[&Expression]) {
-    pretty_complex_application_impl(doc, parts, false);
+    pretty_complex_application_impl(doc, parts, false, false);
 }
 
 fn pretty_complex_application_indent_func(doc: &mut Doc, parts: &[&Expression]) {
-    pretty_complex_application_impl(doc, parts, true);
+    pretty_complex_application_impl(doc, parts, true, true);
 }
 
-fn pretty_complex_application_impl(doc: &mut Doc, parts: &[&Expression], indent_function: bool) {
+fn pretty_complex_application_impl(
+    doc: &mut Doc,
+    parts: &[&Expression],
+    indent_function: bool,
+    has_post: bool,
+) {
     match parts.split_first() {
         Some((first, rest)) if !rest.is_empty() => {
             match rest.split_last() {
@@ -339,6 +344,9 @@ fn pretty_complex_application_impl(doc: &mut Doc, parts: &[&Expression], indent_
                         push_nested(group_doc, |nested| {
                             push_last_arg(nested, last);
                         });
+                        if has_post {
+                            group_doc.push(line_prime());
+                        }
                     });
                 }
                 None => {
@@ -352,12 +360,17 @@ fn pretty_complex_application_impl(doc: &mut Doc, parts: &[&Expression], indent_
                         push_nested(group_doc, |nested| {
                             push_last_arg(nested, rest[0]);
                         });
+                        if has_post {
+                            group_doc.push(line_prime());
+                        }
                     });
                 }
             }
         }
-        Some((only, _)) => only.pretty(doc), // Only one element
-        None => {}                           // Empty parts
+        Some((only, _)) => {
+            only.pretty(doc);
+        } // Only one element
+        None => {} // Empty parts
     }
 }
 

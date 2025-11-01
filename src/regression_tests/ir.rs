@@ -35,7 +35,6 @@ fn test_function_arguments_priority() {
 /// Note: IR representation differs from reference implementation, but formatted output is identical.
 /// Test is ignored until IR representation matches exactly.
 #[test]
-#[ignore]
 fn test_transparent_in_parens_break() {
     test_ir_format("(lib.filterAttrs (x: y))");
 }
