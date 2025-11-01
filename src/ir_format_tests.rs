@@ -87,3 +87,100 @@ fn test_empty_line_structure() {
     // Empty lines generate Emptyline spacing, Priority and Transparent groups
     test_ir_format("{\n\n  a = 1;\n}");
 }
+
+#[test]
+fn test_multiline_string_structure() {
+    // Multiline indented strings test line break handling
+    test_ir_format("''\n  line1\n  line2\n''");
+}
+
+#[test]
+#[ignore]
+fn test_string_interpolation_structure() {
+    // String interpolation exercises nested grouping with line_prime
+    test_ir_format("\"prefix ${expr} suffix\"");
+}
+
+#[test]
+fn test_nested_groups_structure() {
+    // Nested groups with various spacing types
+    test_ir_format("[ { a = 1; } { b = 2; } ]");
+}
+
+#[test]
+#[ignore]
+fn test_function_application_structure() {
+    // Function application exercises hardspace between terms
+    test_ir_format("map (x: x + 1) list");
+}
+
+#[test]
+#[ignore]
+fn test_operation_structure() {
+    // Binary operations test operator spacing
+    test_ir_format("a + b * c");
+}
+
+#[test]
+#[ignore]
+fn test_if_then_else_structure() {
+    // Conditional expressions exercise hardspace placement
+    test_ir_format("if cond then true else false");
+}
+
+#[test]
+#[ignore]
+fn test_lambda_structure() {
+    // Lambda with absorbable body
+    test_ir_format("x: { inherit x; }");
+}
+
+#[test]
+#[ignore]
+fn test_member_check_structure() {
+    // Member check with ? operator
+    test_ir_format("attrs ? foo");
+}
+
+#[test]
+fn test_negation_structure() {
+    // Negation operator spacing
+    test_ir_format("-42");
+}
+
+#[test]
+fn test_boolean_not_structure() {
+    // Boolean not operator spacing
+    test_ir_format("!true");
+}
+
+#[test]
+fn test_parenthesized_complex_structure() {
+    // Parenthesized complex expressions with line_prime separators
+    test_ir_format("(let x = 1; in x)");
+}
+
+#[test]
+#[ignore]
+fn test_list_with_comments_structure() {
+    // Lists with interspersed comments
+    test_ir_format("[\n  # comment\n  1\n  2\n]");
+}
+
+#[test]
+fn test_rec_set_structure() {
+    // Recursive set with rec keyword
+    test_ir_format("rec { a = 1; b = a; }");
+}
+
+#[test]
+fn test_empty_set_with_spacing_structure() {
+    // Empty set spanning multiple lines
+    test_ir_format("{\n\n}");
+}
+
+#[test]
+fn test_empty_list_with_spacing_structure() {
+    // Empty list spanning multiple lines
+    test_ir_format("[\n\n]");
+}

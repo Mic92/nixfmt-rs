@@ -62,6 +62,13 @@ pub trait PrettySimple: Debug {
         false // Most types don't have delimiters
     }
 
+    /// Whether this value should be wrapped in parentheses on a single line when used as an argument.
+    /// Pretty-simple prints certain constructor arguments (like `Spacing ( Newlines n )`) using inline parens,
+    /// which differs from both the simple and the delimiter cases.
+    fn renders_inline_parens(&self) -> bool {
+        false
+    }
+
     /// Whether this value is logically empty (used for collection heuristics)
     fn is_empty(&self) -> bool {
         false
@@ -171,6 +178,18 @@ pub(crate) fn sub_expr<T: PrettySimple, W: Writer>(w: &mut W, arg: &T) {
         // Simple (with or without delimiters): space before
         w.write_plain(" ");
         arg.format(w);
+    } else if arg.renders_inline_parens() {
+        w.newline();
+        w.with_color(|w_colored| {
+            let paren_color = w_colored.current_color();
+            w_colored.with_depth(|w_inner| {
+                w_inner.write_colored("(", paren_color);
+                w_inner.write_plain(" ");
+                arg.format(w_inner);
+                w_inner.write_plain(" ");
+                w_inner.write_colored(")", paren_color);
+            });
+        });
     } else if arg.has_delimiters() {
         // Complex with delimiters: newline before
         w.newline();
@@ -305,11 +324,11 @@ macro_rules! format_record {
 macro_rules! format_enum {
     // Version without wildcard
     ($self:expr, $w:expr, {
-        $( $variant:ident ( $($field:ident),* $(,)? ) => [ $($arg:expr),* $(,)? ] ),* $(,)?
+        $( $variant:ident $( ( $($field:ident),* $(,)? ) )? => [ $($arg:expr),* $(,)? ] ),* $(,)?
     }) => {
         match $self {
             $(
-                Self::$variant($($field),*) => {
+                Self::$variant $( ( $($field),* ) )? => {
                     format_constructor!($w, stringify!($variant), [$($arg),*]);
                 }
             )*
@@ -318,12 +337,12 @@ macro_rules! format_enum {
 
     // Version with wildcard
     ($self:expr, $w:expr, {
-        $( $variant:ident ( $($field:ident),* $(,)? ) => [ $($arg:expr),* $(,)? ] ),* ,
+        $( $variant:ident $( ( $($field:ident),* $(,)? ) )? => [ $($arg:expr),* $(,)? ] ),* ,
         _ => $wildcard_body:block $(,)?
     }) => {
         match $self {
             $(
-                Self::$variant($($field),*) => {
+                Self::$variant $( ( $($field),* ) )? => {
                     format_constructor!($w, stringify!($variant), [$($arg),*]);
                 }
             )*
