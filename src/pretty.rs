@@ -614,11 +614,16 @@ impl Pretty for Binder {
 impl Pretty for Token {
     fn pretty(&self, doc: &mut Doc) {
         use Token::*;
+        // Handle EnvPath separately since it needs formatting
+        if let EnvPath(s) = self {
+            push_text(doc, &format!("<{}>", s));
+            return;
+        }
         let s = match self {
             Integer(s) => s.as_str(),
             Float(s) => s.as_str(),
             Identifier(s) => s.as_str(),
-            EnvPath(s) => s.as_str(),
+            EnvPath(_) => unreachable!("EnvPath handled above"),
             KAssert => "assert",
             KElse => "else",
             KIf => "if",

@@ -192,7 +192,6 @@ fn test_float_token() {
 }
 
 #[test]
-#[ignore]
 fn test_env_path_token() {
     // Test environment path token (line 615 in pretty.rs)
     // Currently has IR mismatch but we run it for coverage
