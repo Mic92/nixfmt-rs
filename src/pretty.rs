@@ -213,6 +213,66 @@ fn collect_application_parts<'a>(expr: &'a Expression, parts: &mut Vec<&'a Expre
     }
 }
 
+/// Render parenthesized expression in a Priority group (absorbParen in nixfmt)
+fn push_absorb_paren(doc: &mut Doc, open: &Ann<Token>, expr: &Expression, close: &Ann<Token>) {
+    let mut open_clean = open.clone();
+    let trailing = open_clean.trail_comment.take();
+    let close_pre = close.pre_trivia.clone();
+    let mut close_clean = close.clone();
+    close_clean.pre_trivia = Trivia::new();
+
+    open_clean.pretty(doc);
+    push_nested(doc, |nested| {
+        if let Some(trailing_comment) = trailing {
+            let comment: Trivia =
+                vec![Trivium::LineComment(format!(" {}", trailing_comment.0))].into();
+            comment.pretty(nested);
+        }
+        push_parenthesized_inner(nested, expr);
+        close_pre.pretty(nested);
+    });
+    close_clean.pretty(doc);
+}
+
+/// Render the last argument of a function application (absorbLast in nixfmt)
+/// Uses Priority group for absorbable or parenthesized args, RegularG otherwise
+fn push_last_arg(doc: &mut Doc, arg: &Expression) {
+    match arg {
+        Expression::Term(Term::Parenthesized(open, expr, close)) => {
+            // absorbParen: render parenthesized expr in Priority without extra group
+            push_group_ann(doc, GroupAnn::Priority, |priority_group| {
+                push_absorb_paren(priority_group, open, expr, close);
+            });
+        }
+        _ if is_absorbable_expr(arg) => {
+            push_group_ann(doc, GroupAnn::Priority, |group| {
+                arg.pretty(group);
+            });
+        }
+        _ => {
+            push_group(doc, |group| {
+                arg.pretty(group);
+            });
+        }
+    }
+}
+
+/// Render function in complex application (optionally with indentation)
+fn push_function(doc: &mut Doc, func: &Expression, indent: bool) {
+    if indent {
+        push_nested(doc, |nested| {
+            push_group(nested, |inner| {
+                inner.push(line_prime());
+                func.pretty(inner);
+            });
+        });
+    } else {
+        push_group_ann(doc, GroupAnn::Transparent, |func_group| {
+            func.pretty(func_group);
+        });
+    }
+}
+
 /// Render simple application with hardspace separators (nixfmt Pretty.hs:516)
 fn pretty_simple_application(doc: &mut Doc, parts: &[&Expression]) {
     push_group(doc, |group_doc| {
@@ -246,35 +306,38 @@ fn pretty_simple_application(doc: &mut Doc, parts: &[&Expression]) {
     });
 }
 
+
 /// Render complex application with Transparent/Priority groups
 fn pretty_complex_application(doc: &mut Doc, parts: &[&Expression]) {
+    pretty_complex_application_impl(doc, parts, false);
+}
+
+fn pretty_complex_application_indent_func(doc: &mut Doc, parts: &[&Expression]) {
+    pretty_complex_application_impl(doc, parts, true);
+}
+
+fn pretty_complex_application_impl(doc: &mut Doc, parts: &[&Expression], indent_function: bool) {
     match parts.split_first() {
         Some((first, rest)) if !rest.is_empty() => {
             match rest.split_last() {
                 Some((last, middle)) => {
                     push_group(doc, |group_doc| {
                         push_group_ann(group_doc, GroupAnn::Transparent, |outer| {
-                            push_group_ann(outer, GroupAnn::Transparent, |func_group| {
-                                first.pretty(func_group);
-                            });
+                            push_function(outer, first, indent_function);
 
                             for arg in middle {
                                 outer.push(line());
-                                push_group_ann(outer, GroupAnn::Priority, |priority_group| {
-                                    push_group(priority_group, |arg_group| {
-                                        push_nested(arg_group, |nested| {
-                                            arg.pretty(nested);
-                                        });
+                                push_nested(outer, |nested| {
+                                    push_group_ann(nested, GroupAnn::Priority, |priority_group| {
+                                        arg.pretty(priority_group);
                                     });
                                 });
                             }
                         });
 
                         group_doc.push(line());
-                        push_group(group_doc, |last_group| {
-                            push_nested(last_group, |nested| {
-                                last.pretty(nested);
-                            });
+                        push_nested(group_doc, |nested| {
+                            push_last_arg(nested, last);
                         });
                     });
                 }
@@ -282,16 +345,12 @@ fn pretty_complex_application(doc: &mut Doc, parts: &[&Expression]) {
                     // Only 1 element in rest, so 2 total (first + one in rest)
                     push_group(doc, |group_doc| {
                         push_group_ann(group_doc, GroupAnn::Transparent, |outer| {
-                            push_group_ann(outer, GroupAnn::Transparent, |func_group| {
-                                first.pretty(func_group);
-                            });
+                            push_function(outer, first, indent_function);
                         });
 
                         group_doc.push(line());
-                        push_group(group_doc, |last_group| {
-                            push_nested(last_group, |nested| {
-                                rest[0].pretty(nested);
-                            });
+                        push_nested(group_doc, |nested| {
+                            push_last_arg(nested, rest[0]);
                         });
                     });
                 }
@@ -431,9 +490,16 @@ fn push_parenthesized_inner(doc: &mut Doc, expr: &Expression) {
             });
         }
         Expression::Application(_, _) => {
-            push_group(doc, |inner| {
-                expr.pretty(inner);
-            });
+            let mut parts = Vec::new();
+            collect_application_parts(expr, &mut parts);
+
+            if is_simple_expression(expr) {
+                push_group(doc, |inner| {
+                    expr.pretty(inner);
+                });
+            } else {
+                pretty_complex_application_indent_func(doc, &parts);
+            }
         }
         Expression::Term(Term::Selection(term, _, _)) if is_absorbable_term(term) => {
             doc.push(line_prime());

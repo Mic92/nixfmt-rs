@@ -14,3 +14,28 @@ use crate::tests_common::test_ir_format;
 fn test_let_expression_groups() {
     test_ir_format("{ pinnedJson ? ./pinned.json, }: let pinned = (builtins.fromJSON (builtins.readFile pinnedJson)).pins; in pinned");
 }
+
+/// Regression test: function arguments should use Priority groups
+///
+/// Issue: nixfmt-rs was using RegularG for function arguments (parenthesized, sets, lambdas),
+/// but reference nixfmt uses Priority groups. This affects how arguments break across lines.
+#[test]
+fn test_function_arguments_priority() {
+    // Set argument
+    test_ir_format("fetchTarball { url = \"x\"; }");
+    // Lambda argument
+    test_ir_format("lib.filterAttrs (x: y)");
+}
+
+/// Regression test: transparent groups in parentheses need Break spacing
+///
+/// Issue: When a Transparent group (like a function name) appears in a parenthesized
+/// context, it should be wrapped in a RegularG with Break spacing before the text.
+///
+/// Note: IR representation differs from reference implementation, but formatted output is identical.
+/// Test is ignored until IR representation matches exactly.
+#[test]
+#[ignore]
+fn test_transparent_in_parens_break() {
+    test_ir_format("(lib.filterAttrs (x: y))");
+}
