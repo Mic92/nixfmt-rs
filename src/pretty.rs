@@ -943,36 +943,39 @@ impl Pretty for Term {
                 push_pretty_parenthesized(doc, open, expr, close);
             }
             Term::List(open, items, close) => {
-                // Empty list
-                if items.0.is_empty()
-                    && open.trail_comment.is_none()
-                    && close.pre_trivia.0.is_empty()
-                {
-                    open.pretty(doc);
-                    doc.push(hardspace());
-                    close.pretty(doc);
-                    return;
-                }
+                // Lists are always wrapped in a group (matches Haskell: pretty l@List{} = group $ prettyTerm l)
+                push_group(doc, |group_doc| {
+                    // Empty list
+                    if items.0.is_empty()
+                        && open.trail_comment.is_none()
+                        && close.pre_trivia.0.is_empty()
+                    {
+                        open.pretty(group_doc);
+                        group_doc.push(hardspace());
+                        close.pretty(group_doc);
+                        return;
+                    }
 
-                // General list with items
-                let open_without_trail = Ann {
-                    trail_comment: None,
-                    ..open.clone()
-                };
+                    // General list with items
+                    let open_without_trail = Ann {
+                        trail_comment: None,
+                        ..open.clone()
+                    };
 
-                open_without_trail.pretty(doc);
-                let separator = if open.span.start_line != close.span.start_line {
-                    vec![hardline()]
-                } else {
-                    vec![line()]
-                };
-                push_surrounded(doc, &separator, |d| {
-                    push_nested(d, |inner| {
-                        open.trail_comment.pretty(inner);
-                        push_pretty_items(inner, items);
+                    open_without_trail.pretty(group_doc);
+                    let separator = if open.span.start_line != close.span.start_line {
+                        vec![hardline()]
+                    } else {
+                        vec![line()]
+                    };
+                    push_surrounded(group_doc, &separator, |d| {
+                        push_nested(d, |inner| {
+                            open.trail_comment.pretty(inner);
+                            push_pretty_items(inner, items);
+                        });
                     });
+                    close.pretty(group_doc);
                 });
-                close.pretty(doc);
             }
             Term::Set(krec, open, binders, close) => {
                 push_pretty_set(doc, false, krec, open, binders, close);
@@ -1033,31 +1036,16 @@ impl Pretty for Expression {
                         //   group' Transparent (pretty op <> hardspace <> group' Priority (prettyTermWide t))
                         // Note: The IR output shows all groups as RegularG, so we use push_group throughout
                         push_group(doc, |inner| {
-                            // Wrap left operand in group ONLY if it's a List
-                            // (matches Haskell's pretty for List which wraps in group)
-                            if matches!(left.as_ref(), Expression::Term(Term::List(..))) {
-                                push_group(inner, |left_group| {
-                                    left.pretty(left_group);
-                                });
-                            } else {
-                                left.pretty(inner);
-                            }
+                            // Left operand - Lists now wrap themselves in groups automatically
+                            left.pretty(inner);
                             inner.push(line());
                             // Operator and RHS
                             op.pretty(inner);
                             inner.push(hardspace());
-                            // RHS term with nesting - Lists need extra group, Sets don't
-                            if matches!(t, Term::List(..)) {
-                                push_group(inner, |rhs_group| {
-                                    push_nested(rhs_group, |rhs_nested| {
-                                        t.pretty(rhs_nested);
-                                    });
-                                });
-                            } else {
-                                push_nested(inner, |rhs_nested| {
-                                    t.pretty(rhs_nested);
-                                });
-                            }
+                            // RHS term with nesting - Lists wrap themselves, Sets don't
+                            push_nested(inner, |rhs_nested| {
+                                t.pretty(rhs_nested);
+                            });
                         });
                         return;
                     }
