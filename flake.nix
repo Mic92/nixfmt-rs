@@ -28,16 +28,24 @@
           # Development shell
           devShells.default = pkgs.mkShell {
             packages = with pkgs; [
-              # Rust toolchain
-              cargo
-              cargo-watch
-              rustc
+              # Rust toolchain (rustup for custom toolchains)
+              rustup
+              ## Coverage tools
+              cargo-tarpaulin
+              #rustc
+              #cargo
               rust-analyzer
-              clippy
               rustfmt
               # Development tools
               nixfmt # For comparing output
             ];
+
+            shellHook = ''
+              # Set up rustup home in project directory
+              export RUSTUP_HOME="$PWD/.rustup"
+              export CARGO_HOME="$PWD/.cargo"
+              export PATH="$CARGO_HOME/bin:$PATH"
+            '';
           };
 
           # treefmt configuration

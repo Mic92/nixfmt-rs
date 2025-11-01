@@ -107,14 +107,12 @@ fn test_nested_groups_structure() {
 }
 
 #[test]
-#[ignore]
 fn test_function_application_structure() {
     // Function application exercises hardspace between terms
     test_ir_format("map (x: x + 1) list");
 }
 
 #[test]
-#[ignore]
 fn test_operation_structure() {
     // Binary operations test operator spacing
     test_ir_format("a + b * c");

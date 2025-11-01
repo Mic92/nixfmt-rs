@@ -183,6 +183,108 @@ fn application_arity(expr: &Expression) -> usize {
     }
 }
 
+fn collect_application_parts<'a>(expr: &'a Expression, parts: &mut Vec<&'a Expression>) {
+    match expr {
+        Expression::Application(f, a) => {
+            collect_application_parts(f, parts);
+            parts.push(a);
+        }
+        _ => parts.push(expr),
+    }
+}
+
+fn flatten_operation_chain<'a>(
+    target: &'a Leaf,
+    expr: &'a Expression,
+    current_op: Option<&'a Leaf>,
+    out: &mut Vec<(Option<&'a Leaf>, &'a Expression)>,
+) {
+    match expr {
+        Expression::Operation(left, op_leaf, right) if op_leaf.value == target.value => {
+            flatten_operation_chain(target, left, current_op, out);
+            flatten_operation_chain(target, right, Some(op_leaf), out);
+        }
+        _ => out.push((current_op, expr)),
+    }
+}
+
+fn push_absorb_operation(doc: &mut Doc, expr: &Expression) {
+    match expr {
+        Expression::Term(term) if is_absorbable_term(term) => {
+            doc.push(hardspace());
+            term.pretty(doc);
+        }
+        Expression::Operation(_, _, _) => {
+            push_group(doc, |group_doc| {
+                group_doc.push(line());
+                expr.pretty(group_doc);
+            });
+        }
+        Expression::Application(_, _) => {
+            doc.push(hardspace());
+            push_group(doc, |group_doc| {
+                expr.pretty(group_doc);
+            });
+        }
+        _ => {
+            doc.push(hardspace());
+            expr.pretty(doc);
+        }
+    }
+}
+
+fn push_pretty_operation(
+    doc: &mut Doc,
+    force_first_term_wide: bool,
+    operation: &Expression,
+    op: &Leaf,
+) {
+    let mut parts: Vec<(Option<&Leaf>, &Expression)> = Vec::new();
+    flatten_operation_chain(op, operation, None, &mut parts);
+
+    push_group(doc, |group_doc| {
+        for (maybe_op, expr) in parts.iter() {
+            match maybe_op {
+                None => {
+                    if force_first_term_wide {
+                        if let Expression::Term(term) = expr {
+                            if is_absorbable_term(term) {
+                                // TODO: implement wide rendering parity
+                            }
+                        }
+                    }
+                    expr.pretty(group_doc);
+                }
+                Some(op_leaf) => {
+                    group_doc.push(line());
+                    op_leaf.pretty(group_doc);
+                    push_nested(group_doc, |nested| {
+                        push_absorb_operation(nested, expr);
+                    });
+                }
+            }
+        }
+    });
+}
+
+fn push_absorb_abs(doc: &mut Doc, depth: usize, expr: &Expression) {
+    match expr {
+        Expression::Abstraction(Parameter::ID(param), colon, body) => {
+            doc.push(hardspace());
+            param.pretty(doc);
+            colon.pretty(doc);
+            push_absorb_abs(doc, depth + 1, body);
+        }
+        _ => {
+            let separator = if depth <= 2 { line() } else { hardline() };
+            doc.push(separator);
+            push_group(doc, |group_doc| {
+                expr.pretty(group_doc);
+            });
+        }
+    }
+}
+
 fn is_simple_expression(expr: &Expression) -> bool {
     match expr {
         Expression::Term(term) => is_simple_term(term),
@@ -812,11 +914,46 @@ impl Pretty for Expression {
     fn pretty(&self, doc: &mut Doc) {
         match self {
             Expression::Term(t) => t.pretty(doc),
-            Expression::Application(f, a) => {
-                // Simplified for now
-                f.pretty(doc);
-                doc.push(hardspace());
-                a.pretty(doc);
+            Expression::Application(_, _) => {
+                let mut parts = Vec::new();
+                collect_application_parts(self, &mut parts);
+
+                if parts.len() >= 2 {
+                    let (first, tail) = parts.split_first().unwrap();
+                    let (leading_args, last_arg) = tail.split_at(tail.len() - 1);
+
+                    push_group(doc, |group_doc| {
+                        push_group_ann(group_doc, GroupAnn::Transparent, |outer| {
+                            push_group_ann(outer, GroupAnn::Transparent, |func_group| {
+                                first.pretty(func_group);
+                            });
+
+                            for (_idx, arg) in leading_args.iter().enumerate() {
+                                outer.push(line());
+                                let arg_expr = *arg;
+                                push_group_ann(outer, GroupAnn::Priority, |priority_group| {
+                                    push_group(priority_group, |arg_group| {
+                                        push_nested(arg_group, |nested| {
+                                            arg_expr.pretty(nested);
+                                        });
+                                    });
+                                });
+                            }
+                        });
+
+                        if let Some(last) = last_arg.first() {
+                            let last_expr = *last;
+                            group_doc.push(line());
+                            push_group(group_doc, |last_group| {
+                                push_nested(last_group, |nested| {
+                                    last_expr.pretty(nested);
+                                });
+                            });
+                        }
+                    });
+                } else if let Some(only) = parts.first() {
+                    only.pretty(doc);
+                }
             }
             Expression::Operation(left, op, right) => {
                 // Special case: absorbable RHS with update/concat/plus operator
@@ -837,11 +974,7 @@ impl Pretty for Expression {
                 }
 
                 // Default case
-                left.pretty(doc);
-                doc.push(hardspace());
-                op.pretty(doc);
-                doc.push(hardspace());
-                right.pretty(doc);
+                push_pretty_operation(doc, false, self, op);
             }
             Expression::MemberCheck(expr, question, selectors) => {
                 expr.pretty(doc);
@@ -933,10 +1066,18 @@ impl Pretty for Expression {
                     expr.pretty(doc);
                 });
             }
+            Expression::Abstraction(Parameter::ID(param), colon, body) => {
+                push_group(doc, |group_doc| {
+                    group_doc.push(line_prime());
+                    param.pretty(group_doc);
+                    colon.pretty(group_doc);
+                    push_absorb_abs(group_doc, 1, body);
+                });
+            }
             Expression::Abstraction(param, colon, body) => {
                 param.pretty(doc);
                 colon.pretty(doc);
-                doc.push(line()); // Use line (soft break) not hardspace, matching nixfmt
+                doc.push(line());
                 body.pretty(doc);
             }
         }
