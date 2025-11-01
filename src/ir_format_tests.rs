@@ -131,13 +131,6 @@ fn test_lambda_structure() {
 }
 
 #[test]
-#[ignore]
-fn test_member_check_structure() {
-    // Member check with ? operator
-    test_ir_format("attrs ? foo");
-}
-
-#[test]
 fn test_negation_structure() {
     // Negation operator spacing
     test_ir_format("-42");
@@ -199,7 +192,6 @@ fn test_env_path_token() {
 }
 
 #[test]
-#[ignore]
 fn test_member_check_full() {
     // Test member check (? operator) structure (lines 984-991 in pretty.rs)
     test_ir_format("attrs ? foo.bar");
@@ -216,7 +208,7 @@ fn test_concat_with_absorbable_rhs() {
 #[ignore]
 fn test_lambda_chain_structure() {
     // Test nested lambdas (abstraction chain) (lines 270-286 in pretty.rs)
-        test_ir_format("a: b: c: d: body");
+    test_ir_format("a: b: c: d: body");
 }
 
 #[test]

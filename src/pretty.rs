@@ -994,7 +994,7 @@ impl Pretty for Expression {
             }
             Expression::MemberCheck(expr, question, selectors) => {
                 expr.pretty(doc);
-                doc.push(hardspace());
+                doc.push(softline());
                 question.pretty(doc);
                 doc.push(hardspace());
                 for sel in selectors {
