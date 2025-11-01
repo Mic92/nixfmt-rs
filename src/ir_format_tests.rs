@@ -205,7 +205,6 @@ fn test_concat_with_absorbable_rhs() {
 }
 
 #[test]
-#[ignore]
 fn test_lambda_chain_structure() {
     // Test nested lambdas (abstraction chain) (lines 270-286 in pretty.rs)
     test_ir_format("a: b: c: d: body");

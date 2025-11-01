@@ -284,9 +284,7 @@ fn push_absorb_abs(doc: &mut Doc, depth: usize, expr: &Expression) {
         _ => {
             let separator = if depth <= 2 { line() } else { hardline() };
             doc.push(separator);
-            push_group(doc, |group_doc| {
-                expr.pretty(group_doc);
-            });
+            expr.pretty(doc);
         }
     }
 }
