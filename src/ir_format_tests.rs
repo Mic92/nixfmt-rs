@@ -274,3 +274,11 @@ fn test_language_annotation_with_string_item() {
     // Test language annotation followed by string in set items (lines 525-543 in pretty.rs)
     test_ir_format("{\n  /* python */ a = \"code\";\n}");
 }
+
+#[test]
+fn test_assignment_rhs_operation_lhs_set() {
+    // Test assignment RHS with operation where LHS is absorbable set
+    // The reference uses absorbRHS -> absorbExpr True -> prettyOp True
+    // which forces wide rendering (hardlines) for the LHS set
+    test_ir_format("{ x = { a = 1; } // y; }");
+}

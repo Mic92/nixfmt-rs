@@ -59,6 +59,26 @@ fn is_absorbable_expr(expr: &Expression) -> bool {
 /// Based on Haskell absorbRHS (Pretty.hs:631-658)
 fn push_absorb_rhs(doc: &mut Doc, expr: &Expression) {
     match expr {
+        // Special case: operation with absorbable LHS (matches absorbRHS in Pretty.hs:659-663)
+        // For update (//), concat (++), and plus (+) operations where LHS is absorbable,
+        // render with hardspace and force wide rendering for the LHS term
+        Expression::Operation(left, op, _right)
+            if matches!(op.value, Token::TUpdate | Token::TConcat | Token::TPlus) =>
+        {
+            if let Expression::Term(t) = &**left {
+                if is_absorbable_term(t) {
+                    // hardspace <> prettyOp True expr op
+                    doc.push(hardspace());
+                    push_pretty_operation(doc, true, expr, op);
+                    return;
+                }
+            }
+            // Fall through to default handling if LHS is not absorbable
+            push_nested(doc, |d| {
+                d.push(line());
+                push_group(d, |inner| expr.pretty(inner));
+            });
+        }
         // Special case: set with single inherit
         Expression::Term(Term::Set(_, _, binders, _)) => {
             if binders.0.len() == 1 {
@@ -335,14 +355,24 @@ fn push_pretty_operation(
         for (maybe_op, expr) in parts.iter() {
             match maybe_op {
                 None => {
+                    // Check if we need wide rendering for the first term
+                    let mut wide_rendered = false;
                     if force_first_term_wide {
                         if let Expression::Term(term) = expr {
                             if is_absorbable_term(term) {
-                                // TODO: implement wide rendering parity
+                                // Wide rendering for absorbable terms (matches prettyTermWide in Pretty.hs:207-209)
+                                if let Term::Set(krec, open, items, close) = term {
+                                    // Render set in wide mode (forces hardlines instead of lines)
+                                    push_pretty_set(group_doc, true, krec, open, items, close);
+                                    wide_rendered = true;
+                                }
+                                // Lists and indented strings handle themselves via auto-wrapping
                             }
                         }
                     }
-                    expr.pretty(group_doc);
+                    if !wide_rendered {
+                        expr.pretty(group_doc);
+                    }
                 }
                 Some(op_leaf) => {
                     group_doc.push(line());
