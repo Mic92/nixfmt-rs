@@ -271,7 +271,6 @@ fn test_arithmetic_operators() {
 }
 
 #[test]
-#[ignore]
 fn test_language_annotation_with_string_item() {
     // Test language annotation followed by string in set items (lines 525-543 in pretty.rs)
     test_ir_format("{\n  /* python */ a = \"code\";\n}");

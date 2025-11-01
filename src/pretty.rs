@@ -586,8 +586,14 @@ fn push_pretty_set(
         _ => false,
     };
 
-    // Separator: use hardline if wide, or when starting with an empty line; else use line
-    let sep = if !items.0.is_empty() && (wide || starts_with_emptyline) {
+    // Check if braces are on different lines (matches Pretty.hs:203)
+    let braces_on_different_lines = open.span.start_line != close.span.start_line;
+
+    // Separator: use hardline if wide, or when starting with an empty line,
+    // or when braces are on different lines; else use line
+    // This matches Pretty.hs:200-205
+    let sep = if !items.0.is_empty() && (wide || starts_with_emptyline || braces_on_different_lines)
+    {
         vec![hardline()]
     } else {
         vec![line()]
