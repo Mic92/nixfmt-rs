@@ -260,7 +260,6 @@ fn test_string_with_leading_whitespace_interpolation() {
 }
 
 #[test]
-#[ignore]
 fn test_operation_with_application_rhs() {
     // Test operation with application on RHS (lines 223-228 in pretty.rs)
     test_ir_format("x + f a b");

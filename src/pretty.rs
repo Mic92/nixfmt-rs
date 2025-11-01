@@ -931,44 +931,77 @@ impl Pretty for Expression {
         match self {
             Expression::Term(t) => t.pretty(doc),
             Expression::Application(_, _) => {
-                let mut parts = Vec::new();
-                collect_application_parts(self, &mut parts);
-
-                if parts.len() >= 2 {
-                    let (first, tail) = parts.split_first().unwrap();
-                    let (leading_args, last_arg) = tail.split_at(tail.len() - 1);
+                // Check if this is a "simple" application (simple terms, arity < 3)
+                // If so, render with hardspace separators (nixfmt Pretty.hs:516)
+                if is_simple_expression(self) {
+                    // Render simple application with hardspace separators (nixfmt Pretty.hs:516)
+                    let mut parts = Vec::new();
+                    collect_application_parts(self, &mut parts);
 
                     push_group(doc, |group_doc| {
-                        push_group_ann(group_doc, GroupAnn::Transparent, |outer| {
-                            push_group_ann(outer, GroupAnn::Transparent, |func_group| {
-                                first.pretty(func_group);
+                        if let Some((first, rest)) = parts.split_first() {
+                            first.pretty(group_doc);
+
+                            if let Some((last_arg, middle_args)) = rest.split_last() {
+                                // Render middle arguments
+                                for arg in middle_args.iter() {
+                                    group_doc.push(hardspace());
+                                    push_nested(group_doc, |nested| {
+                                        arg.pretty(nested);
+                                    });
+                                }
+
+                                // Render last argument wrapped in group (absorbLast, Pretty.hs:481)
+                                group_doc.push(hardspace());
+                                push_group(group_doc, |last_group| {
+                                    push_nested(last_group, |nested| {
+                                        last_arg.pretty(nested);
+                                    });
+                                });
+                            }
+                        }
+                    });
+                } else {
+                    // Complex application: use the standard rendering with Transparent/Priority groups
+                    let mut parts = Vec::new();
+                    collect_application_parts(self, &mut parts);
+
+                    if parts.len() >= 2 {
+                        let (first, tail) = parts.split_first().unwrap();
+                        let (leading_args, last_arg) = tail.split_at(tail.len() - 1);
+
+                        push_group(doc, |group_doc| {
+                            push_group_ann(group_doc, GroupAnn::Transparent, |outer| {
+                                push_group_ann(outer, GroupAnn::Transparent, |func_group| {
+                                    first.pretty(func_group);
+                                });
+
+                                for (_idx, arg) in leading_args.iter().enumerate() {
+                                    outer.push(line());
+                                    let arg_expr = *arg;
+                                    push_group_ann(outer, GroupAnn::Priority, |priority_group| {
+                                        push_group(priority_group, |arg_group| {
+                                            push_nested(arg_group, |nested| {
+                                                arg_expr.pretty(nested);
+                                            });
+                                        });
+                                    });
+                                }
                             });
 
-                            for (_idx, arg) in leading_args.iter().enumerate() {
-                                outer.push(line());
-                                let arg_expr = *arg;
-                                push_group_ann(outer, GroupAnn::Priority, |priority_group| {
-                                    push_group(priority_group, |arg_group| {
-                                        push_nested(arg_group, |nested| {
-                                            arg_expr.pretty(nested);
-                                        });
+                            if let Some(last) = last_arg.first() {
+                                let last_expr = *last;
+                                group_doc.push(line());
+                                push_group(group_doc, |last_group| {
+                                    push_nested(last_group, |nested| {
+                                        last_expr.pretty(nested);
                                     });
                                 });
                             }
                         });
-
-                        if let Some(last) = last_arg.first() {
-                            let last_expr = *last;
-                            group_doc.push(line());
-                            push_group(group_doc, |last_group| {
-                                push_nested(last_group, |nested| {
-                                    last_expr.pretty(nested);
-                                });
-                            });
-                        }
-                    });
-                } else if let Some(only) = parts.first() {
-                    only.pretty(doc);
+                    } else if let Some(only) = parts.first() {
+                        only.pretty(doc);
+                    }
                 }
             }
             Expression::Operation(left, op, right) => {
