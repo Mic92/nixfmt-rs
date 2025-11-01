@@ -275,6 +275,12 @@ fn push_absorb_abs(doc: &mut Doc, depth: usize, expr: &Expression) {
             colon.pretty(doc);
             push_absorb_abs(doc, depth + 1, body);
         }
+        _ if depth == 1 && is_absorbable_expr(expr) => {
+            doc.push(hardspace());
+            push_group_ann(doc, GroupAnn::Priority, |priority_group| {
+                expr.pretty(priority_group);
+            });
+        }
         _ => {
             let separator = if depth <= 2 { line() } else { hardline() };
             doc.push(separator);
