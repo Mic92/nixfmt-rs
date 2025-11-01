@@ -867,8 +867,13 @@ impl Pretty for Term {
                 };
 
                 open_without_trail.pretty(doc);
-                let line_doc = vec![line()];
-                push_surrounded(doc, &line_doc, |d| {
+                let needs_hardline = open.span.start_line != close.span.start_line;
+                let separator = if needs_hardline {
+                    vec![hardline()]
+                } else {
+                    vec![line()]
+                };
+                push_surrounded(doc, &separator, |d| {
                     push_nested(d, |inner| {
                         open.trail_comment.pretty(inner);
                         push_pretty_items(inner, items);

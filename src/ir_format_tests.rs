@@ -157,7 +157,6 @@ fn test_parenthesized_complex_structure() {
 }
 
 #[test]
-#[ignore]
 fn test_list_with_comments_structure() {
     // Lists with interspersed comments
     test_ir_format("[\n  # comment\n  1\n  2\n]");
