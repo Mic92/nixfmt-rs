@@ -198,7 +198,6 @@ fn test_member_check_full() {
 }
 
 #[test]
-#[ignore]
 fn test_concat_with_absorbable_rhs() {
     // Test ++ operator with absorbable RHS (lines 967-968 in pretty.rs)
     test_ir_format("[ 1 ] ++ [ 2 3 ]");

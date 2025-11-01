@@ -1023,17 +1023,41 @@ impl Pretty for Expression {
             }
             Expression::Operation(left, op, right) => {
                 // Special case: absorbable RHS with update/concat/plus operator
-                // Based on Haskell prettyApp (Pretty.hs:665-667)
+                // Based on Haskell Pretty.hs:665-667:
+                // nest $ group' RegularG $ line <> pretty l <> line <>
+                //   group' Transparent (pretty op <> hardspace <> group' Priority (prettyTermWide t))
                 if let Expression::Term(t) = &**right {
                     if is_absorbable_term(t) && op.value.is_update_concat_plus() {
+                        // Based on Haskell Pretty.hs:665-667:
+                        // nest $ group' RegularG $ line <> pretty l <> line <>
+                        //   group' Transparent (pretty op <> hardspace <> group' Priority (prettyTermWide t))
+                        // Note: The IR output shows all groups as RegularG, so we use push_group throughout
                         push_group(doc, |inner| {
-                            left.pretty(inner);
+                            // Wrap left operand in group ONLY if it's a List
+                            // (matches Haskell's pretty for List which wraps in group)
+                            if matches!(left.as_ref(), Expression::Term(Term::List(..))) {
+                                push_group(inner, |left_group| {
+                                    left.pretty(left_group);
+                                });
+                            } else {
+                                left.pretty(inner);
+                            }
                             inner.push(line());
+                            // Operator and RHS
                             op.pretty(inner);
                             inner.push(hardspace());
-                            push_nested(inner, |nested| {
-                                t.pretty(nested);
-                            });
+                            // RHS term with nesting - Lists need extra group, Sets don't
+                            if matches!(t, Term::List(..)) {
+                                push_group(inner, |rhs_group| {
+                                    push_nested(rhs_group, |rhs_nested| {
+                                        t.pretty(rhs_nested);
+                                    });
+                                });
+                            } else {
+                                push_nested(inner, |rhs_nested| {
+                                    t.pretty(rhs_nested);
+                                });
+                            }
                         });
                         return;
                     }
