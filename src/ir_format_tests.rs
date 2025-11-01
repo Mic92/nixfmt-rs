@@ -119,7 +119,6 @@ fn test_operation_structure() {
 }
 
 #[test]
-#[ignore]
 fn test_if_then_else_structure() {
     // Conditional expressions exercise hardspace placement
     test_ir_format("if cond then true else false");

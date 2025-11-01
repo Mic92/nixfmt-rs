@@ -1020,17 +1020,36 @@ impl Pretty for Expression {
                 });
             }
             Expression::If(if_kw, cond, then_kw, then_expr, else_kw, else_expr) => {
-                if_kw.pretty(doc);
-                doc.push(hardspace());
-                cond.pretty(doc);
-                doc.push(hardspace());
-                then_kw.pretty(doc);
-                doc.push(hardspace());
-                then_expr.pretty(doc);
-                doc.push(hardspace());
-                else_kw.pretty(doc);
-                doc.push(hardspace());
-                else_expr.pretty(doc);
+                push_group(doc, |doc| {
+                    push_group(doc, |inner| {
+                        push_group(inner, |head| {
+                            if_kw.pretty(head);
+                            head.push(line());
+                            push_nested(head, |nested| {
+                                cond.pretty(nested);
+                            });
+                            head.push(line());
+                            then_kw.pretty(head);
+                        });
+
+                        inner.push(line());
+                        push_group(inner, |then_group| {
+                            push_nested(then_group, |nested| {
+                                then_expr.pretty(nested);
+                            });
+                        });
+
+                        inner.push(line());
+                        else_kw.pretty(inner);
+
+                        inner.push(line());
+                        push_group(inner, |else_group| {
+                            push_nested(else_group, |nested| {
+                                else_expr.pretty(nested);
+                            });
+                        });
+                    });
+                });
             }
             Expression::Assert(assert_kw, cond, semicolon, expr) => {
                 push_group(doc, |doc| {
