@@ -236,7 +236,6 @@ fn test_empty_parameter_multiline() {
 }
 
 #[test]
-#[ignore]
 fn test_doc_comment_structure() {
     // Test doc comment rendering (line 388 in pretty.rs)
     test_ir_format("/** doc comment */\nx");

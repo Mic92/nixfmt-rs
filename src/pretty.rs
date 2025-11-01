@@ -391,15 +391,17 @@ impl Pretty for Trivium {
             Trivium::BlockComment(is_doc, lines) => {
                 push_comment(doc, if *is_doc { "/**" } else { "/*" });
                 doc.push(hardline());
-                // TODO: implement offset for block comment indentation
-                for line in lines {
-                    if line.is_empty() {
-                        doc.push(emptyline());
-                    } else {
-                        push_comment(doc, line);
-                        doc.push(hardline());
+                // Indent the comment using offset instead of nest
+                push_offset(doc, 2, |offset_doc| {
+                    for line in lines {
+                        if line.is_empty() {
+                            offset_doc.push(emptyline());
+                        } else {
+                            push_comment(offset_doc, line);
+                            offset_doc.push(hardline());
+                        }
                     }
-                }
+                });
                 push_comment(doc, "*/");
                 doc.push(hardline());
             }
