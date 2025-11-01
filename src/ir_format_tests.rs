@@ -230,7 +230,6 @@ fn test_parameter_with_ellipsis() {
 }
 
 #[test]
-#[ignore]
 fn test_empty_parameter_multiline() {
     // Test empty parameter set spanning multiple lines (lines 1201-1214 in pretty.rs)
     test_ir_format("{\n\n}: x");

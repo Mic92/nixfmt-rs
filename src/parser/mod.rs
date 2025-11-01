@@ -185,21 +185,13 @@ impl Parser {
         match &self.current.value {
             Token::TBraceClose => {
                 // Empty set: {} - could be parameter or literal
-                // But first check if there are comments in the pre_trivia of the close brace
-                let mut close_brace = self.take_current();
-                let items = if !close_brace.pre_trivia.is_empty() {
-                    // There are comments inside the empty set, extract them as a Comments item
-                    let comments = std::mem::take(&mut close_brace.pre_trivia);
-                    vec![Item::Comments(comments)]
-                } else {
-                    Vec::new()
-                };
+                let close_brace = self.take_current();
 
                 self.advance()?;
 
                 if matches!(self.current.value, Token::TColon) {
                     // Empty set parameter: {}: body
-                    // Note: parameters can't have Comments items, so this should be empty
+                    // Keep trivia on the close brace for proper formatting
                     let colon = self.take_and_advance()?;
                     let body = self.parse_expression()?;
                     Ok(Expression::Abstraction(
@@ -226,7 +218,16 @@ impl Parser {
                     ))
                 } else {
                     // Empty set literal (possibly with comments)
-                    let set_term = Term::Set(None, open_brace, Items(items), close_brace);
+                    // Extract trivia from close brace as comments for set literals
+                    let mut close_brace_for_literal = close_brace;
+                    let items = if !close_brace_for_literal.pre_trivia.is_empty() {
+                        let comments = std::mem::take(&mut close_brace_for_literal.pre_trivia);
+                        vec![Item::Comments(comments)]
+                    } else {
+                        Vec::new()
+                    };
+                    let set_term =
+                        Term::Set(None, open_brace, Items(items), close_brace_for_literal);
                     let term_with_selection = self.parse_postfix_selection(set_term)?;
                     self.continue_operation_from(Expression::Term(term_with_selection))
                 }
