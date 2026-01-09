@@ -226,22 +226,12 @@ impl PrettySimple for Trivium {
 
 impl PrettySimple for Trivia {
     fn format<W: Writer>(&self, w: &mut W) {
-        // Special case: LanguageAnnotation renders without brackets
-        if self.0.len() == 1 && matches!(self.0[0], Trivium::LanguageAnnotation(_)) {
-            self.0[0].format(w);
-            return;
-        }
-
-        // Otherwise, delegate to standard Vec formatting
+        // Delegate to standard Vec formatting
         self.0.format(w);
     }
 
     fn is_simple(&self) -> bool {
-        // Special case: LanguageAnnotation without brackets is simple
-        if self.0.len() == 1 && matches!(self.0[0], Trivium::LanguageAnnotation(_)) {
-            return true;
-        }
-        // Otherwise delegate to Vec's is_simple logic
+        // Delegate to Vec's is_simple logic
         self.0.is_simple()
     }
 

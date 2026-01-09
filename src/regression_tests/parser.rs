@@ -432,6 +432,15 @@ fn regression_pattern_shadows_formal() {
 }
 
 #[test]
+fn regression_language_annotation_ast_format() {
+    // Regression test for LanguageAnnotation AST formatting
+    // Ensure LanguageAnnotation is wrapped in brackets in the AST output
+    // Input: /* python */ '' ''
+    // Expected AST excerpt: { preTrivia = [ LanguageAnnotation "python" ], ... }
+    test_ast_format("/* python */ '' ''");
+}
+
+#[test]
 fn regression_non_utf8_input() {
     // Parser should handle non-UTF-8 input gracefully with an error, not panic
     // From nix/tests/functional/lang/eval-fail-toJSON-non-utf-8.nix
