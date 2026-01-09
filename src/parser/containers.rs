@@ -93,9 +93,8 @@ impl Parser {
             items.push(Item::Item(term));
         }
 
-        // Only collect trivia if there were actual items parsed
-        // For empty containers, trivia should remain on the closing delimiter
-        if matches!(self.current.value, Token::TBrackClose) && !items.is_empty() {
+        // Always collect trivia as comments
+        if matches!(self.current.value, Token::TBrackClose) {
             self.collect_trivia_as_comments(&mut items);
         }
 

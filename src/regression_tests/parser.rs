@@ -441,6 +441,18 @@ fn regression_language_annotation_ast_format() {
 }
 
 #[test]
+fn regression_empty_list_with_comment() {
+    // Comments inside empty lists should be separate Comments items, not in preTrivia
+    test_ast_format("[\n  # comment\n]");
+}
+
+#[test]
+fn regression_empty_let_with_comment() {
+    // Comments inside empty let bindings should be separate Comments items
+    test_ast_format("let\n  # comment\nin x");
+}
+
+#[test]
 fn regression_non_utf8_input() {
     // Parser should handle non-UTF-8 input gracefully with an error, not panic
     // From nix/tests/functional/lang/eval-fail-toJSON-non-utf-8.nix
