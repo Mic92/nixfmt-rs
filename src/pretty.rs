@@ -50,6 +50,17 @@ fn is_absorbable_expr(expr: &Expression) -> bool {
             Expression::Abstraction(_, _, _) => is_absorbable_expr(body),
             _ => false,
         },
+        // Special case: import applications (e.g. import ./foo) are absorbable
+        Expression::Application(f, _) => {
+            if let Expression::Term(Term::Token(ann)) = &**f {
+                if let Token::Identifier(s) = &ann.value {
+                    if s == "import" {
+                        return true;
+                    }
+                }
+            }
+            is_absorbable_expr(f)
+        }
         Expression::Abstraction(_, _, _) => false,
         _ => false,
     }
@@ -140,10 +151,21 @@ fn push_absorb_rhs(doc: &mut Doc, expr: &Expression) {
         }
         // Function application: try to absorb
         Expression::Application(_, _) => {
-            push_nested(doc, |d| {
-                d.push(line());
-                expr.pretty(d);
-            });
+            if is_simple_expression(expr) {
+                push_nested(doc, |d| {
+                    d.push(line());
+                    expr.pretty(d);
+                });
+            } else {
+                push_nested(doc, |d| {
+                    let mut parts = Vec::new();
+                    collect_application_parts(expr, &mut parts);
+                    push_group(d, |g| {
+                        g.push(line());
+                        pretty_complex_application_impl(g, &parts, false, false, false);
+                    });
+                });
+            }
         }
         // Everything else: new line
         _ => {
@@ -328,11 +350,11 @@ fn pretty_simple_application_flat(doc: &mut Doc, parts: &[&Expression]) {
 
 /// Render complex application with Transparent/Priority groups
 fn pretty_complex_application(doc: &mut Doc, parts: &[&Expression]) {
-    pretty_complex_application_impl(doc, parts, false, false);
+    pretty_complex_application_impl(doc, parts, false, false, true);
 }
 
 fn pretty_complex_application_indent_func(doc: &mut Doc, parts: &[&Expression]) {
-    pretty_complex_application_impl(doc, parts, true, true);
+    pretty_complex_application_impl(doc, parts, true, true, true);
 }
 
 fn pretty_complex_application_impl(
@@ -340,56 +362,59 @@ fn pretty_complex_application_impl(
     parts: &[&Expression],
     indent_function: bool,
     has_post: bool,
+    wrap_in_group: bool,
 ) {
-    match parts.split_first() {
-        Some((first, rest)) if !rest.is_empty() => {
-            match rest.split_last() {
-                Some((last, middle)) => {
-                    push_group(doc, |group_doc| {
-                        push_group_ann(group_doc, GroupAnn::Transparent, |outer| {
+    let make_body = |doc: &mut Doc| {
+        match parts.split_first() {
+            Some((first, rest)) if !rest.is_empty() => {
+                match rest.split_last() {
+                    Some((last, middle)) => {
+                        push_group_ann(doc, GroupAnn::Transparent, |outer| {
                             push_function(outer, first, indent_function);
 
                             for arg in middle {
                                 outer.push(line());
                                 push_nested(outer, |nested| {
-                                    push_group_ann(nested, GroupAnn::Priority, |priority_group| {
-                                        arg.pretty(priority_group);
-                                    });
+                                    push_last_arg(nested, arg);
                                 });
                             }
                         });
 
-                        group_doc.push(line());
-                        push_nested(group_doc, |nested| {
+                        doc.push(line());
+                        push_nested(doc, |nested| {
                             push_last_arg(nested, last);
                         });
                         if has_post {
-                            group_doc.push(line_prime());
+                            doc.push(line_prime());
                         }
-                    });
-                }
-                None => {
-                    // Only 1 element in rest, so 2 total (first + one in rest)
-                    push_group(doc, |group_doc| {
-                        push_group_ann(group_doc, GroupAnn::Transparent, |outer| {
+                    }
+                    None => {
+                        // Only 1 element in rest, so 2 total (first + one in rest)
+                        push_group_ann(doc, GroupAnn::Transparent, |outer| {
                             push_function(outer, first, indent_function);
                         });
 
-                        group_doc.push(line());
-                        push_nested(group_doc, |nested| {
+                        doc.push(line());
+                        push_nested(doc, |nested| {
                             push_last_arg(nested, rest[0]);
                         });
                         if has_post {
-                            group_doc.push(line_prime());
+                            doc.push(line_prime());
                         }
-                    });
+                    }
                 }
             }
+            Some((only, _)) => {
+                only.pretty(doc);
+            } // Only one element
+            None => {} // Empty parts
         }
-        Some((only, _)) => {
-            only.pretty(doc);
-        } // Only one element
-        None => {} // Empty parts
+    };
+
+    if wrap_in_group {
+        push_group(doc, make_body);
+    } else {
+        make_body(doc);
     }
 }
 
