@@ -222,15 +222,19 @@ fn push_absorb_paren(doc: &mut Doc, open: &Ann<Token>, expr: &Expression, close:
     close_clean.pre_trivia = Trivia::new();
 
     open_clean.pretty(doc);
+    // Add Break spacing before inner content (matches nixfmt absorbParen)
+    doc.push(line_prime());
     push_nested(doc, |nested| {
         if let Some(trailing_comment) = trailing {
             let comment: Trivia =
                 vec![Trivium::LineComment(format!(" {}", trailing_comment.0))].into();
             comment.pretty(nested);
         }
-        push_parenthesized_inner(nested, expr);
+        push_parenthesized_inner(nested, expr, false); // false = absorb context, no extra nesting
         close_pre.pretty(nested);
     });
+    // Add Break spacing before closing paren (matches nixfmt absorbParen)
+    doc.push(line_prime());
     close_clean.pretty(doc);
 }
 
@@ -290,12 +294,10 @@ fn pretty_simple_application(doc: &mut Doc, parts: &[&Expression]) {
                             });
                         }
 
-                        // Render last argument wrapped in group (absorbLast, Pretty.hs:481)
+                        // Render last argument using absorbLast (Pretty.hs:481)
                         group_doc.push(hardspace());
-                        push_group(group_doc, |last_group| {
-                            push_nested(last_group, |nested| {
-                                last.pretty(nested);
-                            });
+                        push_nested(group_doc, |nested| {
+                            push_last_arg(nested, last);
                         });
                     }
                     None => {} // Only one element total
@@ -306,6 +308,23 @@ fn pretty_simple_application(doc: &mut Doc, parts: &[&Expression]) {
     });
 }
 
+/// Render simple application with flat nesting (for use inside parentheses)
+/// All parts are at the same nesting level
+fn pretty_simple_application_flat(doc: &mut Doc, parts: &[&Expression]) {
+    push_group(doc, |group_doc| {
+        match parts.split_first() {
+            Some((first, rest)) => {
+                first.pretty(group_doc);
+
+                for arg in rest {
+                    group_doc.push(hardspace());
+                    push_last_arg(group_doc, arg);
+                }
+            }
+            None => {} // Empty parts
+        }
+    });
+}
 
 /// Render complex application with Transparent/Priority groups
 fn pretty_complex_application(doc: &mut Doc, parts: &[&Expression]) {
@@ -495,7 +514,10 @@ fn is_simple_expression(expr: &Expression) -> bool {
 
 /// Render the nested document that appears between parentheses.
 /// Mirrors `inner` in nixfmt's `prettyTerm (Parenthesized ...)`.
-fn push_parenthesized_inner(doc: &mut Doc, expr: &Expression) {
+/// `add_nesting`: whether to add extra nesting for simple applications
+///   - true when called from push_pretty_parenthesized (regular parens)
+///   - false when called from push_absorb_paren (absorb context)
+fn push_parenthesized_inner(doc: &mut Doc, expr: &Expression, add_nesting: bool) {
     match expr {
         _ if is_absorbable_expr(expr) => {
             push_group(doc, |inner| {
@@ -507,9 +529,18 @@ fn push_parenthesized_inner(doc: &mut Doc, expr: &Expression) {
             collect_application_parts(expr, &mut parts);
 
             if is_simple_expression(expr) {
-                push_group(doc, |inner| {
-                    expr.pretty(inner);
-                });
+                if add_nesting {
+                    // Simple applications inside regular parentheses have extra nesting
+                    // but flat nesting between parts
+                    push_nested(doc, |nested| {
+                        pretty_simple_application_flat(nested, &parts);
+                    });
+                } else {
+                    // In absorb context, use normal application with nesting
+                    push_group(doc, |inner| {
+                        expr.pretty(inner);
+                    });
+                }
             } else {
                 pretty_complex_application_indent_func(doc, &parts);
             }
@@ -560,7 +591,7 @@ fn push_pretty_parenthesized(
                     vec![Trivium::LineComment(format!(" {}", trailing_comment.0))].into();
                 comment.pretty(nested);
             }
-            push_parenthesized_inner(nested, expr);
+            push_parenthesized_inner(nested, expr, true); // true = regular context, add extra nesting
             close_pre.pretty(nested);
         });
 
