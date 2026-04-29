@@ -5,11 +5,49 @@
 use crate::predoc::*;
 use crate::types::*;
 
+// ---------------------------------------------------------------------------
+// Classification predicates
+//
+// These mirror the small predicates scattered through `Nixfmt/Types.hs` and
+// `Nixfmt/Pretty.hs` in the reference implementation. Each is documented with
+// its Haskell counterpart so behavioural drift is easy to audit.
+// ---------------------------------------------------------------------------
+
+/// Haskell `hasTrivia` (Types.hs): annotation carries leading or trailing trivia.
 fn has_trivia<T>(ann: &Ann<T>) -> bool {
     !ann.pre_trivia.0.is_empty() || ann.trail_comment.is_some()
 }
 
-/// Exact port of Haskell `isAbsorbable` (Pretty.hs).
+/// Haskell `LoneAnn` pattern (Types.hs): annotation with no surrounding trivia.
+fn is_lone_ann<T>(ann: &Ann<T>) -> bool {
+    !has_trivia(ann)
+}
+
+/// Haskell `hasPreTrivia` (Types.hs).
+fn has_pre_trivia<T>(ann: &Ann<T>) -> bool {
+    !ann.pre_trivia.0.is_empty()
+}
+
+/// Haskell `matchFirstToken hasPreTrivia` (Types.hs), specialised to `Term`.
+fn term_first_token_has_pre_trivia(term: &Term) -> bool {
+    match term {
+        Term::Token(l) => has_pre_trivia(l),
+        Term::SimpleString(s) | Term::IndentedString(s) => has_pre_trivia(s),
+        Term::Path(p) => has_pre_trivia(p),
+        Term::List(open, _, _) => has_pre_trivia(open),
+        Term::Set(Some(rec), _, _, _) => has_pre_trivia(rec),
+        Term::Set(None, open, _, _) => has_pre_trivia(open),
+        Term::Selection(inner, _, _) => term_first_token_has_pre_trivia(inner),
+        Term::Parenthesized(open, _, _) => has_pre_trivia(open),
+    }
+}
+
+/// Haskell `hasOnlyComments` (Pretty.hs): non-empty `Items` containing only comment items.
+fn items_has_only_comments<T>(items: &Items<T>) -> bool {
+    !items.0.is_empty() && items.0.iter().all(|i| matches!(i, Item::Comments(_)))
+}
+
+/// Haskell `isAbsorbable` / `isAbsorbableTerm` (Pretty.hs).
 fn is_absorbable_term(term: &Term) -> bool {
     match term {
         // Multi-line indented string
@@ -35,14 +73,14 @@ fn is_absorbable_term(term: &Term) -> bool {
         Term::List(open, items, _) if has_trivia(open) || items_has_only_comments(items) => true,
         Term::Set(_, open, items, _) if has_trivia(open) || items_has_only_comments(items) => true,
         // Parenthesized absorbable term, only when the open paren has no trivia
-        Term::Parenthesized(open, expr, _) if !has_trivia(open) => {
+        Term::Parenthesized(open, expr, _) if is_lone_ann(open) => {
             matches!(&**expr, Expression::Term(t) if is_absorbable_term(t))
         }
         _ => false,
     }
 }
 
-/// Exact port of Haskell `isAbsorbableExpr` (Pretty.hs).
+/// Haskell `isAbsorbableExpr` (Pretty.hs).
 fn is_absorbable_expr(expr: &Expression) -> bool {
     match expr {
         Expression::Term(t) => is_absorbable_term(t),
@@ -58,6 +96,55 @@ fn is_absorbable_expr(expr: &Expression) -> bool {
         _ => false,
     }
 }
+
+/// Haskell `isSimpleSelector` (Pretty.hs).
+fn is_simple_selector(selector: &Selector) -> bool {
+    matches!(selector.selector, SimpleSelector::ID(_))
+}
+
+/// Haskell `isSimple` (Pretty.hs), `Term` arm; split out so list items can be
+/// classified without wrapping them in an `Expression`.
+fn is_simple_term(term: &Term) -> bool {
+    match term {
+        Term::SimpleString(s) | Term::IndentedString(s) => is_lone_ann(s),
+        Term::Path(p) => is_lone_ann(p),
+        Term::Token(leaf)
+            if is_lone_ann(leaf)
+                && matches!(
+                    leaf.value,
+                    Token::Identifier(_) | Token::Integer(_) | Token::Float(_) | Token::EnvPath(_)
+                ) =>
+        {
+            true
+        }
+        Term::Selection(term, selectors, def) => {
+            is_simple_term(term) && selectors.iter().all(is_simple_selector) && def.is_none()
+        }
+        Term::Parenthesized(open, expr, close) => {
+            is_lone_ann(open) && is_lone_ann(close) && is_simple_expression(expr)
+        }
+        _ => false,
+    }
+}
+
+/// Haskell `isSimple` (Pretty.hs).
+fn is_simple_expression(expr: &Expression) -> bool {
+    match expr {
+        Expression::Term(term) => is_simple_term(term),
+        Expression::Application(f, a) => {
+            // No more than two arguments.
+            if let Expression::Application(f2, _) = &**f {
+                if matches!(**f2, Expression::Application(_, _)) {
+                    return false;
+                }
+            }
+            is_simple_expression(f) && is_simple_expression(a)
+        }
+        _ => false,
+    }
+}
+
+// ---------------------------------------------------------------------------
 
 /// Mirrors `prettyTerm (List ..)` in Nixfmt/Pretty.hs (no surrounding group).
 fn push_pretty_term_list(doc: &mut Doc, open: &Leaf, items: &Items<Term>, close: &Leaf) {
@@ -257,64 +344,6 @@ fn is_spaces(s: &str) -> bool {
     s.chars().all(|c| c.is_whitespace())
 }
 
-fn is_lone_ann<T>(ann: &Ann<T>) -> bool {
-    ann.pre_trivia.0.is_empty() && ann.trail_comment.is_none()
-}
-
-/// Mirrors `hasPreTrivia` in Nixfmt/Types.hs.
-fn has_pre_trivia<T>(ann: &Ann<T>) -> bool {
-    !ann.pre_trivia.0.is_empty()
-}
-
-/// Mirrors `matchFirstToken` for `Term` in Nixfmt/Types.hs, specialised to the
-/// only predicate we need so far (`hasPreTrivia`).
-fn term_first_token_has_pre_trivia(term: &Term) -> bool {
-    match term {
-        Term::Token(l) => has_pre_trivia(l),
-        Term::SimpleString(s) | Term::IndentedString(s) => has_pre_trivia(s),
-        Term::Path(p) => has_pre_trivia(p),
-        Term::List(open, _, _) => has_pre_trivia(open),
-        Term::Set(Some(rec), _, _, _) => has_pre_trivia(rec),
-        Term::Set(None, open, _, _) => has_pre_trivia(open),
-        Term::Selection(inner, _, _) => term_first_token_has_pre_trivia(inner),
-        Term::Parenthesized(open, _, _) => has_pre_trivia(open),
-    }
-}
-
-fn is_simple_selector(selector: &Selector) -> bool {
-    matches!(selector.selector, SimpleSelector::ID(_))
-}
-
-fn is_simple_term(term: &Term) -> bool {
-    match term {
-        Term::SimpleString(s) | Term::IndentedString(s) => is_lone_ann(s),
-        Term::Path(p) => is_lone_ann(p),
-        Term::Token(leaf)
-            if is_lone_ann(leaf)
-                && matches!(
-                    leaf.value,
-                    Token::Identifier(_) | Token::Integer(_) | Token::Float(_) | Token::EnvPath(_)
-                ) =>
-        {
-            true
-        }
-        Term::Selection(term, selectors, def) => {
-            is_simple_term(term) && selectors.iter().all(is_simple_selector) && def.is_none()
-        }
-        Term::Parenthesized(open, expr, close) => {
-            is_lone_ann(open) && is_lone_ann(close) && is_simple_expression(expr)
-        }
-        _ => false,
-    }
-}
-
-fn application_arity(expr: &Expression) -> usize {
-    match expr {
-        Expression::Application(f, _) => 1 + application_arity(f),
-        _ => 0,
-    }
-}
-
 /// Shared trivia juggling for parenthesized rendering: strips the opening
 /// token's trailing comment (returned as `Trivia`) and the closing token's
 /// leading trivia so callers can re-emit them inside the nested body.
@@ -388,7 +417,7 @@ fn push_render_list(
 
     let sur = if open.span.start_line != close.span.start_line
         || items_has_only_comments(items)
-        || (!is_lone_ann(open) && items.0.is_empty())
+        || (has_trivia(open) && items.0.is_empty())
     {
         hardline()
     } else if items.0.is_empty() {
@@ -404,10 +433,6 @@ fn push_render_list(
         });
     });
     close.pretty(doc);
-}
-
-fn items_has_only_comments<T>(items: &Items<T>) -> bool {
-    !items.0.is_empty() && items.0.iter().all(|i| matches!(i, Item::Comments(_)))
 }
 
 /// Strip and return the pre-trivia of the first token of an expression,
@@ -973,19 +998,6 @@ fn pretty_if(doc: &mut Doc, sep: DocE, expr: &Expression) {
     }
 }
 
-fn is_simple_expression(expr: &Expression) -> bool {
-    match expr {
-        Expression::Term(term) => is_simple_term(term),
-        Expression::Application(f, a) => {
-            if application_arity(expr) >= 3 {
-                return false;
-            }
-            is_simple_expression(f) && is_simple_expression(a)
-        }
-        _ => false,
-    }
-}
-
 /// Render the nested document that appears between parentheses.
 /// Mirrors `inner` in Haskell `prettyTerm (Parenthesized ...)`.
 fn push_parenthesized_inner(doc: &mut Doc, expr: &Expression) {
@@ -1131,7 +1143,7 @@ fn push_pretty_set(
     items: &Items<Binder>,
     close: &Ann<Token>,
 ) {
-    if items.0.is_empty() && !has_trivia(open) && close.pre_trivia.0.is_empty() {
+    if items.0.is_empty() && is_lone_ann(open) && close.pre_trivia.0.is_empty() {
         if let Some(rec) = krec {
             rec.pretty(doc);
             doc.push(hardspace());
