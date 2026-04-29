@@ -163,6 +163,13 @@ pub fn test_format(input: &str) {
         })
         .expect("Failed to run nixfmt");
 
+    assert!(
+        nixfmt_output.status.success(),
+        "reference nixfmt rejected input:\n{}\n--- stderr ---\n{}",
+        input,
+        String::from_utf8_lossy(&nixfmt_output.stderr)
+    );
+
     let expected =
         String::from_utf8(nixfmt_output.stdout).expect("nixfmt output is not valid UTF-8");
 

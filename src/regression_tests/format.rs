@@ -12,7 +12,7 @@ use crate::tests_common::{test_format, test_ir_format};
 #[test]
 fn format_trailing_comma_compact_param_set() {
     test_format("{ a, b }: a");
-    test_format("[\n  a\n  b\n]");
+    test_format("{\n  a,\n  b,\n}: a");
 }
 
 /// `f (x: { ... })` should absorb the parenthesised abstraction onto the

@@ -29,9 +29,10 @@ for f in "${files[@]}"; do
     }
     ;;
   ir | ast)
-    a=$("$REF" "--$MODE" - <"$f" 2>&1 >/dev/null) || true
-    # nixfmt --ast/--ir exits 1 even on success; treat empty stderr as failure
-    [[ -n "$a" ]] || continue
+    # nixfmt --ast/--ir exits 1 even on success and writes the dump to stderr;
+    # a real parse error mentions the file path, so use that to skip bad inputs.
+    a=$("$REF" "--$MODE" "$f" 2>&1 >/dev/null) || true
+    [[ -n "$a" && "$a" != *"$f"* ]] || continue
     b=$("$OURS" "--$MODE" <"$f" 2>/dev/null) || {
       echo "REJECT $f" >>"$OUT/mismatch-$MODE.txt"
       continue
@@ -41,7 +42,7 @@ for f in "${files[@]}"; do
   if [[ "$a" != "$b" ]]; then
     echo "DIFF $f" >>"$OUT/mismatch-$MODE.txt"
   fi
-  ((i % 200 == 0)) && echo "  $i/${#files[@]}" >&2
+  if ((i % 200 == 0)); then echo "  $i/${#files[@]}" >&2; fi
 done
 
 echo "mismatches ($MODE): $(wc -l <"$OUT/mismatch-$MODE.txt")" >&2

@@ -615,23 +615,7 @@ fn fits(ni: isize, c: isize, doc: &[DocE]) -> Option<String> {
             DocE::Text(_, _, TextAnn::Trailing, _) => {}
             DocE::Spacing(Spacing::Softbreak) => {}
             DocE::Spacing(Spacing::Break) => {}
-            DocE::Spacing(Spacing::Softspace) => {
-                result.push(' ');
-                remaining -= 1;
-                next_indent -= 1;
-                if remaining < 0 {
-                    return None;
-                }
-            }
-            DocE::Spacing(Spacing::Space) => {
-                result.push(' ');
-                remaining -= 1;
-                next_indent -= 1;
-                if remaining < 0 {
-                    return None;
-                }
-            }
-            DocE::Spacing(Spacing::Hardspace) => {
+            DocE::Spacing(Spacing::Softspace | Spacing::Space | Spacing::Hardspace) => {
                 result.push(' ');
                 remaining -= 1;
                 next_indent -= 1;
