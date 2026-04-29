@@ -35,7 +35,3 @@ tempfile = "3"
 [[bench]]
 name = "parser_benchmark"
 harness = false
-
-[profile.release]
-lto = "thin"
-codegen-units = 1

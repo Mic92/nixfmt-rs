@@ -2,7 +2,7 @@ use crate::predoc::*;
 use crate::types::*;
 
 use super::absorb::push_absorb_rhs;
-use super::util::is_lone_ann;
+use super::util::{is_lone_ann, move_trailing_comment_up};
 
 impl Pretty for ParamAttr {
     fn pretty(&self, doc: &mut Doc) {
@@ -204,6 +204,7 @@ impl Pretty for Parameter {
         match self {
             Parameter::ID(id) => id.pretty(doc),
             Parameter::Set(open, attrs, close) => {
+                let open = move_trailing_comment_up(open);
                 if attrs.is_empty() {
                     let sep = if open.span.start_line != close.span.start_line {
                         hardline()
@@ -219,7 +220,7 @@ impl Pretty for Parameter {
                     return;
                 }
 
-                let sep = parameter_separator(open, attrs, close);
+                let sep = parameter_separator(&open, attrs, close);
                 let sep_doc = vec![sep.clone()];
 
                 push_group(doc, |doc| {

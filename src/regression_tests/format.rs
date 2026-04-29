@@ -16,6 +16,17 @@ fn format_trailing_comma_compact_param_set() {
     test_format("{\n  a,\n  b,\n}: a");
 }
 
+/// `moveTrailingCommentUp` must be applied to the opening `{` of a
+/// `SetParameter` so that `{ /*c*/ a, b }: x` lifts the comment above the
+/// brace and the parameter set stays single-line. Haskell: `Pretty.hs`
+/// `instance Pretty Parameter`.
+#[test]
+fn format_set_param_open_trailing_comment_hoisted() {
+    test_format("{ /*c*/ a, b, }: x");
+    test_format("{ /*c*/ }: x");
+    test_ir_format("{ /*c*/ a, b, }: x");
+}
+
 /// Trailing comments must not count toward line width in `fits`; the
 /// binding body stays on the `=` line. The second case checks that a
 /// genuinely over-wide *non-comment* RHS still wraps.
