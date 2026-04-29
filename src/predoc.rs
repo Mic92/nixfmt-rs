@@ -1045,25 +1045,19 @@ fn try_render_group(
         };
 
         let (nl, off) = next_indent(&[grp]);
-        let line_nl = indents.last().map(|(_, l)| *l).unwrap_or(0);
+        // Haskell `goGroup` (cc == 0): the available width is `tw - firstLineWidth rest`;
+        // the pending indentation is *not* subtracted here. This intentionally lets the
+        // first compact line after a break overshoot by the indent, matching the
+        // reference layout engine exactly.
+        let last_line_nl = indents.last().map(|(_, l)| *l).unwrap_or(0);
+        let line_nl = last_line_nl + if nl > last_line_nl { iw } else { 0 };
         let will_increase = if next_indent(lookahead).0 > line_nl {
             iw
         } else {
             0
         };
 
-        // Calculate the indentation that will be added when rendering this group at cc==0
-        let group_indent = if nl > line_nl {
-            // Will push a new indentation level
-            indents.last().map(|(i, _)| i + iw).unwrap_or(iw)
-        } else {
-            // Will use current indentation
-            indents.last().map(|(i, _)| *i).unwrap_or(0)
-        };
-
-        let target_width = tw
-            .saturating_sub(first_line_width(lookahead))
-            .saturating_sub(group_indent);
+        let target_width = tw.saturating_sub(first_line_width(lookahead));
         fits(will_increase as isize, target_width as isize, grp).map(|t| {
             let mut new_state = state.clone();
             let mut rendered = String::with_capacity(t.len() + 8);

@@ -22,6 +22,23 @@ fn format_paren_abstraction_absorbed_as_last_arg() {
     test_ir_format("f (finalAttrs: {\n  x = 1;\n  y = 2;\n})");
 }
 
+/// A lambda chain whose body is a non-absorbable application must stay on
+/// one line when the whole group fits the target width *ignoring leading
+/// indentation*, matching Haskell `Nixfmt.Predoc.goGroup` (cc == 0 branch)
+/// which calls `fits` with `tw - firstLineWidth rest` and does **not**
+/// subtract the pending indent.
+#[test]
+fn format_lambda_chain_stays_one_line_when_fits() {
+    // Reduced from nixpkgs `lib-override-helper.nix`.
+    test_format(
+        "{\n  addPackageRequires =\n    pkg: packageRequires: addPackageRequiresWhen pkg packageRequires (finalAttrs: previousAttrs: true);\n}",
+    );
+    // Reduced from `cask/package.nix`: single-param lambda with string body.
+    test_format(
+        "{\n  formatLoadPath =\n    loadPathItem: \"-L ${\n      if builtins.isString loadPathItem then loadPathItem else \"${loadPathItem}/share/emacs/site-lisp\"\n    }\";\n}",
+    );
+}
+
 /// Nested simple lambda parameters should stay on one line before an
 /// expanded body. Haskell: `Nixfmt.Pretty.absorbAbs`.
 #[test]
