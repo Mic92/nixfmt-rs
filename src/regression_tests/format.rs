@@ -270,3 +270,12 @@ fn format_interp_trailing_trivia_preserved() {
     test_format("''\n  ${ f a b\n  # c\n  }\n''");
     test_format("\"${ x\n# c\n}\"");
 }
+
+/// A comment between `${` and the interpolation body must be preserved as
+/// leading trivia of the body's first token.
+/// Haskell: `Nixfmt.Lexer.lexeme` (no special-cased trailing slot for `${`).
+#[test]
+fn format_interp_leading_trivia_preserved() {
+    test_format("''\n  ${ # leading\n  x }\n''");
+    test_format("\"${ /* c */ x}\"");
+}
