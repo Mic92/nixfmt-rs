@@ -96,3 +96,25 @@ fn format_assignment_rhs_update_concat_plus_case2() {
     test_format("{ x = a // { y = 1;\n z = 2;\n}; }");
     test_ir_format("{ x = a // { y = 1;\n z = 2;\n}; }");
 }
+
+/// Layout: when the priority-expansion of one argument fails because the
+/// remaining arguments cannot be rendered compactly, the layout state must be
+/// restored before falling through to full expansion. Otherwise the indent
+/// stack is poisoned and continuation arguments lose their 2-space indent.
+/// Haskell: `Nixfmt.Predoc.layoutGreedy` (`goPriorityGroup` via `StateT _ Maybe`).
+#[test]
+fn format_app_multi_absorbable_args_indent() {
+    // sddm/default.nix: `runCommand "name" { ... } ''script''`
+    test_format("runCommand \"n\"\n  {\n    a = 1;\n  }\n  ''\n    echo a\n  ''");
+    // android-studio/common.nix: app + attrset arg + parenthesised last arg
+    test_format("f\n  {\n    a = 1;\n  }\n  (\n    b: c\n  )");
+}
+
+/// Layout: with the application nested inside a binding, the `{` must stay on
+/// the function line and the body indented relative to the binding.
+/// Haskell: `Nixfmt.Predoc.layoutGreedy` priority-group fallback.
+#[test]
+fn format_app_set_absorb_in_binding() {
+    // wrapper.nix style: `x = mk { ... } ''..'';`
+    test_format("{\n  x = mk {\n    a = 1;\n  } ''\n    echo a\n  '';\n}");
+}
