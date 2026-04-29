@@ -630,6 +630,110 @@ fn push_absorb_abs(doc: &mut Doc, depth: usize, expr: &Expression) {
     }
 }
 
+/// Move a trailing comment on a token into its leading trivia.
+/// Mirrors Haskell `moveTrailingCommentUp` (Pretty.hs).
+fn move_trailing_comment_up(ann: &Leaf) -> Leaf {
+    let mut out = ann.clone();
+    if let Some(tc) = out.trail_comment.take() {
+        let mut trivia: Vec<Trivium> = out.pre_trivia.clone().into();
+        trivia.push(Trivium::LineComment(format!(" {}", tc.0)));
+        out.pre_trivia = trivia.into();
+    }
+    out
+}
+
+/// Prepend an expression as the function head of a (possibly nested) application.
+/// Mirrors Haskell `insertIntoApp` used by the `Assert` pretty instance.
+fn insert_into_app(insert: Expression, expr: Expression) -> (Expression, Expression) {
+    match expr {
+        Expression::Application(f, a) => {
+            let (f2, a2) = insert_into_app(insert, *f);
+            (Expression::Application(Box::new(f2), Box::new(a2)), *a)
+        }
+        other => (insert, other),
+    }
+}
+
+/// Render a `with` expression.
+/// Mirrors Haskell `prettyWith` (Pretty.hs).
+fn pretty_with(
+    doc: &mut Doc,
+    absorb: bool,
+    with: &Leaf,
+    expr0: &Expression,
+    semicolon: &Leaf,
+    expr1: &Expression,
+) {
+    if absorb {
+        if let Expression::Term(t) = expr1 {
+            // group' RegularG $ line' <> with <> hardspace <> nest (group expr0) <> ";"
+            //   <> hardspace <> group' Priority (prettyTermWide expr1)
+            push_group_ann(doc, GroupAnn::RegularG, |g| {
+                g.push(line_prime());
+                with.pretty(g);
+                g.push(hardspace());
+                push_nested(g, |n| {
+                    push_group(n, |inner| expr0.pretty(inner));
+                });
+                semicolon.pretty(g);
+                g.push(hardspace());
+                push_group_ann(g, GroupAnn::Priority, |p| match t {
+                    Term::Set(krec, open, items, close) => {
+                        push_pretty_set(p, true, krec, open, items, close);
+                    }
+                    _ => t.pretty(p),
+                });
+            });
+            return;
+        }
+    }
+    // group (with <> hardspace <> nest (group expr0) <> ";") <> line <> expr1
+    push_group(doc, |g| {
+        with.pretty(g);
+        g.push(hardspace());
+        push_nested(g, |n| {
+            push_group(n, |inner| expr0.pretty(inner));
+        });
+        semicolon.pretty(g);
+    });
+    doc.push(line());
+    expr1.pretty(doc);
+}
+
+/// Recursive renderer for `if`/`else if` chains.
+/// Mirrors Haskell `prettyIf` (Pretty.hs, inside the `If` clause).
+fn pretty_if(doc: &mut Doc, sep: DocE, expr: &Expression) {
+    match expr {
+        Expression::If(if_kw, cond, then_kw, expr0, else_kw, expr1) => {
+            // group (if <> line <> nest cond <> line <> then)
+            push_group(doc, |g| {
+                if_kw.pretty(g);
+                g.push(line());
+                push_nested(g, |n| cond.pretty(n));
+                g.push(line());
+                then_kw.pretty(g);
+            });
+            // surroundWith sep (nest $ group expr0)
+            push_surrounded(doc, &vec![sep], |d| {
+                push_nested(d, |n| {
+                    push_group(n, |g| expr0.pretty(g));
+                });
+            });
+            // else (with trailing comment moved up) <> hardspace <> recurse with hardline
+            move_trailing_comment_up(else_kw).pretty(doc);
+            doc.push(hardspace());
+            pretty_if(doc, hardline(), expr1);
+        }
+        x => {
+            // line <> nest (group x)
+            doc.push(line());
+            push_nested(doc, |n| {
+                push_group(n, |g| x.pretty(g));
+            });
+        }
+    }
+}
+
 fn is_simple_expression(expr: &Expression) -> bool {
     match expr {
         Expression::Term(term) => is_simple_term(term),
@@ -1340,92 +1444,81 @@ impl Pretty for Expression {
                 expr.pretty(doc);
             }
             Expression::Let(let_kw, binders, in_kw, expr) => {
+                // Strip trivia/trailing from `in` and move it down to the body,
+                // mirroring the Haskell clause for `Let`.
                 let mut in_kw_clean = in_kw.clone();
                 in_kw_clean.pre_trivia = Trivia::new();
                 in_kw_clean.trail_comment = None;
 
+                // convertTrailing
                 let mut moved_trivia_vec: Vec<Trivium> = in_kw.pre_trivia.clone().into();
                 if let Some(trailing) = &in_kw.trail_comment {
                     moved_trivia_vec.push(Trivium::LineComment(format!(" {}", trailing.0)));
                 }
                 let moved_trivia: Trivia = moved_trivia_vec.into();
 
-                push_group(doc, |doc| {
-                    let_kw.pretty(doc);
-                    doc.push(hardline());
-                    push_nested(doc, |inner| {
-                        push_pretty_items(inner, binders);
+                // letPart = group $ pretty let_ <> hardline <> letBody
+                // letBody = nest $ renderItems hardline binders
+                let let_part = |doc: &mut Doc| {
+                    push_group(doc, |g| {
+                        let_kw.pretty(g);
+                        g.push(hardline());
+                        push_nested(g, |n| {
+                            push_pretty_items(n, binders);
+                        });
                     });
-                });
+                };
+                // inPart = group $ pretty in_ <> hardline <> trivia <> pretty expr
+                let in_part = |doc: &mut Doc| {
+                    push_group(doc, |g| {
+                        in_kw_clean.pretty(g);
+                        g.push(hardline());
+                        moved_trivia.pretty(g);
+                        expr.pretty(g);
+                    });
+                };
+
+                // letPart <> hardline <> inPart
+                let_part(doc);
                 doc.push(hardline());
-                push_group(doc, |doc| {
-                    in_kw_clean.pretty(doc);
-                    doc.push(hardline());
-                    moved_trivia.pretty(doc);
-                    expr.pretty(doc);
-                });
+                in_part(doc);
             }
-            Expression::If(if_kw, cond, then_kw, then_expr, else_kw, else_expr) => {
-                push_group(doc, |inner| {
-                    push_group(inner, |head| {
-                        if_kw.pretty(head);
-                        head.push(line());
-                        push_nested(head, |nested| {
-                            cond.pretty(nested);
-                        });
-                        head.push(line());
-                        then_kw.pretty(head);
-                    });
-
-                    inner.push(line());
-                    push_group(inner, |then_group| {
-                        push_nested(then_group, |nested| {
-                            then_expr.pretty(nested);
-                        });
-                    });
-
-                    inner.push(line());
-                    else_kw.pretty(inner);
-
-                    inner.push(line());
-                    push_group(inner, |else_group| {
-                        push_nested(else_group, |nested| {
-                            else_expr.pretty(nested);
-                        });
-                    });
+            Expression::If(if_kw, _, _, _, _, _) => {
+                // group' RegularG $ prettyIf line $ mapFirstToken moveTrailingCommentUp expr
+                // The first token of an `If` is always the `if` keyword itself.
+                let if_kw_moved = move_trailing_comment_up(if_kw);
+                let expr_moved = match self {
+                    Expression::If(_, c, t, e0, el, e1) => Expression::If(
+                        if_kw_moved,
+                        c.clone(),
+                        t.clone(),
+                        e0.clone(),
+                        el.clone(),
+                        e1.clone(),
+                    ),
+                    _ => unreachable!(),
+                };
+                push_group_ann(doc, GroupAnn::RegularG, |g| {
+                    pretty_if(g, line(), &expr_moved);
                 });
             }
             Expression::Assert(assert_kw, cond, semicolon, expr) => {
-                push_group(doc, |doc| {
-                    push_group(doc, |inner| {
-                        push_group_ann(inner, GroupAnn::Transparent, |transparent| {
-                            assert_kw.pretty(transparent);
-                        });
-                        inner.push(line());
-                        push_group(inner, |arg_group| {
-                            push_nested(arg_group, |nested| {
-                                cond.pretty(nested);
-                            });
-                        });
-                    });
-                    semicolon.pretty(doc);
-                    doc.push(hardline());
-                    expr.pretty(doc);
+                // group $ prettyApp False mempty False (insertIntoApp (Term (Token assert)) cond)
+                //       <> ";" <> hardline <> pretty expr
+                push_group(doc, |g| {
+                    let assert_term = Expression::Term(Term::Token(assert_kw.clone()));
+                    let (f, a) = insert_into_app(assert_term, (**cond).clone());
+                    let app = Expression::Application(Box::new(f), Box::new(a));
+                    let mut parts = Vec::new();
+                    collect_application_parts(&app, &mut parts);
+                    pretty_complex_application(g, &parts);
+                    semicolon.pretty(g);
+                    g.push(hardline());
+                    expr.pretty(g);
                 });
             }
             Expression::With(with_kw, env, semicolon, expr) => {
-                push_group(doc, |inner| {
-                    with_kw.pretty(inner);
-                    inner.push(hardspace());
-                    push_group(inner, |grouped_env| {
-                        push_nested(grouped_env, |nested| {
-                            env.pretty(nested);
-                        });
-                    });
-                    semicolon.pretty(inner);
-                });
-                doc.push(line());
-                expr.pretty(doc);
+                pretty_with(doc, false, with_kw, env, semicolon, expr);
             }
             Expression::Abstraction(Parameter::ID(param), colon, body) => {
                 push_group(doc, |group_doc| {

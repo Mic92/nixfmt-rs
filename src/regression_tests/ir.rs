@@ -146,3 +146,45 @@ fn test_empty_container_with_comment_idempotent() {
 fn test_param_set_trailing_comment_nesting() {
     test_ir_format("{ a,\n# c\n}: x");
 }
+
+/// Regression: `with` expression uses `nest (group expr0)` for the scope expression
+#[test]
+fn test_with_simple() {
+    test_ir_format("with p; y");
+}
+
+/// Regression: `with` followed by an attrset body
+#[test]
+fn test_with_set_body() {
+    test_ir_format("with p; { a = 1; }");
+}
+
+/// Regression: `assert` is rendered via the application path (`prettyApp`)
+#[test]
+fn test_assert_simple() {
+    test_ir_format("assert c; x");
+}
+
+/// Regression: `let` uses `letPart <> hardline <> inPart` structure
+#[test]
+fn test_let_simple() {
+    test_ir_format("let a = 1; in a");
+}
+
+/// Regression: `if` uses `surroundWith line (nest (group then))` and recursive `prettyIf`
+#[test]
+fn test_if_simple() {
+    test_ir_format("if c then a else b");
+}
+
+/// Regression: `if` nested inside an attrset binding
+#[test]
+fn test_if_in_set() {
+    test_ir_format("{ x = if c then a else b; }");
+}
+
+/// Regression: `else if` chains are flattened by `prettyIf` instead of nesting
+#[test]
+fn test_if_else_if_chain() {
+    test_ir_format("if c then a else if d then e else f");
+}
