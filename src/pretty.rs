@@ -69,72 +69,49 @@ fn is_absorbable_expr(expr: &Expression) -> bool {
     }
 }
 
-/// Format the right-hand side of an assignment with absorption rules
-/// Based on Haskell absorbRHS (Pretty.hs:631-658)
+/// Format the right-hand side of an assignment or function-parameter default value.
+///
+/// This mirrors Haskell `absorbRHS` (Pretty.hs ~ line 657) one-to-one: each match
+/// arm corresponds to exactly one Haskell `case` arm, in the same order, so that
+/// behavioural differences against the reference implementation are easy to locate.
 fn push_absorb_rhs(doc: &mut Doc, expr: &Expression) {
     match expr {
-        // Special case: operation with absorbable LHS (matches absorbRHS in Pretty.hs:659-663)
-        // For update (//), concat (++), and plus (+) operations where LHS is absorbable,
-        // render with hardspace and force wide rendering for the LHS term
-        Expression::Operation(left, op, _right)
-            if matches!(op.value, Token::TUpdate | Token::TConcat | Token::TPlus) =>
+        // Exception to the absorbable-expr case below: do not force-expand attrsets
+        // that only contain a single `inherit` statement.
+        Expression::Term(Term::Set(_, _, binders, _))
+            if matches!(
+                binders.0.as_slice(),
+                [Item::Item(Binder::Inherit(_, _, _, _))]
+            ) =>
         {
-            if let Expression::Term(t) = &**left {
-                if is_absorbable_term(t) {
-                    // hardspace <> prettyOp True expr op
-                    doc.push(hardspace());
-                    push_pretty_operation(doc, true, expr, op);
-                    return;
-                }
-            }
-            // Fall through to default handling if LHS is not absorbable
             push_nested(doc, |d| {
-                d.push(line());
+                d.push(hardspace());
+                // absorbExpr False expr
                 push_group(d, |inner| expr.pretty(inner));
             });
         }
-        // Special case: set with single inherit
-        Expression::Term(Term::Set(_, _, binders, _)) => {
-            if binders.0.len() == 1 {
-                if let Item::Item(Binder::Inherit(_, _, _, _)) = &binders.0[0] {
-                    push_nested(doc, |d| {
-                        d.push(hardspace());
-                        push_group(d, |inner| expr.pretty(inner));
-                    });
-                    return;
-                }
-            }
-            // Absorbable set: force expand
-            if is_absorbable_expr(expr) {
-                push_nested(doc, |d| {
-                    d.push(hardspace());
-                    push_group(d, |inner| expr.pretty(inner));
-                });
-                return;
-            }
-            // Non-absorbable: new line
-            push_nested(doc, |d| {
-                push_group(d, |inner| {
-                    inner.push(line());
-                    expr.pretty(inner);
-                });
-            });
-        }
-        // Absorbable expressions
+
+        // Absorbable expression. Always start on the same line, force-expand attrsets.
         _ if is_absorbable_expr(expr) => {
             push_nested(doc, |d| {
                 d.push(hardspace());
+                // absorbExpr True expr
                 push_group(d, |inner| expr.pretty(inner));
             });
         }
-        // Parenthesized expressions
+
+        // Parenthesized expression: same special case as for the last argument of
+        // a function call.
         Expression::Term(Term::Parenthesized(_, _, _)) => {
             push_nested(doc, |d| {
                 d.push(hardspace());
+                // absorbParen open expr' close
                 expr.pretty(d);
             });
         }
-        // Strings and paths: always keep on same line
+
+        // Not all strings are absorbable, but there is nothing to gain from
+        // starting them on a new line; same for paths.
         Expression::Term(Term::SimpleString(_))
         | Expression::Term(Term::IndentedString(_))
         | Expression::Term(Term::Path(_)) => {
@@ -143,7 +120,8 @@ fn push_absorb_rhs(doc: &mut Doc, expr: &Expression) {
                 push_group(d, |inner| expr.pretty(inner));
             });
         }
-        // Non-absorbable terms: start on new line
+
+        // Non-absorbable term: if multi-line, force it onto a new indented line.
         Expression::Term(_) => {
             push_nested(doc, |d| {
                 push_group(d, |inner| {
@@ -152,25 +130,16 @@ fn push_absorb_rhs(doc: &mut Doc, expr: &Expression) {
                 });
             });
         }
-        // Function application: try to absorb
+
+        // Function call: absorb if all arguments except the last fit on the line,
+        // start on a new line otherwise.
         Expression::Application(_, _) => {
-            if is_simple_expression(expr) {
-                push_nested(doc, |d| {
-                    d.push(line());
-                    expr.pretty(d);
-                });
-            } else {
-                push_nested(doc, |d| {
-                    let mut parts = Vec::new();
-                    collect_application_parts(expr, &mut parts);
-                    push_group(d, |g| {
-                        g.push(line());
-                        pretty_complex_application_impl(g, &parts, false, false, false);
-                    });
-                });
-            }
+            // prettyApp False line False f a
+            push_nested(doc, |d| push_pretty_app(d, line(), false, false, expr));
         }
-        // With: keep the leading `line` inside the group so it can collapse with the body
+
+        // `with ...;` keeps the leading `line` inside the group so it can collapse
+        // together with the body.
         Expression::With(_, _, _, _) => {
             push_nested(doc, |d| {
                 push_group(d, |inner| {
@@ -179,7 +148,22 @@ fn push_absorb_rhs(doc: &mut Doc, expr: &Expression) {
                 });
             });
         }
-        // Everything else: new line
+
+        // Special-case `//`, `++` and `+` to be more compact in some situations.
+        // Case 1: LHS is an absorbable term → unindent the concatenation chain.
+        Expression::Operation(left, op, _)
+            if op.value.is_update_concat_plus()
+                && matches!(&**left, Expression::Term(t) if is_absorbable_term(t)) =>
+        {
+            // hardspace <> prettyOp True expr op
+            doc.push(hardspace());
+            push_pretty_operation(doc, true, expr, op);
+        }
+
+        // Everything else:
+        // - fits on one line → keep it there
+        // - fits with a newline after `=` → do that
+        // - otherwise start on a new line and expand fully
         _ => {
             push_nested(doc, |d| {
                 d.push(line());
@@ -434,6 +418,30 @@ fn pretty_complex_application(doc: &mut Doc, parts: &[&Expression]) {
 
 fn pretty_complex_application_indent_func(doc: &mut Doc, parts: &[&Expression]) {
     pretty_complex_application_impl(doc, parts, true, true, true);
+}
+
+/// Port of Haskell `prettyApp indentFunction pre hasPost f a` for use from
+/// `push_absorb_rhs`. The simple/complex split lives here so callers can stay
+/// a single-line delegation that mirrors the Haskell call site.
+fn push_pretty_app(
+    doc: &mut Doc,
+    pre: DocE,
+    indent_function: bool,
+    has_post: bool,
+    expr: &Expression,
+) {
+    let mut parts = Vec::new();
+    collect_application_parts(expr, &mut parts);
+
+    if is_simple_expression(expr) {
+        doc.push(pre);
+        pretty_simple_application(doc, &parts);
+    } else {
+        push_group(doc, |g| {
+            g.push(pre);
+            pretty_complex_application_impl(g, &parts, indent_function, has_post, false);
+        });
+    }
 }
 
 fn pretty_complex_application_impl(
