@@ -198,3 +198,99 @@ files diverge from `nixfmt` v1.2.0.
 This file is now a historical bug log; the planning/TODO documents that
 fed it have been folded into `README.md` and `docs/ARCHITECTURE.md` and
 removed from the tree.
+
+## 2026-04-29 — Arena allocation for AST/Doc (exploratory, not landed)
+
+**Goal:** evaluate whether `typed-arena`/`bumpalo` for `DocE`, arena
+indices for `Box<Expression>`, or `&'src str`/interning for identifiers
+would yield a ≥10% wall-clock win on `all-packages.nix` within a ~400
+line diff.
+
+### Allocator pressure (dhat, release, `all-packages.nix` 374 KB)
+
+| metric | value |
+|---|---|
+| total allocations | **861 261** blocks |
+| total bytes | 113 MB (≈300× input) |
+| peak heap | 37.9 MB |
+
+Allocation blocks bucketed by first nixfmt_rs frame on the dhat stack:
+
+| phase | blocks | bytes | share |
+|---|---|---|---|
+| `render_doc` / `priority_groups` | 478 666 | 41.7 MB | **56 %** |
+| `pretty` (IR build, `push_*`) | 162 175 | 25.8 MB | 19 % |
+| `parser` | 93 485 | 32.6 MB | 11 % |
+| `fixup` | 66 134 | 9.9 MB | 8 % |
+| other / unattributed | 60 801 | 3.5 MB | 7 % |
+
+Top individual sites: `predoc::fixup` Vec↔VecDeque churn (≈60k),
+`priority_groups::{segments,explode}` cloning group bodies, `push_text`
+allocating a `String` per token.
+
+### Phase wall-clock (min of 80 in-process iterations, quiet system)
+
+| phase | time | share |
+|---|---|---|
+| parse | 8.0 ms | 19 % |
+| pretty (IR build) | 8.1 ms | 19 % |
+| fixup | 5.0 ms | 12 % |
+| layout (`render_doc`) | ≈18 ms | 44 % |
+| **format() total** | **41–43 ms** | |
+
+### Upper bound on allocator wins
+
+Swapping the global allocator to `mimalloc` (no other changes) on the
+same input: hyperfine user-time **62.2 ms → 46.5 ms (−25 %)**. This
+bounds what “make alloc/free cheap” can buy across *all* phases; an
+arena restricted to AST or Doc construction can capture only a slice of
+that.
+
+### Per-option assessment
+
+- **`bumpalo` for `DocE` / `Doc`**: targets pretty+fixup (27 % of
+  blocks, ~31 % of time). Requires `Doc<'a>`, `DocE<'a>` (the `String`
+  payload must become `&'a str`), a `&'a Bump` threaded through the
+  `Pretty` trait and every `push_*` helper, and ≈200 call sites across
+  `predoc.rs` + 9 `pretty/` files. Estimated diff well over 400 lines;
+  ceiling on the win is the ~13 ms spent in pretty+fixup, i.e. <10 % of
+  the 41 ms total even if allocation there went to zero — and render
+  still clones owned `Doc`s, so the lifetime would also have to invade
+  `render_doc`/`priority_groups`.
+- **Arena indices for `Box<Expression>`**: targets parser (11 % of
+  blocks, 19 % of time including non-Box work). `Expression`/`Term`
+  recursion appears in every `parser/` and `pretty/` file plus
+  `types.rs`; flipping to indices is a whole-AST rewrite. Diff far
+  exceeds 400 lines for at most a few ms.
+- **`&'src str` / interning for identifiers**: 56 match sites on
+  `Token::{Identifier,Integer,Float,EnvPath}`; adding a lifetime to
+  `Token` cascades through `Leaf`/`Ann<T>`/`Term`/`Expression`/`File`.
+  Even if free, it only removes a fraction of the 93 k parser allocs
+  and the `push_text` copy in pretty still re-allocates.
+
+### Conclusion
+
+None of the three arena options clears both gates (≥10 % wall-clock
+*and* ≤400-line diff). The dominant cost — 56 % of allocations and
+~44 % of time — lives in `render_doc`/`priority_groups`, which **clone
+whole `Doc` subtrees** to try alternate layouts. That is an algorithmic
+issue (borrow instead of clone, or memoise `fits`), not an arena issue;
+an arena would just make those clones cheaper to allocate while still
+copying the bytes.
+
+**Decision:** do not land an arena. Recommended follow-ups, in order of
+expected payoff:
+
+1. Make `priority_groups::{segments,explode}` and `unexpand_spacing`
+   operate on borrowed slices instead of cloned `Doc`s.
+2. Change `DocE::Text` payload from `String` to `Cow<'static, str>` (or
+   a 24-byte inline small-string) so static tokens (`=`, `;`, `{`, …)
+   stop hitting the heap in `push_text` and `fixup`'s text-merge.
+3. If a blanket win is wanted with a tiny diff, gate `mimalloc` behind
+   a feature (≈10 lines, +1 dep, −25 % user time) — but note this
+   breaks the current zero-dependency property.
+
+`LIMIT=2000 scripts/diff_sweep.sh format` baseline: 0 mismatches,
+6m00s wall / 36.9s user (dominated by the Haskell reference, so not a
+useful perf signal for our binary). All 211 tests green on the reverted
+tree.
