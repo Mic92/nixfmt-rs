@@ -1,8 +1,8 @@
 //! PrettySimple implementations for AST nodes
 
 use super::{
-    escape_string, format_delimited_value, sub_expr, write_delimited, PrettySimple, Writer,
-    NUMBER_COLOR, STRING_CONTENT_COLOR, STRING_QUOTE_COLOR,
+    NUMBER_COLOR, PrettySimple, STRING_CONTENT_COLOR, STRING_QUOTE_COLOR, Writer, escape_string,
+    format_delimited_value, sub_expr, write_delimited,
 };
 use crate::format_constructor;
 use crate::format_enum;
@@ -224,23 +224,16 @@ impl PrettySimple for Trivium {
     }
 }
 
+// Haskell `Trivia` is `Seq Trivium` since nixfmt 1.2.0; Show renders as `fromList [..]`.
 impl PrettySimple for Trivia {
     fn format<W: Writer>(&self, w: &mut W) {
-        // Delegate to standard Vec formatting
-        self.0.format(w);
+        w.write_plain("fromList");
+        sub_expr(w, &self.0);
     }
 
-    fn is_simple(&self) -> bool {
-        // Delegate to Vec's is_simple logic
+    fn renders_inline_parens(&self) -> bool {
+        // `( fromList [ EmptyLine ] )` stays on one line when the inner list is simple.
         self.0.is_simple()
-    }
-
-    fn has_delimiters(&self) -> bool {
-        true
-    }
-
-    fn is_empty(&self) -> bool {
-        self.0.is_empty()
     }
 }
 
