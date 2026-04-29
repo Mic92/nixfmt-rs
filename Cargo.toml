@@ -23,7 +23,7 @@ path = "src/lib.rs"
 
 [dependencies]
 memchr = "2"
-compact_str = "0.8"
+compact_str = "0.9"
 rayon = "1"
 walkdir = "2"
 mimalloc = { version = "0.1", default-features = false }
