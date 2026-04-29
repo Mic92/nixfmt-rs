@@ -27,10 +27,21 @@ pub fn parse(source: &str) -> Result<File> {
 
 /// Format a Nix file
 pub fn format(source: &str) -> Result<String> {
+    format_with(source, 100, 2)
+}
+
+/// Format a Nix file with explicit layout parameters.
+///
+/// Exposed so the CLI can honour `--width` / `--indent` without re-exporting
+/// the internal `RenderConfig` type.
+pub fn format_with(source: &str, width: usize, indent: usize) -> Result<String> {
     let ast = parse(source)?;
     let mut doc = predoc::Doc::new();
     ast.pretty(&mut doc);
-    let config = RenderConfig::default();
+    let config = RenderConfig {
+        width,
+        indent_width: indent,
+    };
     let output = render_with_config(doc, &config);
     Ok(output)
 }
