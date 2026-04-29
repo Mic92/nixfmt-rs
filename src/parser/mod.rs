@@ -51,7 +51,9 @@ impl Parser {
     pub(crate) fn parse_file(&mut self) -> Result<File> {
         let expr = self.parse_expression()?;
         self.expect_eof()?;
-        let trailing_trivia = self.lexer.finish_parse();
+        // `lexeme()` already moved trivia after the last real token into the
+        // EOF token's `pre_trivia`; that is the file's trailing trivia.
+        let trailing_trivia = std::mem::take(&mut self.current.pre_trivia);
 
         Ok(Whole {
             value: expr,

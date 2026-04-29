@@ -184,11 +184,6 @@ impl Lexer {
         Ok(())
     }
 
-    /// Get remaining trivia at end of file
-    pub(crate) fn finish_parse(&mut self) -> Trivia {
-        std::mem::take(&mut self.trivia_buffer)
-    }
-
     /// Get current position as a zero-length span (in byte offsets)
     pub(crate) fn current_pos(&self) -> crate::types::Span {
         crate::types::Span::point(self.byte_pos)
