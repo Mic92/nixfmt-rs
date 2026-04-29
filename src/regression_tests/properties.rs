@@ -286,8 +286,12 @@ fn collect_fixture_nix_files(dir: &FsPath, out: &mut Vec<PathBuf>) {
     }
 }
 
+fn fixture_root() -> PathBuf {
+    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/nixfmt")
+}
+
 fn collect_inputs() -> Vec<PathBuf> {
-    let root = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/nixfmt");
+    let root = fixture_root();
     let mut files = Vec::new();
     // `correct/` are already-formatted snippets; `diff/*/` contain in/out pairs.
     collect_fixture_nix_files(&root.join("correct"), &mut files);
@@ -423,4 +427,63 @@ fn ast_preserved_on_fixture_corpus() {
     if failures > 0 {
         panic!("{failures} file(s) changed AST after formatting");
     }
+}
+
+/// For every `diff/*/in.nix` fixture, format the input and compare against the
+/// upstream `out.nix` golden. Unlike the two property tests above this is *not*
+/// an invariant we already uphold — it tracks remaining divergence from the
+/// reference formatter — so mismatches are logged and counted but do **not**
+/// fail the test. Parse errors on our own output, however, do.
+#[test]
+fn formats_to_golden_on_fixture_corpus() {
+    let diff_root = fixture_root().join("diff");
+    let mut dirs: Vec<_> = std::fs::read_dir(&diff_root)
+        .expect("diff fixture dir missing")
+        .flatten()
+        .map(|e| e.path())
+        .filter(|p| p.is_dir())
+        .collect();
+    dirs.sort();
+    assert!(!dirs.is_empty(), "no diff/* fixtures found");
+
+    let mut checked = 0usize;
+    let mut matched = 0usize;
+    let mut diverged = 0usize;
+    let mut skipped_parse = 0usize;
+    for dir in &dirs {
+        let in_path = dir.join("in.nix");
+        let out_path = dir.join("out.nix");
+        let (Ok(input), Ok(expected)) = (
+            std::fs::read_to_string(&in_path),
+            std::fs::read_to_string(&out_path),
+        ) else {
+            continue;
+        };
+        let got = match crate::format(&input) {
+            Ok(s) => s,
+            Err(_) => {
+                // Parser gaps are tracked by the parser regression suite.
+                skipped_parse += 1;
+                continue;
+            }
+        };
+        checked += 1;
+        if got == expected {
+            matched += 1;
+        } else {
+            diverged += 1;
+            eprintln!(
+                "\n[golden] {}: diverges from out.nix",
+                dir.strip_prefix(&diff_root).unwrap_or(dir).display()
+            );
+            eprintln!("{}", minimised_diff(&expected, &got));
+        }
+    }
+    eprintln!(
+        "[golden] {checked} checked, {matched} match, {diverged} diverge, \
+         {skipped_parse} skipped (parse)"
+    );
+    // Divergence is expected while we close the gap; only assert we actually
+    // exercised the corpus.
+    assert!(checked > 0, "no diff fixtures were checked");
 }

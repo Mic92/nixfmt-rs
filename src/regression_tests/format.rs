@@ -9,6 +9,7 @@ use crate::tests_common::{test_format, test_ir_format};
 
 /// Layout: `Trailing` text must be dropped when a group is rendered compact.
 /// Haskell: `Nixfmt.Predoc.fits` skips `Text Trailing`.
+/// Fixture: fast reproducer for `tests/fixtures/nixfmt/diff/lambda/`.
 #[test]
 fn format_trailing_comma_compact_param_set() {
     test_format("{ a, b }: a");
@@ -83,6 +84,7 @@ fn format_nested_lambda_body_absorbed() {
 /// `with X;` followed by an attrset should keep the `{` on the same line,
 /// both as a lambda body and as an assignment RHS.
 /// Haskell: `Nixfmt.Pretty` `instance Pretty Expression` (With) / `absorbRHS`.
+/// Fixture: fast reproducer for `tests/fixtures/nixfmt/diff/with/`.
 #[test]
 fn format_with_body_absorbed() {
     test_ir_format("self: with self; {\n  a = 1;\n  b = 2;\n}");
@@ -99,6 +101,7 @@ fn format_assignment_rhs_app_with_string_last_arg() {
 
 /// Chained `if ... else if ...` must always be expanded onto multiple lines.
 /// Haskell: `Nixfmt.Pretty.prettyIf` emits hardlines between branches.
+/// Fixture: fast reproducer for `tests/fixtures/nixfmt/diff/if_else/`.
 #[test]
 fn format_if_elseif_chain_forced_multiline() {
     test_ir_format("{ x = if a then \"x\" else if b then \"y\" else \"z\"; }");
@@ -127,6 +130,7 @@ fn format_app_comment_before_last_arg_indent() {
 /// `//` / `++` / `+` on the RHS of an assignment must absorb onto the `=` line
 /// when the LHS is an absorbable term and there is no leading trivia.
 /// Haskell: `Nixfmt.Pretty.absorbRHS` Operation Case 1 / `prettyOp True`.
+/// Fixture: fast reproducer for `tests/fixtures/nixfmt/diff/operation/`.
 #[test]
 fn format_assignment_rhs_update_concat_plus_case1() {
     test_format("{ meta = oldAttrs.meta // { description = \"x\"; }; }");
@@ -142,6 +146,7 @@ fn format_assignment_rhs_update_concat_plus_case1() {
 /// `//` with an absorbable RHS term and a non-absorbable LHS keeps `// {` on
 /// the LHS line and only expands the attrset.
 /// Haskell: `Nixfmt.Pretty.absorbRHS` Operation Case 2.
+/// Fixture: fast reproducer for `tests/fixtures/nixfmt/diff/attr_set/`.
 #[test]
 fn format_assignment_rhs_update_concat_plus_case2() {
     test_format("{ x = a // { y = 1;\n z = 2;\n}; }");
