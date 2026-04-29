@@ -96,7 +96,7 @@ impl Parser {
 
         loop {
             match self.lexer.peek() {
-                Some('$') if self.lexer.peek_ahead(1) == Some('{') => {
+                Some('$') if self.lexer.at("${") => {
                     let interp = self.parse_string_interpolation()?;
                     parts.push(interp);
                 }
@@ -164,7 +164,7 @@ impl Parser {
             if ch.is_alphanumeric() || matches!(ch, '.' | '_' | '-' | '+' | '~') {
                 text.push(ch);
                 self.lexer.advance();
-            } else if ch == '$' && self.lexer.peek_ahead(1) == Some('{') {
+            } else if ch == '$' && self.lexer.at("${") {
                 break;
             } else if ch == '/' {
                 // Don't consume / here - it's handled in the main loop
@@ -261,7 +261,7 @@ impl Parser {
             // identifier/ → path (no space), identifier /path → application (space before /)
             Token::Identifier(_) => {
                 self.lexer.peek() == Some('/')
-                    && self.lexer.peek_ahead(1) != Some('/') // not //
+                    && !self.lexer.at("//")
                     && self.is_path_content_at(1)
                     && !self.has_preceding_whitespace()
             }

@@ -45,7 +45,7 @@ impl Parser {
                         labels: vec![],
                     });
                 }
-                Some('$') if self.lexer.peek_ahead(1) == Some('{') => {
+                Some('$') if self.lexer.at("${") => {
                     let interp = self.parse_string_interpolation()?;
                     parts.push(interp);
                 }
@@ -86,7 +86,7 @@ impl Parser {
         loop {
             match self.lexer.peek() {
                 Some('"') | None => break,
-                Some('$') if self.lexer.peek_ahead(1) == Some('{') => break,
+                Some('$') if self.lexer.at("${") => break,
                 Some('\\') => {
                     self.lexer.advance();
                     match self.lexer.peek() {
@@ -110,10 +110,9 @@ impl Parser {
                         None => break,
                     }
                 }
-                Some('$') if self.lexer.peek_ahead(1) == Some('$') => {
+                Some('$') if self.lexer.at("$$") => {
                     text.push_str("$$");
-                    self.lexer.advance();
-                    self.lexer.advance();
+                    self.lexer.advance_by(2);
                 }
                 Some('$') => {
                     text.push('$');
@@ -131,8 +130,7 @@ impl Parser {
 
     /// Parse string interpolation: ${expr}
     pub(super) fn parse_string_interpolation(&mut self) -> Result<StringPart> {
-        self.lexer.advance();
-        self.lexer.advance();
+        self.lexer.advance_by(2);
 
         // Re-sync parser
         self.current = self.lexer.lexeme()?;
@@ -212,7 +210,7 @@ impl Parser {
             lines.push(self.parse_indented_string_line()?);
         }
 
-        if self.lexer.peek() != Some('\'') || self.lexer.peek_ahead(1) != Some('\'') {
+        if !self.lexer.at("''") {
             return Err(ParseError {
                 span: self.lexer.current_pos(),
                 kind: ErrorKind::UnclosedDelimiter {
@@ -222,8 +220,7 @@ impl Parser {
                 labels: vec![],
             });
         }
-        self.lexer.advance();
-        self.lexer.advance();
+        self.lexer.advance_by(2);
 
         let trail_comment = self.parse_trailing_trivia_and_advance()?;
         let lines = process_indented(lines);
@@ -245,7 +242,7 @@ impl Parser {
 
         loop {
             match self.lexer.peek() {
-                Some('\'') if self.lexer.peek_ahead(1) == Some('\'') => {
+                Some('\'') if self.lexer.at("''") => {
                     // Could be end or escape
                     if matches!(
                         self.lexer.peek_ahead(2),
@@ -259,7 +256,7 @@ impl Parser {
                         break;
                     }
                 }
-                Some('$') if self.lexer.peek_ahead(1) == Some('{') => {
+                Some('$') if self.lexer.at("${") => {
                     let interp = self.parse_string_interpolation()?;
                     parts.push(interp);
                 }
@@ -284,28 +281,22 @@ impl Parser {
         loop {
             match self.lexer.peek() {
                 None | Some('\n') => break,
-                Some('\'') if self.lexer.peek_ahead(1) == Some('\'') => {
+                Some('\'') if self.lexer.at("''") => {
                     match self.lexer.peek_ahead(2) {
                         Some('$') => {
                             // ''$ -> $
                             text.push_str("''$");
-                            self.lexer.advance();
-                            self.lexer.advance();
-                            self.lexer.advance();
+                            self.lexer.advance_by(3);
                         }
                         Some('\'') => {
                             // ''' -> '
                             text.push_str("'''");
-                            self.lexer.advance();
-                            self.lexer.advance();
-                            self.lexer.advance();
+                            self.lexer.advance_by(3);
                         }
                         Some('\\') => {
                             // ''\ escapes next char
                             text.push_str("''\\");
-                            self.lexer.advance();
-                            self.lexer.advance();
-                            self.lexer.advance();
+                            self.lexer.advance_by(3);
                             if let Some(ch) = self.lexer.peek() {
                                 text.push(ch);
                                 self.lexer.advance();
@@ -317,17 +308,16 @@ impl Parser {
                         }
                     }
                 }
-                Some('$') if self.lexer.peek_ahead(1) == Some('{') => break,
-                Some('$') if self.lexer.peek_ahead(1) == Some('$') => {
+                Some('$') if self.lexer.at("${") => break,
+                Some('$') if self.lexer.at("$$") => {
                     text.push_str("$$");
-                    self.lexer.advance();
-                    self.lexer.advance();
+                    self.lexer.advance_by(2);
                 }
                 Some('$') => {
                     text.push('$');
                     self.lexer.advance();
                 }
-                Some('\'') if self.lexer.peek_ahead(1) != Some('\'') => {
+                Some('\'') if !self.lexer.at("''") => {
                     text.push('\'');
                     self.lexer.advance();
                 }

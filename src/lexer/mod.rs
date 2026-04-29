@@ -256,10 +256,8 @@ impl Lexer {
                 Ok(Token::TQuestion)
             }
             '.' => {
-                if self.peek_ahead(1) == Some('.') && self.peek_ahead(2) == Some('.') {
-                    self.advance();
-                    self.advance();
-                    self.advance();
+                if self.at("...") {
+                    self.advance_by(3);
                     Ok(Token::TEllipsis)
                 } else if self.peek_ahead(1).is_some_and(|c| c.is_ascii_digit()) {
                     self.advance();
@@ -346,9 +344,8 @@ impl Lexer {
                 Ok(Token::TDoubleQuote)
             }
             '\'' => {
-                if self.peek_ahead(1) == Some('\'') {
-                    self.advance();
-                    self.advance();
+                if self.at("''") {
+                    self.advance_by(2);
                     Ok(Token::TDoubleSingleQuote)
                 } else {
                     Err(crate::error::ParseError {
@@ -362,9 +359,8 @@ impl Lexer {
                 }
             }
             '$' => {
-                if self.peek_ahead(1) == Some('{') {
-                    self.advance();
-                    self.advance();
+                if self.at("${") {
+                    self.advance_by(2);
                     Ok(Token::TInterOpen)
                 } else {
                     Err(crate::error::ParseError {
@@ -488,6 +484,23 @@ impl Lexer {
         self.input.get(self.pos + n).copied()
     }
 
+    /// Check whether the upcoming input matches `s` character-for-character.
+    /// Replaces open-coded `peek() == Some(a) && peek_ahead(1) == Some(b)` ladders.
+    #[inline]
+    pub(crate) fn at(&self, s: &str) -> bool {
+        s.chars()
+            .enumerate()
+            .all(|(i, c)| self.peek_ahead(i) == Some(c))
+    }
+
+    /// Advance `n` characters.
+    #[inline]
+    pub(crate) fn advance_by(&mut self, n: usize) {
+        for _ in 0..n {
+            self.advance();
+        }
+    }
+
     /// Consume and return current character
     #[inline(always)]
     pub(crate) fn advance(&mut self) -> Option<char> {
@@ -556,7 +569,7 @@ impl Lexer {
                 Some('#') => {
                     trivia.push(self.parse_line_comment());
                 }
-                Some('/') if self.peek_ahead(1) == Some('*') => {
+                Some('/') if self.at("/*") => {
                     // Try language annotation first, fall back to block comment
                     let saved_state = self.save_state();
 

@@ -44,16 +44,15 @@ impl Lexer {
         self.advance(); // consume '*'
 
         // Check for doc comment /**
-        let is_doc = self.peek() == Some('*') && self.peek_ahead(1) != Some('/');
+        let is_doc = self.peek() == Some('*') && !self.at("*/");
         if is_doc {
             self.advance();
         }
 
         self.block_comment_buffer.clear();
         while !self.is_eof() {
-            if matches!((self.peek(), self.peek_ahead(1)), (Some('*'), Some('/'))) {
-                self.advance(); // consume '*'
-                self.advance(); // consume '/'
+            if self.at("*/") {
+                self.advance_by(2);
                 break;
             }
             let advanced = self.advance().unwrap();
@@ -122,10 +121,7 @@ impl Lexer {
         }
         let _ = self.skip_hspace();
 
-        let result = matches!(
-            (self.peek(), self.peek_ahead(1)),
-            (Some('"'), _) | (Some('\''), Some('\''))
-        );
+        let result = self.peek() == Some('"') || self.at("''");
 
         self.restore_state(saved_state);
         result

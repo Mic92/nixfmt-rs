@@ -94,7 +94,7 @@ impl Parser {
                 }
 
                 // Might be a path (identifier followed by `/`, but not `//`)
-                if self.lexer.peek() == Some('/') && self.lexer.peek_ahead(1) != Some('/') {
+                if self.lexer.peek() == Some('/') && !self.lexer.at("//") {
                     return self.parse_operation_or_lambda();
                 }
 
