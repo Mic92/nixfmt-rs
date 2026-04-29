@@ -37,14 +37,8 @@ fn nixfmt(args: &[&str], stdin: Option<&str>) -> Output {
     run("nixfmt", args, stdin)
 }
 
-fn tmpfile(name: &str, content: &str) -> PathBuf {
-    let dir = std::env::temp_dir().join(format!(
-        "nixfmt_rs_cli_{}_{}",
-        std::process::id(),
-        name.replace('/', "_")
-    ));
-    std::fs::create_dir_all(&dir).unwrap();
-    let p = dir.join(name);
+fn tmpfile(dir: &tempfile::TempDir, name: &str, content: &str) -> PathBuf {
+    let p = dir.path().join(name);
     std::fs::write(&p, content).unwrap();
     p
 }
@@ -92,7 +86,8 @@ fn check_formatted_stdin_exits_0() {
 
 #[test]
 fn check_file_does_not_modify() {
-    let p = tmpfile("check.nix", UNFORMATTED);
+    let d = tempfile::tempdir().unwrap();
+    let p = tmpfile(&d, "check.nix", UNFORMATTED);
     let out = ours(&["--check", p.to_str().unwrap()], None);
     assert_eq!(out.status.code(), Some(1));
     assert_eq!(std::fs::read_to_string(&p).unwrap(), UNFORMATTED);
@@ -103,8 +98,9 @@ fn check_file_does_not_modify() {
 
 #[test]
 fn files_are_formatted_in_place() {
-    let a = tmpfile("a.nix", UNFORMATTED);
-    let b = tmpfile("b.nix", "{b=2;}\n");
+    let d = tempfile::tempdir().unwrap();
+    let a = tmpfile(&d, "a.nix", UNFORMATTED);
+    let b = tmpfile(&d, "b.nix", "{b=2;}\n");
     let out = ours(&[a.to_str().unwrap(), b.to_str().unwrap()], None);
     assert!(out.status.success());
     assert!(
@@ -117,18 +113,68 @@ fn files_are_formatted_in_place() {
 
 #[test]
 fn multiple_files_error_continues_and_exits_1() {
-    let bad = tmpfile("bad.nix", INVALID);
-    let good = tmpfile("good.nix", UNFORMATTED);
+    let d = tempfile::tempdir().unwrap();
+    let bad = tmpfile(&d, "bad.nix", INVALID);
+    let good = tmpfile(&d, "good.nix", UNFORMATTED);
     let out = ours(&[bad.to_str().unwrap(), good.to_str().unwrap()], None);
     assert_eq!(out.status.code(), Some(1));
     assert_eq!(std::fs::read_to_string(&good).unwrap(), FORMATTED);
     assert_eq!(std::fs::read_to_string(&bad).unwrap(), INVALID);
 
-    let rbad = tmpfile("rbad.nix", INVALID);
-    let rgood = tmpfile("rgood.nix", UNFORMATTED);
+    let rbad = tmpfile(&d, "rbad.nix", INVALID);
+    let rgood = tmpfile(&d, "rgood.nix", UNFORMATTED);
     let ref_out = nixfmt(&[rbad.to_str().unwrap(), rgood.to_str().unwrap()], None);
     assert_eq!(ref_out.status.code(), Some(1));
     assert_eq!(std::fs::read_to_string(&rgood).unwrap(), FORMATTED);
+}
+
+#[test]
+fn directory_is_walked_recursively_and_formatted_in_place() {
+    let d = tempfile::tempdir().unwrap();
+    let dir = d.path();
+    std::fs::create_dir_all(dir.join("sub")).unwrap();
+    std::fs::write(dir.join("a.nix"), UNFORMATTED).unwrap();
+    std::fs::write(dir.join("sub/b.nix"), UNFORMATTED).unwrap();
+    std::fs::write(dir.join("README.md"), "# not nix\n").unwrap();
+
+    let out = ours(&[dir.to_str().unwrap()], None);
+    assert!(
+        out.status.success(),
+        "stderr: {}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    assert!(out.stdout.is_empty());
+    assert_eq!(
+        std::fs::read_to_string(dir.join("a.nix")).unwrap(),
+        FORMATTED
+    );
+    assert_eq!(
+        std::fs::read_to_string(dir.join("sub/b.nix")).unwrap(),
+        FORMATTED
+    );
+    assert_eq!(
+        std::fs::read_to_string(dir.join("README.md")).unwrap(),
+        "# not nix\n"
+    );
+}
+
+#[test]
+fn directory_check_reports_unformatted_and_exits_1() {
+    let d = tempfile::tempdir().unwrap();
+    let dir = d.path();
+    std::fs::write(dir.join("ok.nix"), FORMATTED).unwrap();
+    std::fs::write(dir.join("bad.nix"), UNFORMATTED).unwrap();
+
+    let out = ours(&["-c", dir.to_str().unwrap()], None);
+    assert_eq!(out.status.code(), Some(1));
+    let stderr = String::from_utf8_lossy(&out.stderr);
+    assert!(stderr.contains("bad.nix"));
+    assert!(!stderr.contains("ok.nix"));
+    // --check must not modify files.
+    assert_eq!(
+        std::fs::read_to_string(dir.join("bad.nix")).unwrap(),
+        UNFORMATTED
+    );
 }
 
 #[test]
@@ -220,7 +266,8 @@ fn debug_dumps_go_to_stderr_and_exit_1() {
 
 #[test]
 fn ast_on_file_does_not_modify() {
-    let p = tmpfile("ast.nix", UNFORMATTED);
+    let d = tempfile::tempdir().unwrap();
+    let p = tmpfile(&d, "ast.nix", UNFORMATTED);
     let out = ours(&["--ast", p.to_str().unwrap()], None);
     assert_eq!(out.status.code(), Some(1));
     assert_eq!(std::fs::read_to_string(&p).unwrap(), UNFORMATTED);

@@ -3,8 +3,11 @@
 //! Mirrors the flag surface and exit-code semantics of the Haskell `nixfmt`
 //! binary so the two can be used interchangeably by editors / CI.
 
+use rayon::prelude::*;
 use std::io::{self, Read, Write};
+use std::path::{Path, PathBuf};
 use std::process::exit;
+use walkdir::WalkDir;
 
 const VERSION: &str = env!("CARGO_PKG_VERSION");
 
@@ -211,18 +214,56 @@ fn main() {
         let name = o.filename.as_deref().unwrap_or("<stdin>");
         ok &= process(&o, name, &buf, false);
     } else {
-        for path in &o.files {
+        let files = expand_paths(&o.files);
+        // Debug dumps stream to stderr; running them in parallel would
+        // interleave output, so keep those modes sequential.
+        let parallel = !(o.ast || o.ir || o.parse_only) && files.len() > 1;
+        let process_path = |path: &PathBuf| -> bool {
+            let name = path.to_string_lossy();
             match std::fs::read_to_string(path) {
-                Ok(source) => ok &= process(&o, path, &source, true),
+                Ok(source) => process(&o, &name, &source, true),
                 Err(e) => {
                     if !o.quiet {
-                        eprintln!("{path}: {e}");
+                        eprintln!("{name}: {e}");
                     }
-                    ok = false;
+                    false
                 }
             }
-        }
+        };
+        ok &= if parallel {
+            files
+                .par_iter()
+                .map(process_path)
+                .reduce(|| true, |a, b| a & b)
+        } else {
+            files.iter().map(process_path).fold(true, |a, b| a & b)
+        };
     }
 
     exit(if ok { 0 } else { 1 });
+}
+
+/// Expand argument paths: directories are walked for `*.nix` files, files are
+/// passed through unchanged so that explicit non-`.nix` paths still get
+/// formatted. Unlike upstream `nixfmt` we treat directory arguments as a
+/// first-class, supported feature.
+fn expand_paths(args: &[String]) -> Vec<PathBuf> {
+    let mut out = Vec::with_capacity(args.len());
+    for arg in args {
+        let p = Path::new(arg);
+        if p.is_dir() {
+            let mut found: Vec<PathBuf> = WalkDir::new(p)
+                .into_iter()
+                .filter_map(|e| e.ok())
+                .filter(|e| e.file_type().is_file())
+                .filter(|e| e.path().extension().is_some_and(|x| x == "nix"))
+                .map(|e| e.into_path())
+                .collect();
+            found.sort();
+            out.extend(found);
+        } else {
+            out.push(p.to_owned());
+        }
+    }
+    out
 }
