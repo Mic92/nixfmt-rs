@@ -215,3 +215,23 @@ fn format_interp_inline_short_forced_compact() {
     ));
     test_ir_format("''\n  prefix ${lib.makeBinPath [ gdb ]} suffix\n''");
 }
+
+/// Non-chainable comparison operators (`<`, `>`, `<=`, `>=`, `==`, `!=`) use
+/// `softline` before the operator and `hardspace` after, with no extra `nest`
+/// on the RHS, so a short RHS stays on the LHS's last line even when the LHS
+/// is multi-line.
+/// Haskell: `Nixfmt.Pretty.instance Pretty Expression` `Operation` comparison arm.
+#[test]
+fn format_comparison_op_softline() {
+    // fetchgithub: multi-line application LHS, short identifier RHS.
+    test_format(concat!(
+        "{\n  x =\n    f (\n      a:\n      if cond ",
+        "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa then\n",
+        "        a\n      else\n        b\n    ) y != y;\n}",
+    ));
+    // nixops: comment as preTrivia on the RHS must not be nested under the op.
+    test_format("{\n  x =\n    a ==\n    # note\n    b.c (d: e);\n}");
+    test_ir_format("a == b");
+    // dev-shell-tools: LHS is `//` chain, RHS is an attrset.
+    test_format("a // { b = 1; } == { c = 1; }");
+}
