@@ -112,10 +112,14 @@ impl PrettySimple for DocE {
             Text(nest, off, ann, text) => [nest, off, ann, text],
             Spacing(sp) => [sp],
             Group(ann, doc) => [ann, doc],
+            Nest(n, o) => [n, o],
         });
     }
 
     fn is_simple(&self) -> bool {
-        matches!(self, DocE::Spacing(_) | DocE::Text(_, _, _, _))
+        matches!(
+            self,
+            DocE::Spacing(_) | DocE::Text(_, _, _, _) | DocE::Nest(..)
+        )
     }
 }

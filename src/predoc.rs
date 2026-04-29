@@ -70,6 +70,10 @@ pub(crate) enum DocE {
     /// Group element
     /// Contains annotation and nested document
     Group(GroupAnn, Doc),
+    /// Indentation delta marker (nest, offset). Emitted in begin/end pairs by
+    /// `push_nested`/`push_offset` and folded into `Text` during `fixup`, so
+    /// the renderer never sees it.
+    Nest(isize, isize),
 }
 
 /// Document - a list of document elements
@@ -201,26 +205,15 @@ where
 }
 
 /// Push a nested document (increase indentation) using a closure.
-/// Appends directly into `doc` and bumps the nesting level in place so no
-/// intermediate `Vec` is built.
+/// Emits a `Nest` delta pair around the region; `fixup` bakes the accumulated
+/// delta into each `Text` so the renderer's indent stack logic is unchanged.
 pub(crate) fn push_nested<F>(doc: &mut Doc, f: F)
 where
     F: FnOnce(&mut Doc),
 {
-    let start = doc.len();
+    doc.push(DocE::Nest(1, 0));
     f(doc);
-    nest_slice(&mut doc[start..]);
-}
-
-/// Bump the nesting depth of every `Text` in `doc` (recursing into groups).
-fn nest_slice(doc: &mut [DocE]) {
-    for elem in doc {
-        match elem {
-            DocE::Text(i, _, _, _) => *i += 1,
-            DocE::Group(_, inner) => nest_slice(inner),
-            DocE::Spacing(_) => {}
-        }
-    }
+    doc.push(DocE::Nest(-1, 0));
 }
 
 /// Line break or nothing (soft)
@@ -298,20 +291,10 @@ pub(crate) fn push_offset<F>(doc: &mut Doc, level: usize, f: F)
 where
     F: FnOnce(&mut Doc),
 {
-    let start = doc.len();
+    let level = level as isize;
+    doc.push(DocE::Nest(0, level));
     f(doc);
-    offset_slice(level, &mut doc[start..]);
-}
-
-/// Add `level` to the offset of every `Text` in `doc` (recursing into groups).
-fn offset_slice(level: usize, doc: &mut [DocE]) {
-    for elem in doc {
-        match elem {
-            DocE::Text(_, o, _, _) => *o += level,
-            DocE::Group(_, inner) => offset_slice(level, inner),
-            DocE::Spacing(_) => {}
-        }
-    }
+    doc.push(DocE::Nest(0, -level));
 }
 
 // Renderer: Convert IR (Doc) to formatted text
@@ -415,6 +398,7 @@ pub(crate) fn unexpand_spacing_prime(mut limit: Option<i32>, doc: &[DocE]) -> Op
             }
             DocE::Spacing(Spacing::Break) | DocE::Spacing(Spacing::Softbreak) => {}
             DocE::Spacing(_) => return None,
+            DocE::Nest(..) => result.push(elem.clone()),
             DocE::Group(_, inner) => stack.push(inner.iter()),
         }
         if matches!(limit, Some(n) if n < 0) {
@@ -434,6 +418,7 @@ fn unexpand_spacing(chain: &[&[DocE]]) -> Doc {
                 DocE::Spacing(Spacing::Softspace) => result.push(DocE::Spacing(Spacing::Hardspace)),
                 DocE::Spacing(Spacing::Break) => {}
                 DocE::Spacing(Spacing::Softbreak) => {}
+                DocE::Nest(..) => {}
                 _ => result.push(elem.clone()),
             }
         }
@@ -456,7 +441,7 @@ fn has_priority_groups(doc: &[DocE]) -> bool {
 /// - Merging consecutive spacings
 /// - Removing empty groups
 pub(crate) fn fixup(mut doc: Doc) -> Doc {
-    fixup_mut(&mut doc);
+    fixup_mut(&mut doc, 0, 0);
     doc
 }
 
@@ -467,49 +452,60 @@ const HOLE: DocE = DocE::Spacing(Spacing::Softbreak);
 /// (`w <= r`), recursing into group bodies via `&mut` so the existing `Vec`
 /// allocations are reused. Mirrors Haskell `fixup` clause-by-clause; see the
 /// per-arm comments for the corresponding rule.
-fn fixup_mut(doc: &mut Vec<DocE>) {
+fn fixup_mut(doc: &mut Vec<DocE>, mut nacc: isize, mut oacc: isize) {
     let mut r = 0usize;
     let mut w = 0usize;
     while r < doc.len() {
         let elem = std::mem::replace(&mut doc[r], HOLE);
         r += 1;
         match elem {
-            // `Spacing Hardspace : Group ann xs : ys` — push the hardspace
-            // into the group so it can merge with a leading soft spacing.
-            DocE::Spacing(Spacing::Hardspace) if matches!(doc.get(r), Some(DocE::Group(_, _))) => {
-                if let Some(DocE::Group(_, xs)) = doc.get_mut(r) {
-                    xs.insert(0, DocE::Spacing(Spacing::Hardspace));
-                }
+            DocE::Nest(dn, doff) => {
+                nacc += dn;
+                oacc += doff;
             }
 
-            // `Spacing a : Spacing b : ys` — fold into the next slot.
+            // `Spacing a : Spacing b : ys` — fold into the next slot, or into
+            // the previous written slot when a `Nest` marker sat in between.
             DocE::Spacing(a) => {
                 if let Some(DocE::Spacing(b)) = doc.get(r) {
                     doc[r] = DocE::Spacing(merge_spacings(a, *b));
+                } else if matches!(w.checked_sub(1).map(|i| &doc[i]), Some(DocE::Spacing(_))) {
+                    if let DocE::Spacing(b) = &mut doc[w - 1] {
+                        *b = merge_spacings(*b, a);
+                    }
                 } else {
                     doc[w] = DocE::Spacing(a);
                     w += 1;
                 }
             }
 
-            // `Text ann a : Text ann b : ys` — concatenate into the next slot.
+            // `Text ann a : Text ann b : ys` — concatenate into the previous
+            // written slot, keeping the first text's (already baked) indent.
             DocE::Text(l, o, ann, txt) => {
-                if let Some(DocE::Text(l2, o2, ann2, b)) = doc.get_mut(r) {
-                    if ann == *ann2 {
-                        let mut merged = txt;
-                        merged.push_str(b);
-                        *l2 = l;
-                        *o2 = o;
-                        *b = merged;
-                        continue;
+                if w > 0 {
+                    if let DocE::Text(_, _, ann2, b) = &mut doc[w - 1] {
+                        if ann == *ann2 {
+                            b.push_str(&txt);
+                            continue;
+                        }
                     }
                 }
+                let l = (l as isize + nacc) as usize;
+                let o = (o as isize + oacc) as usize;
                 doc[w] = DocE::Text(l, o, ann, txt);
                 w += 1;
             }
 
             DocE::Group(ann, mut body) => {
-                fixup_mut(&mut body);
+                // `Spacing Hardspace : Group ann xs : ys` — pull a just-written
+                // hardspace into the group so it can merge with a leading soft
+                // spacing during the recursive fixup.
+                if w > 0 && matches!(doc[w - 1], DocE::Spacing(Spacing::Hardspace)) {
+                    w -= 1;
+                    doc[w] = HOLE;
+                    body.insert(0, DocE::Spacing(Spacing::Hardspace));
+                }
+                fixup_mut(&mut body, nacc, oacc);
 
                 // Leading hard spacings and comments lift out of the group.
                 let pre_end = body
@@ -543,14 +539,15 @@ fn fixup_mut(doc: &mut Vec<DocE>) {
 
                 if core.is_empty() {
                     // Dissolve: `fixup $ (a : pre) ++ post ++ ys`. Put the
-                    // lifted pieces back on the read side; pull a just-written
-                    // spacing back too so it can merge with them.
-                    pre.extend(post);
-                    if w > 0 && matches!(doc[w - 1], DocE::Spacing(_)) {
-                        w -= 1;
-                        pre.insert(0, std::mem::replace(&mut doc[w], HOLE));
-                    }
-                    doc.splice(w..r, pre);
+                    // lifted pieces back on the read side. Their `Text` nodes
+                    // already carry the baked indent, so wrap with a `Nest`
+                    // that cancels the running accumulator for the reprocess.
+                    let mut lifted = Vec::with_capacity(pre.len() + post.len() + 2);
+                    lifted.push(DocE::Nest(-nacc, -oacc));
+                    lifted.extend(pre);
+                    lifted.extend(post);
+                    lifted.push(DocE::Nest(nacc, oacc));
+                    doc.splice(w..r, lifted);
                     r = w;
                 } else {
                     // `simplifyGroup`
@@ -678,7 +675,7 @@ fn fits(mut ni: isize, mut c: isize, chain: &[&[DocE]], out: &mut String) -> Opt
                 width += text_width(t);
             }
             Some(DocE::Text(_, _, TextAnn::Trailing, _)) => {}
-            Some(DocE::Spacing(_) | DocE::Group(_, _)) => unreachable!(),
+            Some(DocE::Spacing(_) | DocE::Group(_, _) | DocE::Nest(..)) => unreachable!(),
         }
     }
 }
@@ -746,7 +743,7 @@ fn fits_width(mut c: isize, doc: &[DocE]) -> Option<usize> {
                 w += text_width(t);
             }
             Some(DocE::Text(_, _, TextAnn::Trailing, _)) => {}
-            Some(DocE::Spacing(_) | DocE::Group(_, _)) => unreachable!(),
+            Some(DocE::Spacing(_) | DocE::Group(_, _) | DocE::Nest(..)) => unreachable!(),
         }
     }
 }
@@ -782,7 +779,7 @@ fn first_line_width(chain: Look<'_>) -> usize {
             None => return width,
             Some(DocE::Text(_, _, TextAnn::Comment | TextAnn::TrailingComment, _)) => {}
             Some(DocE::Text(_, _, _, t)) => width += text_width(t),
-            Some(DocE::Spacing(_) | DocE::Group(_, _)) => unreachable!(),
+            Some(DocE::Spacing(_) | DocE::Group(_, _) | DocE::Nest(..)) => unreachable!(),
         }
     }
 }
@@ -820,7 +817,7 @@ fn first_line_fits(target_width: usize, max_width: usize, chain: Look<'_>) -> bo
         match elem {
             None => return max - c <= target,
             Some(DocE::Text(_, _, TextAnn::RegularT, t)) => c -= text_width(t) as isize,
-            Some(DocE::Text(..)) => {}
+            Some(DocE::Text(..)) | Some(DocE::Nest(..)) => {}
             Some(DocE::Group(_, ys)) => {
                 rest.clear();
                 rest.extend(it.stack.iter().rev().map(|(s, i)| &s[*i..]));
@@ -842,7 +839,7 @@ fn next_indent(chain: Look<'_>) -> (usize, usize) {
             match elem {
                 DocE::Text(i, o, _, _) => return (*i, *o),
                 DocE::Group(_, xs) => return next_indent(&[xs]),
-                DocE::Spacing(_) => {}
+                DocE::Spacing(_) | DocE::Nest(..) => {}
             }
         }
     }
@@ -1028,6 +1025,8 @@ fn render_elem(
         },
 
         DocE::Group(ann, ys) => render_group(out, *ann, ys, lookahead, state, tw, iw),
+
+        DocE::Nest(..) => unreachable!("Nest consumed by fixup"),
     }
 }
 

@@ -44,6 +44,18 @@ impl PrettySimple for String {
     }
 }
 
+impl PrettySimple for isize {
+    fn format<W: Writer>(&self, w: &mut W) {
+        w.write_colored(&self.to_string(), NUMBER_COLOR);
+    }
+    fn is_simple(&self) -> bool {
+        true
+    }
+    fn is_atomic(&self) -> bool {
+        true
+    }
+}
+
 /// PrettySimple for usize - number literals
 /// Based on pretty-simple's NumberLit
 impl PrettySimple for usize {
