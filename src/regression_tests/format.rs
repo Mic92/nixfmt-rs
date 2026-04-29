@@ -60,3 +60,15 @@ fn format_if_elseif_chain_forced_multiline() {
 fn format_multi_arg_application_continuation_indent() {
     test_ir_format("runCommand \"n\"\n  {\n    a = 1;\n  }\n  ''\n    echo a\n  ''");
 }
+
+/// A line comment before the last argument forces expansion; the comment and
+/// the argument must still be indented under the function head.
+/// Haskell: `Nixfmt.Pretty.prettyApp` / `absorbLast` (`absorbParen` keeps the
+/// argument's pre-trivia inside the same `nest` as the function chain).
+#[test]
+fn format_app_comment_before_last_arg_indent() {
+    test_format("(map toString\n  # comment\n  (builtins.filter f version))");
+    test_format(
+        "{\n  v = lib.concat \".\" (\n    map toString\n      # comment\n      (builtins.filter f version)\n  );\n}",
+    );
+}

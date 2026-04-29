@@ -338,6 +338,13 @@ fn test_paren_absorb_rhs() {
 }
 
 #[test]
+fn test_app_last_arg_with_pre_comment() {
+    // prettyApp: comment on the last argument must stay inside the same
+    // nesting as the function head so the arg is indented under it
+    test_ir_format("(map toString\n  # comment\n  (builtins.filter f version))");
+}
+
+#[test]
 fn test_paren_inner_arg_unexpanded() {
     // renderSimple unexpands the function chain so an inner parenthesized arg
     // is flattened into the surrounding hardspace-separated token stream

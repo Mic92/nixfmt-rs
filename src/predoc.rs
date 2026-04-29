@@ -544,9 +544,19 @@ pub(crate) fn fixup(doc: &Doc) -> Doc {
                     }
                 }
 
+                // Haskell `fixup (a@(Spacing _) : Group ann xs : ys)` keeps the
+                // preceding spacing together with the lifted `pre` so they can
+                // merge (e.g. `Space <> Hardline` -> `Hardline`). Mirror that by
+                // pulling a just-emitted spacing back off `result`.
+                if matches!(result.last(), Some(DocE::Spacing(_))) {
+                    pre.insert(0, result.pop().unwrap());
+                }
+
                 if rest.is_empty() {
-                    // Dissolve empty group
-                    result.extend(pre);
+                    // Dissolve empty group: `fixup $ (a : pre) ++ post ++ ys`
+                    for e in pre.into_iter().rev() {
+                        doc.insert(0, e);
+                    }
                 } else {
                     // Split out trailing hard spacings, and also peel from nested groups
                     let (body, post) = split_trailing(rest);
@@ -554,12 +564,16 @@ pub(crate) fn fixup(doc: &Doc) -> Doc {
                     let body = simplify_group(ann, body);
 
                     if body.is_empty() {
-                        result.extend(pre);
-                        result.extend(post);
+                        for e in pre.into_iter().chain(post).rev() {
+                            doc.insert(0, e);
+                        }
                     } else {
-                        result.extend(pre);
+                        // `fixup (a : pre) ++ [Group ann body] ++ fixup (post ++ ys)`
+                        result.extend(fixup(&pre));
                         result.push(DocE::Group(ann, body));
-                        result.extend(fixup(&post));
+                        for e in post.into_iter().rev() {
+                            doc.insert(0, e);
+                        }
                     }
                 }
             }
@@ -1072,6 +1086,11 @@ fn render_group(
                     return format!("{}{}{}", pre_text, prio_text, post_text);
                 }
             }
+            // Attempt failed: discard any mutations from the trial run before
+            // trying the next priority group or falling back to full expansion.
+            // Haskell threads this via `StateT St Maybe`, which simply drops
+            // the state on `Nothing`.
+            *state = state_backup.clone();
         }
     }
 
