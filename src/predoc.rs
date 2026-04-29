@@ -612,12 +612,7 @@ fn fits(ni: isize, c: isize, doc: &[DocE]) -> Option<String> {
                 }
                 result.push_str(t);
             }
-            DocE::Text(_, _, TextAnn::Trailing, t) => {
-                let w = text_width(t) as isize;
-                result.push_str(t);
-                remaining -= w;
-                next_indent -= w;
-            }
+            DocE::Text(_, _, TextAnn::Trailing, _) => {}
             DocE::Spacing(Spacing::Softbreak) => {}
             DocE::Spacing(Spacing::Break) => {}
             DocE::Spacing(Spacing::Softspace) => {

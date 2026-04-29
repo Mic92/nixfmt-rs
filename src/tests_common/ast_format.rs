@@ -141,3 +141,40 @@ pub fn test_ir_format(input: &str) {
         panic!("IR output mismatch");
     }
 }
+
+/// Test helper: run `nixfmt -` and compare with our formatted output.
+///
+/// Unlike [`test_ir_format`], this exercises the full pipeline including the
+/// layout pass, so it can detect divergences that only show up in the final
+/// rendered text even when the IR matches.
+pub fn test_format(input: &str) {
+    let our_output = crate::format(input).expect("nixfmt_rs failed to format input");
+
+    let nixfmt_output = Command::new("nixfmt")
+        .arg("-")
+        .stdin(std::process::Stdio::piped())
+        .stdout(std::process::Stdio::piped())
+        .stderr(std::process::Stdio::piped())
+        .spawn()
+        .and_then(|mut child| {
+            use std::io::Write;
+            child.stdin.as_mut().unwrap().write_all(input.as_bytes())?;
+            child.wait_with_output()
+        })
+        .expect("Failed to run nixfmt");
+
+    let expected =
+        String::from_utf8(nixfmt_output.stdout).expect("nixfmt output is not valid UTF-8");
+
+    if our_output != expected {
+        eprintln!("TEST FAILED: format");
+        eprintln!("INPUT:\n{}", input);
+        eprintln!("\n=== EXPECTED (nixfmt) ===");
+        eprintln!("{}", expected);
+        eprintln!("\n=== GOT (ours) ===");
+        eprintln!("{}", our_output);
+        eprintln!("\n=== DIFF ===");
+        diff::print_colored_diff(&expected, &our_output);
+        panic!("format output mismatch");
+    }
+}

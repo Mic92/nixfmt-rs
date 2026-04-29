@@ -156,3 +156,27 @@
 
 ### Current Focus:
 Keeping the archived exhaustive suite commented out, but actively hammering parser weak spots (string selectors, numbers, unary operators, comparison chains, trivia preservation) uncovered via nixfmt's regression corpus. Re-enable the historic set after addressing these regressions.
+
+## 2026-04-29 — Differential format sweep (`scripts/diff_sweep.sh`)
+
+Swept the first 2000 `*.nix` files under `~/git/nixpkgs/pkgs/` comparing
+final formatted output of `./target/release/nixfmt_rs` against `nixfmt`
+v1.2.0. 1197/2000 files diverged. Mismatches cluster into the following
+root causes (each has a minimised reproducer in
+`src/regression_tests/format.rs`):
+
+| # | Reproducer | Haskell reference | Status |
+|---|---|---|---|
+| A | `{ a, b }: a` → we emitted `{ a, b, }: a` | `Nixfmt.Predoc.fits` drops `Text Trailing` in compact groups | **Fixed** in `src/predoc.rs` (`fits`) |
+| B | `f (x: { …multiline… })` not absorbed onto `f` line | `Nixfmt.Pretty.absorbLast` / `isAbsorbableExpr` | `#[ignore]` |
+| C | `a: b: { … }` breaks before `{` | `Nixfmt.Pretty.absorbAbs` | `#[ignore]` |
+| D | `with X; { … }` breaks before `{` (lambda body & RHS) | `Nixfmt.Pretty` `With` instance / `absorbRHS` | `#[ignore]` |
+| E | `x = f "a" ''…'';` pushes application to next line | `Nixfmt.Pretty.absorbRHS` (Application) | `#[ignore]` |
+| F | `if … else if …` stays single-line; nixfmt forces expand | `Nixfmt.Pretty.prettyIf` | `#[ignore]` |
+| G | expanded `runCommand "n" {…} ''…''` loses 2-space continuation indent and drops first arg to next line | `Nixfmt.Pretty.prettyApp` | `#[ignore]` |
+
+Classes B–G are all IR-generation gaps in `src/pretty.rs` (absorption /
+grouping), each needing >10-line restructuring to mirror the Haskell
+`Pretty Expression` instance. Class A was a one-line layout bug where
+`fits()` rendered `TextAnn::Trailing` despite the comment saying it
+shouldn't.
