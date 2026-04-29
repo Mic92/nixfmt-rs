@@ -8,14 +8,12 @@ dependencies and a single static binary.
 
 ## Status
 
-**Parity reached** with upstream `nixfmt` v1.2.0 (2026-04-29):
+**Parity reached** with upstream `nixfmt` v1.2.0:
 
-- 0 divergences on the full-tree nixpkgs differential sweep
-  (`cargo run --release --example diff_sweep`).
-- 222 / 222 tests green (unit, regression, vendored upstream fixture
-  corpus, property tests) plus 22 CLI integration tests.
-- `~/git/nixpkgs/pkgs/top-level/all-packages.nix` formats in ≈32 ms
-  (release build, M-series mac).
+- Byte-identical output across the entire nixpkgs tree
+  (`LIMIT=0 cargo run --release --example diff_sweep`).
+- Roughly an order of magnitude faster than the Haskell original on a
+  single file, more when formatting directories in parallel.
 
 See [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) for how the pieces fit
 together.
@@ -28,6 +26,12 @@ cargo build --release
 
 # Format (stdin → stdout)
 echo '{a=1;}' | ./target/release/nixfmt_rs
+
+# Format files / directories in place (recurses for *.nix, parallel)
+./target/release/nixfmt_rs path/to/file.nix path/to/dir
+
+# Check only (exit 1 if any file would change)
+./target/release/nixfmt_rs -c path/to/dir
 
 # Debugging modes (match `nixfmt --ast` / `nixfmt --ir` exactly)
 echo '{a=1;}' | ./target/release/nixfmt_rs --ast
@@ -57,4 +61,6 @@ new cases.
 - **Hand-written recursive-descent parser.** No parser-combinator or
   grammar generator; the structure mirrors `Nixfmt/Parser.hs` directly,
   which keeps error messages and trivia handling under our control.
-- **Zero dependencies** in the `[dependencies]` section.
+- **Minimal dependencies.** The library itself uses only `memchr` and
+  `compact_str`; the binary adds `rayon` and `walkdir` for parallel
+  directory formatting.
