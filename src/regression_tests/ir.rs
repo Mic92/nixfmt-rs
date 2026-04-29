@@ -34,10 +34,66 @@ fn test_assignment_rhs_application_grouping() {
     test_ir_format("{ x = f { }; }");
 }
 
-/// Regression test: import application should be absorbable
+// `isAbsorbable` / `isAbsorbableExpr` / `absorbExpr` parity with Haskell nixfmt.
+// Each test exercises one clause of the Haskell definitions and asserts our IR
+// matches `nixfmt --ir -` exactly.
+
+/// `absorbExpr True (Term t)` must use `prettyTermWide`, i.e. force-expand the
+/// attrset on the RHS of an assignment.
 #[test]
-fn test_import_absorbability() {
-    test_ir_format("{ x = import ./foo; }");
+fn test_absorb_rhs_set_wide() {
+    test_ir_format("{ x = { a = 1; }; }");
+}
+
+/// `absorbExpr` on a `with ...; { ... }` must go through `prettyWith True`.
+#[test]
+fn test_absorb_rhs_with_set() {
+    test_ir_format("{ x = with p; { a = 1; }; }");
+}
+
+/// `isAbsorbableExpr` accepts `Abstraction (IDParameter _) _ (Term t)` when
+/// the body is an absorbable term.
+#[test]
+fn test_absorb_rhs_lambda_set() {
+    test_ir_format("{ x = a: { b = 1; }; }");
+}
+
+/// `isAbsorbableExpr` recurses through chained `IDParameter` abstractions.
+#[test]
+fn test_absorb_rhs_lambda_chain_set() {
+    test_ir_format("{ x = a: b: { c = 1; }; }");
+}
+
+/// `isAbsorbable (Parenthesized (LoneAnn _) (Term t) _)` recurses into the
+/// inner term.
+#[test]
+fn test_absorb_rhs_paren_set() {
+    test_ir_format("{ x = ({ a = 1; }); }");
+}
+
+/// `isAbsorbable` on an empty set whose braces span multiple source lines.
+#[test]
+fn test_absorb_rhs_empty_set_multiline() {
+    test_ir_format("{ x = {\n}; }");
+}
+
+/// `isAbsorbable` on a list that contains only comment items.
+#[test]
+fn test_absorb_rhs_comment_only_list() {
+    test_ir_format("{ x = [\n# c\n]; }");
+}
+
+/// `isAbsorbable` on a multi-line indented string.
+#[test]
+fn test_absorb_rhs_indented_string() {
+    test_ir_format("{ x = ''\n  a\n  b\n''; }");
+}
+
+/// Single-`inherit` attrset on the RHS goes through `absorbExpr False` and
+/// must not be force-expanded.
+#[test]
+fn test_absorb_rhs_single_inherit() {
+    test_ir_format("{ x = { inherit a; }; }");
 }
 
 /// Regression test: middle arguments in application should use absorbLast logic (RegularG if not absorbable)

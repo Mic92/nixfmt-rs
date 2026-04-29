@@ -7,65 +7,100 @@ use crate::types::*;
 
 // Helper functions
 
-/// Check if a term is absorbable (can stay on same line after =)
-/// Based on Haskell isAbsorbable (Pretty.hs:581-595)
+fn has_trivia<T>(ann: &Ann<T>) -> bool {
+    !ann.pre_trivia.0.is_empty() || ann.trail_comment.is_some()
+}
+
+/// Exact port of Haskell `isAbsorbable` (Pretty.hs).
 fn is_absorbable_term(term: &Term) -> bool {
     match term {
         // Multi-line indented string
         Term::IndentedString(s) if s.value.len() >= 2 => true,
-        // Paths are not absorbable
         Term::Path(_) => false,
         // Non-empty sets and lists
         Term::Set(_, _, items, _) if !items.0.is_empty() => true,
         Term::List(_, items, _) if !items.0.is_empty() => true,
-        // Empty sets/lists - absorbable if braces/brackets span multiple lines,
-        // or if the opening token carries trivia (e.g. a trailing block comment).
-        // The trivia case keeps formatting idempotent for `[ /* foo */ ]`
-        // (https://github.com/NixOS/nixfmt/issues/362).
-        Term::Set(_, open, items, close) if items.0.is_empty() => {
-            open.span.start_line != close.span.start_line || !is_lone_ann(open)
+        // Empty sets and lists if they have a line break
+        // https://github.com/NixOS/nixfmt/issues/253
+        Term::Set(_, open, items, close)
+            if items.0.is_empty() && open.span.start_line != close.span.start_line =>
+        {
+            true
         }
-        Term::List(open, items, close) if items.0.is_empty() => {
-            open.span.start_line != close.span.start_line || !is_lone_ann(open)
+        Term::List(open, items, close)
+            if items.0.is_empty() && open.span.start_line != close.span.start_line =>
+        {
+            true
         }
-        // Parenthesized absorbable terms
-        Term::Parenthesized(_, expr, _) => is_absorbable_expr(expr),
+        // Lists/sets with only comments are absorbable
+        // https://github.com/NixOS/nixfmt/issues/362
+        Term::List(open, items, _) if has_trivia(open) || items_has_only_comments(items) => true,
+        Term::Set(_, open, items, _) if has_trivia(open) || items_has_only_comments(items) => true,
+        // Parenthesized absorbable term, only when the open paren has no trivia
+        Term::Parenthesized(open, expr, _) if !has_trivia(open) => {
+            matches!(&**expr, Expression::Term(t) if is_absorbable_term(t))
+        }
         _ => false,
     }
 }
 
-/// Check if an expression is absorbable
-/// Based on Haskell isAbsorbableExpr (Pretty.hs:572-579)
+/// Exact port of Haskell `isAbsorbableExpr` (Pretty.hs).
 fn is_absorbable_expr(expr: &Expression) -> bool {
     match expr {
         Expression::Term(t) => is_absorbable_term(t),
-        // with expr; term where term is absorbable
-        Expression::With(_, _, _, inner) => {
-            if let Expression::Term(t) = &**inner {
-                is_absorbable_term(t)
-            } else {
-                false
-            }
+        Expression::With(_, _, _, body) => {
+            matches!(&**body, Expression::Term(t) if is_absorbable_term(t))
         }
-        // Simple lambda with absorbable body: x: { }
+        // Absorb function declarations but only those with simple parameter(s)
         Expression::Abstraction(Parameter::ID(_), _, body) => match &**body {
             Expression::Term(t) => is_absorbable_term(t),
             Expression::Abstraction(_, _, _) => is_absorbable_expr(body),
             _ => false,
         },
-        // Special case: import applications (e.g. import ./foo) are absorbable
-        Expression::Application(f, _) => {
-            if let Expression::Term(Term::Token(ann)) = &**f {
-                if let Token::Identifier(s) = &ann.value {
-                    if s == "import" {
-                        return true;
-                    }
-                }
-            }
-            is_absorbable_expr(f)
-        }
-        Expression::Abstraction(_, _, _) => false,
         _ => false,
+    }
+}
+
+/// Exact port of Haskell `prettyTermWide` (Pretty.hs).
+fn push_pretty_term_wide(doc: &mut Doc, term: &Term) {
+    if let Term::Set(krec, open, items, close) = term {
+        push_pretty_set(doc, true, krec, open, items, close);
+    } else {
+        term.pretty(doc);
+    }
+}
+
+/// Exact port of Haskell `absorbExpr` (Pretty.hs).
+///
+/// Unlike absorbable terms which can be force-absorbed, some expressions may
+/// turn out not to be absorbable; in that case they fall through to `pretty`.
+fn push_absorb_expr(doc: &mut Doc, force_wide: bool, expr: &Expression) {
+    match expr {
+        Expression::Term(t) if is_absorbable_term(t) => {
+            if force_wide {
+                push_pretty_term_wide(doc, t);
+            } else {
+                t.pretty(doc);
+            }
+        }
+        // With expression with absorbable body: treat as absorbable term via
+        // `prettyWith True`.
+        Expression::With(with_kw, env, semicolon, body) if matches!(&**body, Expression::Term(t) if is_absorbable_term(t)) =>
+        {
+            let Expression::Term(t) = &**body else {
+                unreachable!()
+            };
+            push_group_ann(doc, GroupAnn::RegularG, |g| {
+                g.push(line_prime());
+                with_kw.pretty(g);
+                g.push(hardspace());
+                push_nested(g, |n| push_group(n, |gg| env.pretty(gg)));
+                semicolon.pretty(g);
+                g.push(hardspace());
+                push_group_ann(g, GroupAnn::Priority, |pg| push_pretty_term_wide(pg, t));
+            });
+        }
+        _ => expr.pretty(doc),
     }
 }
 
@@ -86,8 +121,7 @@ fn push_absorb_rhs(doc: &mut Doc, expr: &Expression) {
         {
             push_nested(doc, |d| {
                 d.push(hardspace());
-                // absorbExpr False expr
-                push_group(d, |inner| expr.pretty(inner));
+                push_group(d, |inner| push_absorb_expr(inner, false, expr));
             });
         }
 
@@ -95,8 +129,7 @@ fn push_absorb_rhs(doc: &mut Doc, expr: &Expression) {
         _ if is_absorbable_expr(expr) => {
             push_nested(doc, |d| {
                 d.push(hardspace());
-                // absorbExpr True expr
-                push_group(d, |inner| expr.pretty(inner));
+                push_group(d, |inner| push_absorb_expr(inner, true, expr));
             });
         }
 
@@ -557,26 +590,12 @@ fn push_pretty_operation(
     push_group(doc, |group_doc| {
         for (maybe_op, expr) in parts.iter() {
             match maybe_op {
-                None => {
-                    // Check if we need wide rendering for the first term
-                    let mut wide_rendered = false;
-                    if force_first_term_wide {
-                        if let Expression::Term(term) = expr {
-                            if is_absorbable_term(term) {
-                                // Wide rendering for absorbable terms (matches prettyTermWide in Pretty.hs:207-209)
-                                if let Term::Set(krec, open, items, close) = term {
-                                    // Render set in wide mode (forces hardlines instead of lines)
-                                    push_pretty_set(group_doc, true, krec, open, items, close);
-                                    wide_rendered = true;
-                                }
-                                // Lists and indented strings handle themselves via auto-wrapping
-                            }
-                        }
+                None => match expr {
+                    Expression::Term(term) if force_first_term_wide && is_absorbable_term(term) => {
+                        push_pretty_term_wide(group_doc, term);
                     }
-                    if !wide_rendered {
-                        expr.pretty(group_doc);
-                    }
-                }
+                    _ => expr.pretty(group_doc),
+                },
                 Some(op_leaf) => {
                     group_doc.push(line());
                     op_leaf.pretty(group_doc);
@@ -597,10 +616,10 @@ fn push_absorb_abs(doc: &mut Doc, depth: usize, expr: &Expression) {
             colon.pretty(doc);
             push_absorb_abs(doc, depth + 1, body);
         }
-        _ if depth == 1 && is_absorbable_expr(expr) => {
+        _ if is_absorbable_expr(expr) => {
             doc.push(hardspace());
             push_group_ann(doc, GroupAnn::Priority, |priority_group| {
-                expr.pretty(priority_group);
+                push_absorb_expr(priority_group, false, expr);
             });
         }
         _ => {
@@ -633,7 +652,7 @@ fn push_parenthesized_inner(doc: &mut Doc, expr: &Expression, add_nesting: bool)
     match expr {
         _ if is_absorbable_expr(expr) => {
             push_group(doc, |inner| {
-                expr.pretty(inner);
+                push_absorb_expr(inner, false, expr);
             });
         }
         Expression::Application(_, _) => {
@@ -804,14 +823,19 @@ fn push_pretty_set(
     close: &Ann<Token>,
 ) {
     // Empty attribute set
-    if items.0.is_empty() && open.trail_comment.is_none() && close.pre_trivia.0.is_empty() {
+    if items.0.is_empty() && !has_trivia(open) && close.pre_trivia.0.is_empty() {
         // Pretty print optional `rec` keyword with hardspace
         if let Some(rec) = krec {
             rec.pretty(doc);
             doc.push(hardspace());
         }
         open.pretty(doc);
-        doc.push(hardspace());
+        // If the braces are on different lines, keep them like that
+        doc.push(if open.span.start_line != close.span.start_line {
+            hardline()
+        } else {
+            hardspace()
+        });
         close.pretty(doc);
         return;
     }

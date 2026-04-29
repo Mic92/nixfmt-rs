@@ -466,6 +466,14 @@ pub(crate) fn fixup(doc: &Doc) -> Doc {
         let elem = doc.remove(0);
 
         match elem {
+            // Move/Merge hard spaces into groups so they can merge with a
+            // leading soft spacing inside the group (Haskell `fixup` rule for
+            // `Spacing Hardspace : Group ann xs`).
+            DocE::Spacing(Spacing::Hardspace) if matches!(doc.first(), Some(DocE::Group(_, _))) => {
+                if let Some(DocE::Group(_, xs)) = doc.first_mut() {
+                    xs.insert(0, DocE::Spacing(Spacing::Hardspace));
+                }
+            }
             // Merge consecutive spacings
             DocE::Spacing(a) if !doc.is_empty() => {
                 if let DocE::Spacing(b) = &doc[0] {
