@@ -1,5 +1,60 @@
 //! nixfmt-rs2: Rust implementation of nixfmt with exact Haskell compatibility
 
+#![warn(clippy::pedantic, clippy::nursery, missing_docs)]
+// --- pedantic/nursery allows -----------------------------------------------
+// This crate intentionally mirrors the structure of nixfmt's Haskell source
+// (Types.hs / Predoc.hs / Pretty.hs) line-for-line where possible. Many of
+// clippy's stylistic suggestions would diverge from that reference and make
+// cross-checking harder, so they are allowed crate-wide below.
+#![allow(
+    // Style churn that would obscure the 1:1 Haskell mapping.
+    clippy::use_self,
+    clippy::wildcard_imports,
+    clippy::enum_glob_use,
+    clippy::match_same_arms,
+    clippy::single_match_else,
+    clippy::if_not_else,
+    clippy::redundant_else,
+    clippy::manual_let_else,
+    clippy::option_if_let_else,
+    clippy::map_unwrap_or,
+    clippy::unnested_or_patterns,
+    clippy::match_wildcard_for_single_variants,
+    clippy::comparison_chain,
+    clippy::items_after_statements,
+    clippy::branches_sharing_code,
+    clippy::redundant_closure_for_method_calls,
+    // Naming follows the Haskell identifiers verbatim.
+    clippy::similar_names,
+    clippy::many_single_char_names,
+    clippy::doc_markdown,
+    clippy::too_long_first_doc_paragraph,
+    // Function shape follows Haskell; size/signature lints are noise here.
+    clippy::too_many_lines,
+    clippy::needless_pass_by_value,
+    clippy::unnecessary_wraps,
+    clippy::unused_self,
+    clippy::ref_option,
+    clippy::must_use_candidate,
+    clippy::missing_errors_doc,
+    // Visibility is intentionally explicit on private-module items.
+    clippy::redundant_pub_crate,
+    // Lexer/layout hot paths: leave casts, inlining and allocation patterns
+    // to the perf work; nursery suggestions here are not always correct.
+    clippy::missing_const_for_fn,
+    clippy::inline_always,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::format_push_string,
+    clippy::uninlined_format_args,
+    clippy::needless_collect,
+    clippy::redundant_clone,
+    // Test fixtures use r#""# uniformly for Nix snippets and explicit
+    // `if .. panic!` for clearer failure messages.
+    clippy::needless_raw_string_hashes,
+    clippy::manual_assert,
+)]
+
 // Internal modules - hidden from public API
 mod colored_writer;
 pub mod error; // Keep public for ParseError export

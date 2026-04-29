@@ -1274,5 +1274,5 @@ fn render_group(
     }
 
     // Fully expand group
-    render_doc(out, ys, lookahead, state, tw, iw)
+    render_doc(out, ys, lookahead, state, tw, iw);
 }

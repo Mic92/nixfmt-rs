@@ -10,6 +10,7 @@ pub struct Span {
 }
 
 impl Span {
+    /// Create a span from byte offsets, with line numbers defaulting to 1.
     pub fn new(start: usize, end: usize) -> Self {
         Self {
             start,
@@ -56,6 +57,7 @@ pub enum Trivium {
 pub struct Trivia(pub Vec<Trivium>);
 
 impl Trivia {
+    /// Empty trivia list.
     pub fn new() -> Self {
         Self(Vec::new())
     }
@@ -132,6 +134,7 @@ pub struct Ann<T> {
 }
 
 impl<T> Ann<T> {
+    /// Wrap a value with a span and no surrounding trivia.
     pub fn new(value: T, span: Span) -> Self {
         Ann {
             pre_trivia: Trivia::new(),
@@ -155,6 +158,7 @@ pub enum Item<T> {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Items<T>(pub Vec<Item<T>>);
 
+/// A token annotated with trivia and span (Haskell: `Leaf`).
 pub type Leaf = Ann<Token>;
 
 /// String parts - either text or interpolation
@@ -164,6 +168,7 @@ pub enum StringPart {
     Interpolation(Box<Whole<Expression>>),
 }
 
+/// A path literal: a single line of text / interpolation parts (Haskell: `Path`).
 pub type Path = Ann<Vec<StringPart>>;
 
 /// A string consists of lines, each of which consists of text elements and interpolations
@@ -267,6 +272,7 @@ pub struct Whole<T> {
     pub trailing_trivia: Trivia,
 }
 
+/// A complete source file: top-level expression plus trailing trivia (Haskell: `File`).
 pub type File = Whole<Expression>;
 
 /// Tokens
@@ -335,6 +341,7 @@ pub enum Token {
 }
 
 impl Token {
+    /// Source text for keyword / operator tokens (Haskell: `tokenText`).
     pub fn text(&self) -> &str {
         match self {
             Token::KAssert => "assert",

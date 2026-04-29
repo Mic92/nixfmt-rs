@@ -11,6 +11,7 @@ pub struct ErrorFormatter<'a> {
 }
 
 impl<'a> ErrorFormatter<'a> {
+    /// Create a formatter that resolves spans against `context`.
     pub fn new(context: &'a ErrorContext<'a>) -> Self {
         Self { context }
     }

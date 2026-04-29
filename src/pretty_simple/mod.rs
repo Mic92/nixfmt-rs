@@ -1,7 +1,7 @@
 //! PrettySimple trait for formatting AST and IR nodes to match nixfmt Haskell's output
 //!
 //! This implementation is based on the pretty-simple Haskell library:
-//! https://github.com/cdepillabout/pretty-simple
+//! <https://github.com/cdepillabout/pretty-simple>
 //!
 //! Key algorithm from pretty-simple's `list` function:
 //! - Empty list: []
@@ -310,16 +310,20 @@ macro_rules! format_record {
 /// Automatically generates match arms that call format_constructor! for each variant
 ///
 /// Usage without wildcard:
-///   format_enum!(self, w, {
-///       Variant1(field) => [field],
-///       Variant2(field1, field2) => [field1, field2],
-///   });
+/// ```ignore
+/// format_enum!(self, w, {
+///     Variant1(field) => [field],
+///     Variant2(field1, field2) => [field1, field2],
+/// });
+/// ```
 ///
 /// Usage with wildcard (for fallback case):
-///   format_enum!(self, w, {
-///       Variant1(field) => [field],
-///       _ => { w.write_plain(&format!("{:?}", self)); }
-///   });
+/// ```ignore
+/// format_enum!(self, w, {
+///     Variant1(field) => [field],
+///     _ => { w.write_plain(&format!("{:?}", self)); }
+/// });
+/// ```
 #[macro_export]
 macro_rules! format_enum {
     // Version without wildcard

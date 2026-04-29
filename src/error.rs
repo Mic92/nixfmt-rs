@@ -92,30 +92,43 @@ impl std::error::Error for ParseError {}
 pub enum ErrorKind {
     /// Unexpected token: expected X, found Y
     UnexpectedToken {
-        expected: Vec<String>, // ["';'", "'}'"]
-        found: String,         // "'in'"
+        /// Human-readable tokens that would have been accepted, e.g. `["';'", "'}'"]`.
+        expected: Vec<String>,
+        /// Human-readable token actually found, e.g. `"'in'"`.
+        found: String,
     },
 
     /// Unclosed delimiter (brace, bracket, paren, string)
     UnclosedDelimiter {
-        delimiter: char,    // '{', '[', '(', '"', '\''
-        opening_span: Span, // where it was opened
+        /// The opening delimiter character: `{`, `[`, `(`, `"` or `'`.
+        delimiter: char,
+        /// Location of the unmatched opening delimiter.
+        opening_span: Span,
     },
 
     /// Missing required token
     MissingToken {
-        token: String, // "';'"
-        after: String, // "attribute definition"
+        /// The token that was expected, e.g. `"';'"`.
+        token: String,
+        /// Description of the preceding construct, e.g. `"attribute definition"`.
+        after: String,
     },
 
     /// Invalid syntax pattern
     InvalidSyntax {
+        /// Human-readable description of what is wrong.
         description: String,
+        /// Optional suggestion for how to fix it.
         hint: Option<String>,
     },
 
-    /// Chained comparison operators (1 < 2 < 3)
-    ChainedComparison { first_op: String, second_op: String },
+    /// Chained comparison operators (`1 < 2 < 3`)
+    ChainedComparison {
+        /// Source text of the first comparison operator.
+        first_op: String,
+        /// Source text of the second comparison operator.
+        second_op: String,
+    },
 
     /// Generic message (for gradual migration)
     Message(String),
@@ -124,17 +137,24 @@ pub enum ErrorKind {
 /// Labeled related location
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Label {
+    /// Source range this label points at.
     pub span: Span,
+    /// Text shown next to the span in diagnostics.
     pub message: String,
+    /// How the label is rendered (primary / secondary / note).
     pub style: LabelStyle,
 }
 
 /// Label style for secondary locations
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum LabelStyle {
-    Primary,   // Main error location
-    Secondary, // Related/context location
-    Note,      // Informational
+    /// Main error location.
+    Primary,
+    /// Related / context location.
+    Secondary,
+    /// Informational annotation.
+    Note,
 }
 
+/// Convenience alias for `Result<T, ParseError>`.
 pub type Result<T> = std::result::Result<T, ParseError>;

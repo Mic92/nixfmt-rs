@@ -1,7 +1,7 @@
 //! Path and URI parsing utilities
 //!
 //! This module handles parsing of Nix paths (e.g., ./foo, ../bar, /abs, ~/home)
-//! and URIs (e.g., https://example.com). Paths in Nix can contain interpolations
+//! and URIs (e.g., `https://example.com`). Paths in Nix can contain interpolations
 //! and have specific validation rules (e.g., no trailing slashes).
 
 use crate::error::{ErrorKind, ParseError, Result};

@@ -306,7 +306,7 @@ impl Pretty for Term {
                     Term::Token(_) => {}
                     Term::Parenthesized(_, _, _) => doc.push(softline_prime()),
                     _ => doc.push(line_prime()),
-                };
+                }
 
                 push_hcat(doc, selectors.clone());
 

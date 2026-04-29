@@ -75,8 +75,10 @@ impl<'a> ErrorContext<'a> {
 /// Computed position (line, column)
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Position {
-    pub line: usize,   // 1-based
-    pub column: usize, // 0-based byte offset from line start
+    /// 1-based line number.
+    pub line: usize,
+    /// 0-based byte offset from the start of the line.
+    pub column: usize,
 }
 
 /// Compute byte offsets of line starts

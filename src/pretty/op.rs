@@ -52,7 +52,7 @@ pub(super) fn push_pretty_operation(
     flatten_operation_chain(op, operation, None, &mut parts);
 
     push_group(doc, |group_doc| {
-        for (maybe_op, expr) in parts.iter() {
+        for (maybe_op, expr) in &parts {
             match maybe_op {
                 None => match expr {
                     Expression::Term(term) if force_first_term_wide && is_absorbable_term(term) => {

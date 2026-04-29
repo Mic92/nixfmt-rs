@@ -53,7 +53,7 @@ impl<'a> ColoredWriter<'a> {
     }
 }
 
-impl<'a> Writer for ColoredWriter<'a> {
+impl Writer for ColoredWriter<'_> {
     fn write_plain(&mut self, text: &str) {
         self.indent();
         self.output.push_str(text);
