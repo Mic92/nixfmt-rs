@@ -1189,37 +1189,25 @@ impl Pretty for Term {
             }
             Term::List(open, items, close) => {
                 // Lists are always wrapped in a group (matches Haskell: pretty l@List{} = group $ prettyTerm l)
-                push_group(doc, |group_doc| {
-                    // Empty list
+                push_group(doc, |g| {
+                    // Empty list fast path (Haskell: prettyTerm (List paropen@Ann{trailComment = Nothing} (Items []) parclose@Ann{preTrivia = []}))
                     if items.0.is_empty()
                         && open.trail_comment.is_none()
                         && close.pre_trivia.0.is_empty()
                     {
-                        open.pretty(group_doc);
-                        group_doc.push(hardspace());
-                        close.pretty(group_doc);
+                        open.pretty(g);
+                        // If the brackets are on different lines, keep them like that
+                        if open.span.start_line != close.span.start_line {
+                            g.push(hardline());
+                        } else {
+                            g.push(hardspace());
+                        }
+                        close.pretty(g);
                         return;
                     }
 
-                    // General list with items
-                    let open_without_trail = Ann {
-                        trail_comment: None,
-                        ..open.clone()
-                    };
-
-                    open_without_trail.pretty(group_doc);
-                    let separator = if open.span.start_line != close.span.start_line {
-                        vec![hardline()]
-                    } else {
-                        vec![line()]
-                    };
-                    push_surrounded(group_doc, &separator, |d| {
-                        push_nested(d, |inner| {
-                            open.trail_comment.pretty(inner);
-                            push_pretty_items(inner, items);
-                        });
-                    });
-                    close.pretty(group_doc);
+                    // General list (Haskell: prettyTerm (List ..) = renderList hardline ..)
+                    push_render_list(g, hardline(), open, items, close);
                 });
             }
             Term::Set(krec, open, binders, close) => {

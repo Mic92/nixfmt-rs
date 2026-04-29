@@ -57,3 +57,13 @@ fn test_with_grouping() {
 fn test_inner_arg_simple_list() {
     test_ir_format("f [ 1 2 3 ] x");
 }
+
+/// Regression test: list rendering must match Haskell `renderList`/`prettyTerm (List ..)`
+#[test]
+fn test_list_rendering() {
+    test_ir_format("[ ]");
+    test_ir_format("[\n]");
+    test_ir_format("[ # c\n]");
+    test_ir_format("[ 1 2 ]");
+    test_ir_format("[\n1 2\n]");
+}
