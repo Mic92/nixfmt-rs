@@ -118,16 +118,13 @@ impl Lexer {
         // Skip horizontal space first
         let _ = self.skip_hspace();
 
-        // Check for newlines/trivia at current position (can happen after string parsing + rewind)
-        // Parse them and split into trailing (for previous token) and leading (for next token)
+        // Re-sync: when entering expression mode mid-source (after `${` in a
+        // string), the lexer has not yet consumed the trivia before the first
+        // body token. There is no preceding Nix token here, so treat all of it
+        // as leading trivia rather than splitting off a discarded "trailing".
         if matches!(self.peek(), Some('\n') | Some('\r') | Some('#') | Some('/')) {
             let extra_trivia = self.parse_trivia();
-
-            // Split into trailing and leading
-            let next_col = self.column;
-            let (_trailing, next_leading) = trivia::convert_trivia(extra_trivia, next_col);
-
-            leading_trivia.extend(next_leading);
+            leading_trivia.extend(trivia::convert_leading(&extra_trivia));
 
             // Skip hspace after trivia
             let _ = self.skip_hspace();

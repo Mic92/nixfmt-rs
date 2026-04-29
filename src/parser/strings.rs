@@ -334,8 +334,18 @@ impl Parser {
 
     /// Parse selector interpolation: ${expr} within attribute paths
     pub(super) fn parse_selector_interpolation(&mut self) -> Result<Ann<StringPart>> {
-        let open = self.take_current();
+        let mut open = self.take_current();
         debug_assert!(matches!(open.value, Token::TInterOpen));
+        // Haskell parses `${` with `rawSymbol`, so a comment immediately after
+        // it becomes leading trivia of the body's first token. Our `${` came
+        // through `lexeme()`, which classified that comment as `trail_comment`;
+        // re-queue it as leading trivia so it is not dropped.
+        if let Some(tc) = open.trail_comment.take() {
+            self.lexer
+                .trivia_buffer
+                .0
+                .insert(0, Trivium::LineComment(format!(" {}", tc.0)));
+        }
         self.advance()?;
 
         let expr = self.parse_expression()?;

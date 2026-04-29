@@ -278,4 +278,8 @@ fn format_interp_trailing_trivia_preserved() {
 fn format_interp_leading_trivia_preserved() {
     test_format("''\n  ${ # leading\n  x }\n''");
     test_format("\"${ /* c */ x}\"");
+    // Selector interpolations go through `lexeme()` for `${`, so the comment
+    // is first classified as its `trail_comment` and must be re-queued.
+    test_format("{ ${ # c\nx } = 1; }");
+    test_format("a.${ # c\nx }");
 }
