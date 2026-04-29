@@ -41,6 +41,15 @@ fn regression_or_operator_deprecated_syntax() {
 }
 
 #[test]
+fn regression_chained_prefix_operators() {
+    // nixfmt 1f3fa2e / https://github.com/NixOS/nixfmt/issues/351
+    test_ast_format("(--1)");
+    test_ast_format("(---1)");
+    test_ast_format("(!!a)");
+    test_ast_format("(!!!!a)");
+}
+
+#[test]
 fn regression_float_no_leading_digit() {
     // Ensure parser accepts `.5` like nixfmt
     test_ast_format(".5");
