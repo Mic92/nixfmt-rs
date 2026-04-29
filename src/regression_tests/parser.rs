@@ -441,6 +441,23 @@ fn regression_language_annotation_ast_format() {
 }
 
 #[test]
+fn regression_indented_string_to_simple() {
+    // nixfmt 1.2.0: single-line indented strings without `"` or `\` become SimpleString,
+    // with `''$` -> `\$` and `'''` -> `''` escape conversion.
+    test_ast_format("''hello ${x} '''quoted''' ''$var''");
+}
+
+#[test]
+fn regression_indented_string_kept_with_quote() {
+    test_ast_format(r#"''has"quote''"#);
+}
+
+#[test]
+fn regression_indented_string_kept_with_backslash() {
+    test_ast_format(r"''back\slash''");
+}
+
+#[test]
 fn regression_empty_list_with_comment() {
     // Comments inside empty lists should be separate Comments items, not in preTrivia
     test_ast_format("[\n  # comment\n]");

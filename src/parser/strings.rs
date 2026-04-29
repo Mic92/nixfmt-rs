@@ -260,7 +260,7 @@ impl Parser {
             trail_comment,
         };
 
-        Ok(Term::IndentedString(ann))
+        Ok(classify_indented_string(ann))
     }
 
     /// Parse one line of an indented string
@@ -413,6 +413,61 @@ fn process_simple(parts: Vec<StringPart>) -> Vec<Vec<StringPart>> {
         .into_iter()
         .map(merge_adjacent_text)
         .collect()
+}
+
+/// Reclassify a parsed indented string as a `SimpleString` when its content is
+/// representable in `"..."` syntax. Mirrors `classifyString` in nixfmt's Parser.hs.
+fn classify_indented_string(ann: Ann<Vec<Vec<StringPart>>>) -> Term {
+    fn has_quote_or_backslash(part: &StringPart) -> bool {
+        match part {
+            StringPart::TextPart(t) => t.contains('"') || t.contains('\\'),
+            StringPart::Interpolation(_) => false,
+        }
+    }
+
+    // More than one line means the original literal contained a newline.
+    let should_be_simple =
+        ann.value.len() <= 1 && !ann.value.iter().flatten().any(has_quote_or_backslash);
+
+    if !should_be_simple {
+        return Term::IndentedString(ann);
+    }
+
+    fn convert_escapes(t: &str) -> String {
+        let mut out = String::with_capacity(t.len());
+        let bytes = t.as_bytes();
+        let mut i = 0;
+        while i < bytes.len() {
+            if bytes[i..].starts_with(b"''$") {
+                out.push_str("\\$");
+                i += 3;
+            } else if bytes[i..].starts_with(b"'''") {
+                out.push_str("''");
+                i += 3;
+            } else {
+                // Safe: input is valid UTF-8 and we only ever skip whole ASCII prefixes above.
+                let ch = t[i..].chars().next().unwrap();
+                out.push(ch);
+                i += ch.len_utf8();
+            }
+        }
+        out
+    }
+
+    let value = ann
+        .value
+        .into_iter()
+        .map(|line| {
+            line.into_iter()
+                .map(|part| match part {
+                    StringPart::TextPart(t) => StringPart::TextPart(convert_escapes(&t)),
+                    interp @ StringPart::Interpolation(_) => interp,
+                })
+                .collect()
+        })
+        .collect();
+
+    Term::SimpleString(Ann { value, ..ann })
 }
 
 /// Process an indented string by normalizing whitespace and stripping common indentation
