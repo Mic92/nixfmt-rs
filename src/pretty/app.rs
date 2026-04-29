@@ -370,7 +370,7 @@ pub(super) fn push_pretty_app(
 
     // renderSimple
     if is_simple_expression(expr) {
-        if let Some(unexpanded) = unexpand_spacing_prime(&rendered_f) {
+        if let Some(unexpanded) = unexpand_spacing_prime(None, &rendered_f) {
             push_group(doc, |g| {
                 g.extend(unexpanded);
                 g.push(hardspace());

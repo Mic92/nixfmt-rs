@@ -398,10 +398,9 @@ fn merge_spacings(a: Spacing, b: Spacing) -> Spacing {
 
 /// Manually force a doc to its compact layout, replacing all soft whitespace.
 /// Recurses into inner groups (flattening them). Returns `None` if the doc
-/// contains hard line breaks.
-/// Mirrors Haskell `unexpandSpacing' Nothing` (Predoc.hs); the width-limit
-/// variant is unused in this port.
-pub(crate) fn unexpand_spacing_prime(doc: &[DocE]) -> Option<Doc> {
+/// contains hard line breaks or exceeds the optional width limit.
+/// Mirrors Haskell `unexpandSpacing'` (Predoc.hs).
+pub(crate) fn unexpand_spacing_prime(mut limit: Option<i32>, doc: &[DocE]) -> Option<Doc> {
     let mut result = Vec::new();
     let mut stack: Vec<std::slice::Iter<'_, DocE>> = vec![doc.iter()];
     while let Some(iter) = stack.last_mut() {
@@ -410,15 +409,26 @@ pub(crate) fn unexpand_spacing_prime(doc: &[DocE]) -> Option<Doc> {
             continue;
         };
         match elem {
-            DocE::Text(_, _, _, _) => result.push(elem.clone()),
+            DocE::Text(_, _, _, t) => {
+                if let Some(n) = limit.as_mut() {
+                    *n -= text_width(t) as i32;
+                }
+                result.push(elem.clone());
+            }
             DocE::Spacing(Spacing::Hardspace)
             | DocE::Spacing(Spacing::Space)
             | DocE::Spacing(Spacing::Softspace) => {
+                if let Some(n) = limit.as_mut() {
+                    *n -= 1;
+                }
                 result.push(DocE::Spacing(Spacing::Hardspace));
             }
             DocE::Spacing(Spacing::Break) | DocE::Spacing(Spacing::Softbreak) => {}
             DocE::Spacing(_) => return None,
             DocE::Group(_, inner) => stack.push(inner.iter()),
+        }
+        if matches!(limit, Some(n) if n < 0) {
+            return None;
         }
     }
     Some(result)
