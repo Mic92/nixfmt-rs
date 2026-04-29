@@ -1,7 +1,7 @@
 //! Formatted-output regression tests
 //!
 //! Minimal reproducers for divergences between our final formatted output and
-//! the reference `nixfmt` (v1.2.0), discovered by `scripts/diff_sweep.sh`
+//! the reference `nixfmt` (v1.2.0), discovered by the `diff_sweep` example
 //! over `nixpkgs/pkgs/`. Each test names the corresponding Haskell
 //! function in `Nixfmt.Pretty` / `Nixfmt.Predoc`.
 

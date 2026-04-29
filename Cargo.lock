@@ -329,6 +329,8 @@ dependencies = [
  "compact_str",
  "criterion",
  "memchr",
+ "rayon",
+ "walkdir",
 ]
 
 [[package]]

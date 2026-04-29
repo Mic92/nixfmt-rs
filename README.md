@@ -10,11 +10,11 @@ dependencies and a single static binary.
 
 **Parity reached** with upstream `nixfmt` v1.2.0 (2026-04-29):
 
-- 0 / 2000 divergences on the nixpkgs `pkgs/` differential sweep
-  (`scripts/diff_sweep.sh`).
-- 211 / 211 tests green (unit, regression, vendored upstream fixture
-  corpus, property tests).
-- `~/git/nixpkgs/pkgs/top-level/all-packages.nix` formats in ≈70 ms
+- 0 divergences on the full-tree nixpkgs differential sweep
+  (`cargo run --release --example diff_sweep`).
+- 222 / 222 tests green (unit, regression, vendored upstream fixture
+  corpus, property tests) plus 22 CLI integration tests.
+- `~/git/nixpkgs/pkgs/top-level/all-packages.nix` formats in ≈32 ms
   (release build, M-series mac).
 
 See [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) for how the pieces fit
@@ -37,9 +37,12 @@ echo '{a=1;}' | ./target/release/nixfmt_rs --ir
 ## Testing
 
 ```bash
-cargo test                       # full suite (211 tests)
+cargo test                       # full suite
 cargo llvm-cov --html            # coverage report → target/llvm-cov/html/
-scripts/diff_sweep.sh            # differential check vs. `nixfmt` over nixpkgs
+
+# differential check vs. reference `nixfmt` over a nixpkgs checkout
+# modes: format | ir | ast; env: NIXPKGS, LIMIT, JOBS, MAX_BYTES, REF, OUT
+LIMIT=0 cargo run --release --example diff_sweep -- format
 ```
 
 The test suite is layered (unit → regression → vendored fixtures →
