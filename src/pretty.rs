@@ -59,12 +59,29 @@ fn is_absorbable_expr(expr: &Expression) -> bool {
     }
 }
 
-/// Exact port of Haskell `prettyTermWide` (Pretty.hs).
-fn push_pretty_term_wide(doc: &mut Doc, term: &Term) {
-    if let Term::Set(krec, open, items, close) = term {
-        push_pretty_set(doc, true, krec, open, items, close);
+/// Mirrors `prettyTerm (List ..)` in Nixfmt/Pretty.hs (no surrounding group).
+fn push_pretty_term_list(doc: &mut Doc, open: &Leaf, items: &Items<Term>, close: &Leaf) {
+    if items.0.is_empty() && open.trail_comment.is_none() && close.pre_trivia.0.is_empty() {
+        open.pretty(doc);
+        if open.span.start_line != close.span.start_line {
+            doc.push(hardline());
+        } else {
+            doc.push(hardspace());
+        }
+        close.pretty(doc);
     } else {
-        term.pretty(doc);
+        push_render_list(doc, hardline(), open, items, close);
+    }
+}
+
+/// Mirrors `prettyTermWide` in Nixfmt/Pretty.hs.
+fn push_pretty_term_wide(doc: &mut Doc, term: &Term) {
+    match term {
+        Term::Set(krec, open, items, close) => push_pretty_set(doc, true, krec, open, items, close),
+        // `prettyTermWide` delegates to `prettyTerm`, which unlike `instance
+        // Pretty Term` does *not* wrap lists in an extra group.
+        Term::List(open, items, close) => push_pretty_term_list(doc, open, items, close),
+        _ => term.pretty(doc),
     }
 }
 
@@ -179,14 +196,44 @@ fn push_absorb_rhs(doc: &mut Doc, expr: &Expression) {
         }
 
         // Special-case `//`, `++` and `+` to be more compact in some situations.
-        // Case 1: LHS is an absorbable term → unindent the concatenation chain.
+        // Case 1: LHS is an absorbable term without leading trivia → unindent the
+        // concatenation chain (https://github.com/NixOS/nixfmt/issues/228).
         Expression::Operation(left, op, _)
             if op.value.is_update_concat_plus()
-                && matches!(&**left, Expression::Term(t) if is_absorbable_term(t)) =>
+                && matches!(
+                    &**left,
+                    Expression::Term(t)
+                        if is_absorbable_term(t) && !term_first_token_has_pre_trivia(t)
+                ) =>
         {
-            // hardspace <> prettyOp True expr op
             doc.push(hardspace());
             push_pretty_operation(doc, true, expr, op);
+        }
+
+        // Case 2: operator has no trivia and RHS is an absorbable term → keep
+        // `<lhs> // {` on one line and let only the RHS expand.
+        Expression::Operation(left, op, right)
+            if is_lone_ann(op)
+                && op.value.is_update_concat_plus()
+                && matches!(&**right, Expression::Term(t) if is_absorbable_term(t)) =>
+        {
+            let Expression::Term(t) = &**right else {
+                unreachable!()
+            };
+            push_nested(doc, |d| {
+                push_group(d, |g| {
+                    g.push(line());
+                    left.pretty(g);
+                    g.push(line());
+                    push_group_ann(g, GroupAnn::Transparent, |tg| {
+                        op.pretty(tg);
+                        tg.push(hardspace());
+                        push_group_ann(tg, GroupAnn::Priority, |pg| {
+                            push_pretty_term_wide(pg, t);
+                        });
+                    });
+                });
+            });
         }
 
         // Everything else:
@@ -212,6 +259,26 @@ fn is_spaces(s: &str) -> bool {
 
 fn is_lone_ann<T>(ann: &Ann<T>) -> bool {
     ann.pre_trivia.0.is_empty() && ann.trail_comment.is_none()
+}
+
+/// Mirrors `hasPreTrivia` in Nixfmt/Types.hs.
+fn has_pre_trivia<T>(ann: &Ann<T>) -> bool {
+    !ann.pre_trivia.0.is_empty()
+}
+
+/// Mirrors `matchFirstToken` for `Term` in Nixfmt/Types.hs, specialised to the
+/// only predicate we need so far (`hasPreTrivia`).
+fn term_first_token_has_pre_trivia(term: &Term) -> bool {
+    match term {
+        Term::Token(l) => has_pre_trivia(l),
+        Term::SimpleString(s) | Term::IndentedString(s) => has_pre_trivia(s),
+        Term::Path(p) => has_pre_trivia(p),
+        Term::List(open, _, _) => has_pre_trivia(open),
+        Term::Set(Some(rec), _, _, _) => has_pre_trivia(rec),
+        Term::Set(None, open, _, _) => has_pre_trivia(open),
+        Term::Selection(inner, _, _) => term_first_token_has_pre_trivia(inner),
+        Term::Parenthesized(open, _, _) => has_pre_trivia(open),
+    }
 }
 
 fn is_simple_selector(selector: &Selector) -> bool {
@@ -1447,27 +1514,7 @@ impl Pretty for Term {
                 push_pretty_parenthesized(doc, open, expr, close);
             }
             Term::List(open, items, close) => {
-                // Lists are always wrapped in a group (matches Haskell: pretty l@List{} = group $ prettyTerm l)
-                push_group(doc, |g| {
-                    // Empty list fast path (Haskell: prettyTerm (List paropen@Ann{trailComment = Nothing} (Items []) parclose@Ann{preTrivia = []}))
-                    if items.0.is_empty()
-                        && open.trail_comment.is_none()
-                        && close.pre_trivia.0.is_empty()
-                    {
-                        open.pretty(g);
-                        // If the brackets are on different lines, keep them like that
-                        if open.span.start_line != close.span.start_line {
-                            g.push(hardline());
-                        } else {
-                            g.push(hardspace());
-                        }
-                        close.pretty(g);
-                        return;
-                    }
-
-                    // General list (Haskell: prettyTerm (List ..) = renderList hardline ..)
-                    push_render_list(g, hardline(), open, items, close);
-                });
+                push_group(doc, |g| push_pretty_term_list(g, open, items, close));
             }
             Term::Set(krec, open, binders, close) => {
                 push_pretty_set(doc, false, krec, open, binders, close);

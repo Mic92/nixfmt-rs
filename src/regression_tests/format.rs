@@ -72,3 +72,27 @@ fn format_app_comment_before_last_arg_indent() {
         "{\n  v = lib.concat \".\" (\n    map toString\n      # comment\n      (builtins.filter f version)\n  );\n}",
     );
 }
+
+/// `//` / `++` / `+` on the RHS of an assignment must absorb onto the `=` line
+/// when the LHS is an absorbable term and there is no leading trivia.
+/// Haskell: `Nixfmt.Pretty.absorbRHS` Operation Case 1 / `prettyOp True`.
+#[test]
+fn format_assignment_rhs_update_concat_plus_case1() {
+    test_format("{ meta = oldAttrs.meta // { description = \"x\"; }; }");
+    test_ir_format("{ meta = oldAttrs.meta // { description = \"x\"; }; }");
+    test_format("{ x = a.b or [ ] ++ [ y ]; }");
+    test_ir_format("{ x = a.b or [ ] ++ [ y ]; }");
+    test_format("{ x = lib.optionals a [ p ] ++ lib.optionals b [ q ]; }");
+    // Leading trivia on the LHS term disables Case 1 and falls through to Case 2.
+    test_ir_format("{ x = /* c */ [ a ] ++ [ b ]; }");
+    test_ir_format("{ x = [ a ] ++ [ b ] ++ [ c ]; }");
+}
+
+/// `//` with an absorbable RHS term and a non-absorbable LHS keeps `// {` on
+/// the LHS line and only expands the attrset.
+/// Haskell: `Nixfmt.Pretty.absorbRHS` Operation Case 2.
+#[test]
+fn format_assignment_rhs_update_concat_plus_case2() {
+    test_format("{ x = a // { y = 1;\n z = 2;\n}; }");
+    test_ir_format("{ x = a // { y = 1;\n z = 2;\n}; }");
+}
