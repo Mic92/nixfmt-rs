@@ -168,15 +168,16 @@ root causes (each has a minimised reproducer in
 | # | Reproducer | Haskell reference | Status |
 |---|---|---|---|
 | A | `{ a, b }: a` → we emitted `{ a, b, }: a` | `Nixfmt.Predoc.fits` drops `Text Trailing` in compact groups | **Fixed** in `src/predoc.rs` (`fits`) |
-| B | `f (x: { …multiline… })` not absorbed onto `f` line | `Nixfmt.Pretty.absorbLast` / `isAbsorbableExpr` | `#[ignore]` |
-| C | `a: b: { … }` breaks before `{` | `Nixfmt.Pretty.absorbAbs` | `#[ignore]` |
-| D | `with X; { … }` breaks before `{` (lambda body & RHS) | `Nixfmt.Pretty` `With` instance / `absorbRHS` | `#[ignore]` |
-| E | `x = f "a" ''…'';` pushes application to next line | `Nixfmt.Pretty.absorbRHS` (Application) | `#[ignore]` |
-| F | `if … else if …` stays single-line; nixfmt forces expand | `Nixfmt.Pretty.prettyIf` | `#[ignore]` |
-| G | expanded `runCommand "n" {…} ''…''` loses 2-space continuation indent and drops first arg to next line | `Nixfmt.Pretty.prettyApp` | `#[ignore]` |
+| B | `f (x: { …multiline… })` not absorbed onto `f` line | `Nixfmt.Pretty.absorbLast` / `isAbsorbableExpr` | **Fixed** by `pretty.rs` rewrite (chain) |
+| C | `a: b: { … }` breaks before `{` | `Nixfmt.Pretty.absorbAbs` | **Fixed** by `pretty.rs` rewrite (chain) |
+| D | `with X; { … }` breaks before `{` (lambda body & RHS) | `Nixfmt.Pretty` `With` instance / `absorbRHS` | **Fixed** by `pretty.rs` rewrite (chain) |
+| E | `x = f "a" ''…'';` pushes application to next line | `Nixfmt.Pretty.absorbRHS` (Application) | **Fixed** by `pretty.rs` rewrite (chain) |
+| F | `if … else if …` stays single-line; nixfmt forces expand | `Nixfmt.Pretty.prettyIf` | **Fixed** by `pretty.rs` rewrite (chain) |
+| G | expanded `runCommand "n" {…} ''…''` loses 2-space continuation indent and drops first arg to next line | `Nixfmt.Pretty.prettyApp` | **Fixed** by `pretty.rs` rewrite (chain) |
 
-Classes B–G are all IR-generation gaps in `src/pretty.rs` (absorption /
-grouping), each needing >10-line restructuring to mirror the Haskell
-`Pretty Expression` instance. Class A was a one-line layout bug where
-`fits()` rendered `TextAnn::Trailing` despite the comment saying it
-shouldn't.
+Class A was a one-line layout bug where `fits()` rendered
+`TextAnn::Trailing` despite the comment saying it shouldn't. Classes
+B–G were IR-generation gaps in `src/pretty.rs`; after rebasing onto the
+`comments-cleanup` chain (which carries the `pretty.rs`/`predoc.rs`
+restructuring from earlier branches) all seven reproducers pass and are
+enabled as active regression tests in `src/regression_tests/format.rs`.
