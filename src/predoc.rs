@@ -486,51 +486,6 @@ fn simplify_group(ann: GroupAnn, doc: Doc) -> Doc {
     doc
 }
 
-/// Check if an element is trailing spacing (hard spacing or groups containing only hard spacing)
-fn is_trailing_spacing_elem(elem: &DocE) -> bool {
-    if is_hard_spacing(elem) {
-        return true;
-    }
-    match elem {
-        DocE::Group(_, inner) => inner.iter().all(|e| match e {
-            DocE::Spacing(s) => matches!(
-                s,
-                Spacing::Hardspace | Spacing::Hardline | Spacing::Emptyline | Spacing::Newlines(_)
-            ),
-            _ => false,
-        }),
-        _ => false,
-    }
-}
-
-/// Recursively peel trailing spacing out of nested groups
-fn split_trailing(doc: Doc) -> (Doc, Doc) {
-    // First, peel any trailing spacing at this level
-    let (mut body, post) = span_end(is_trailing_spacing_elem, doc);
-    if !post.is_empty() {
-        return (body, post);
-    }
-
-    // If the last element is a group, try peeling from inside it
-    if let Some(DocE::Group(last_ann, last_inner)) = body.last_mut() {
-        let last_ann = *last_ann;
-        let inner = std::mem::take(last_inner);
-        let (new_inner, inner_post) = split_trailing(inner);
-        if !inner_post.is_empty() {
-            body.pop();
-            let new_inner = simplify_group(last_ann, new_inner);
-            if !new_inner.is_empty() {
-                body.push(DocE::Group(last_ann, new_inner));
-            }
-            return (body, inner_post);
-        }
-        // Nothing peeled: restore.
-        *body.last_mut().unwrap() = DocE::Group(last_ann, new_inner);
-    }
-
-    (body, post)
-}
-
 /// Cheap pre-check so render_group can skip the clone-heavy `priority_groups`
 /// machinery for groups that contain no Priority children.
 fn has_priority_groups(doc: &[DocE]) -> bool {
@@ -615,10 +570,8 @@ pub(crate) fn fixup(doc: Doc) -> Doc {
                         doc.push_front(e);
                     }
                 } else {
-                    // Split out trailing hard spacings, and also peel from nested groups
-                    let (body, post) = split_trailing(rest);
-
-                    let body = simplify_group(ann, body);
+                    let (rest, post) = span_end(is_hard_spacing, rest);
+                    let body = simplify_group(ann, rest);
 
                     if body.is_empty() {
                         for e in pre.into_iter().chain(post).rev() {
