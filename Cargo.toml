@@ -1,3 +1,9 @@
+[workspace]
+members = ["fuzz"]
+# The fuzz crate requires a nightly toolchain via `cargo-fuzz`; keep it out
+# of the default set so `cargo build` / `cargo test` work on stable.
+default-members = ["."]
+
 [package]
 name = "nixfmt_rs"
 version = "0.1.0"

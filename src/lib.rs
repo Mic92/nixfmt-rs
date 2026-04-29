@@ -8,6 +8,7 @@ mod pretty_simple;
 
 // Internal modules - not exposed as public API
 mod lexer;
+mod normalize;
 mod parser;
 mod pretty;
 mod types;
@@ -23,6 +24,14 @@ pub(crate) use types::*;
 pub fn parse(source: &str) -> Result<File> {
     let mut parser = parser::Parser::new(source)?;
     parser.parse_file()
+}
+
+/// Parse and return an AST with all trivia/spans stripped, suitable for
+/// structural equality comparison. Intended for the fuzzing harness.
+pub fn parse_normalized(source: &str) -> Result<File> {
+    let mut ast = parse(source)?;
+    normalize::normalize_file(&mut ast);
+    Ok(ast)
 }
 
 /// Format a Nix file
