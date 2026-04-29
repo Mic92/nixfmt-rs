@@ -67,3 +67,13 @@ fn test_list_rendering() {
     test_ir_format("[ 1 2 ]");
     test_ir_format("[\n1 2\n]");
 }
+
+/// Regression test: empty lists/sets containing only a comment must be
+/// absorbable and rendered with hardlines so formatting is idempotent.
+/// https://github.com/NixOS/nixfmt/issues/362
+#[test]
+fn test_empty_container_with_comment_idempotent() {
+    test_ir_format("{ x = [ /* foo */ ]; }");
+    test_ir_format("{ x = { /* foo */ }; }");
+    test_ir_format("{ x = [\n# foo\n]; }");
+}

@@ -18,12 +18,15 @@ fn is_absorbable_term(term: &Term) -> bool {
         // Non-empty sets and lists
         Term::Set(_, _, items, _) if !items.0.is_empty() => true,
         Term::List(_, items, _) if !items.0.is_empty() => true,
-        // Empty sets/lists - absorbable only if braces/brackets span multiple lines
+        // Empty sets/lists - absorbable if braces/brackets span multiple lines,
+        // or if the opening token carries trivia (e.g. a trailing block comment).
+        // The trivia case keeps formatting idempotent for `[ /* foo */ ]`
+        // (https://github.com/NixOS/nixfmt/issues/362).
         Term::Set(_, open, items, close) if items.0.is_empty() => {
-            open.span.start_line != close.span.start_line
+            open.span.start_line != close.span.start_line || !is_lone_ann(open)
         }
         Term::List(open, items, close) if items.0.is_empty() => {
-            open.span.start_line != close.span.start_line
+            open.span.start_line != close.span.start_line || !is_lone_ann(open)
         }
         // Parenthesized absorbable terms
         Term::Parenthesized(_, expr, _) => is_absorbable_expr(expr),
