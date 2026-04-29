@@ -145,10 +145,8 @@ impl Pretty for Binder {
                 });
             }
             Binder::Assignment(selectors, assign, expr, semicolon) => {
-                // For a short, plain-identifier LHS a line break after `=`
-                // gains almost nothing, so the RHS is absorbed directly.
-                // A long or dynamic key gets a `line'` + Priority group so the
-                // value can drop to its own indented line when it overflows.
+                // Only allow a break after `=` when the key is long/dynamic;
+                // for short plain-id keys the extra line buys almost nothing.
                 let simple_lhs = selectors.len() <= 4 && selectors.iter().all(is_simple_selector);
                 push_group(doc, |d| {
                     push_hcat(d, selectors.clone());

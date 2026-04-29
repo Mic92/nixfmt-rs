@@ -13,7 +13,6 @@ impl Pretty for StringPart {
                 let trailing_empty = whole.trailing_trivia.0.is_empty();
                 let value = &whole.value;
 
-                // Absorb a bare absorbable term: `${ [ ... ] }` etc.
                 if trailing_empty {
                     if let Expression::Term(term) = value {
                         if is_absorbable_term(term) {
@@ -120,8 +119,7 @@ impl Pretty for Vec<StringPart> {
         }
 
         match self.as_slice() {
-            // Fallback for a lone interpolation that has trailing trivia:
-            // always surround with `line'`.
+            // Lone interpolation with trailing trivia: always surround with `line'`.
             [StringPart::Interpolation(whole)] => {
                 push_group(doc, |g| {
                     push_text(g, "${");
