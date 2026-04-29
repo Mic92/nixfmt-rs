@@ -60,7 +60,7 @@ pub(super) fn is_spaces(s: &str) -> bool {
 }
 
 /// Haskell `isSimpleSelector` (Pretty.hs).
-fn is_simple_selector(selector: &Selector) -> bool {
+pub(super) fn is_simple_selector(selector: &Selector) -> bool {
     matches!(selector.selector, SimpleSelector::ID(_))
 }
 

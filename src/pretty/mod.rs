@@ -20,7 +20,7 @@ use op::push_pretty_operation;
 use stmt::{insert_into_app, pretty_if, pretty_with, push_absorb_abs};
 use string::{push_pretty_indented_string, push_pretty_simple_string};
 use term::{push_pretty_items, push_pretty_parenthesized, push_pretty_set, push_pretty_term_list};
-use util::{Width, move_trailing_comment_up};
+use util::{Width, is_simple_selector, move_trailing_comment_up};
 
 impl Pretty for TrailingComment {
     fn pretty(&self, doc: &mut Doc) {
@@ -145,12 +145,24 @@ impl Pretty for Binder {
                 });
             }
             Binder::Assignment(selectors, assign, expr, semicolon) => {
+                // For a short, plain-identifier LHS a line break after `=`
+                // gains almost nothing, so the RHS is absorbed directly.
+                // A long or dynamic key gets a `line'` + Priority group so the
+                // value can drop to its own indented line when it overflows.
+                let simple_lhs = selectors.len() <= 4 && selectors.iter().all(is_simple_selector);
                 push_group(doc, |d| {
                     push_hcat(d, selectors.clone());
                     push_nested(d, |inner| {
                         inner.push(hardspace());
                         assign.pretty(inner);
-                        push_absorb_rhs(inner, expr);
+                        if simple_lhs {
+                            push_absorb_rhs(inner, expr);
+                        } else {
+                            inner.push(line_prime());
+                            push_group_ann(inner, GroupAnn::Priority, |g| {
+                                push_absorb_rhs(g, expr);
+                            });
+                        }
                     });
                     semicolon.pretty(d);
                 });
