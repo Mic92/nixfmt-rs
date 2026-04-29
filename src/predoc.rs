@@ -435,15 +435,17 @@ pub(crate) fn unexpand_spacing_prime(mut limit: Option<i32>, doc: &[DocE]) -> Op
 }
 
 /// Manually force a group to compact layout (does not recurse into inner groups)
-fn unexpand_spacing(doc: &Doc) -> Doc {
+fn unexpand_spacing(chain: &[&[DocE]]) -> Doc {
     let mut result = Vec::new();
-    for elem in doc {
-        match elem {
-            DocE::Spacing(Spacing::Space) => result.push(DocE::Spacing(Spacing::Hardspace)),
-            DocE::Spacing(Spacing::Softspace) => result.push(DocE::Spacing(Spacing::Hardspace)),
-            DocE::Spacing(Spacing::Break) => {}
-            DocE::Spacing(Spacing::Softbreak) => {}
-            _ => result.push(elem.clone()),
+    for s in chain {
+        for elem in *s {
+            match elem {
+                DocE::Spacing(Spacing::Space) => result.push(DocE::Spacing(Spacing::Hardspace)),
+                DocE::Spacing(Spacing::Softspace) => result.push(DocE::Spacing(Spacing::Hardspace)),
+                DocE::Spacing(Spacing::Break) => {}
+                DocE::Spacing(Spacing::Softbreak) => {}
+                _ => result.push(elem.clone()),
+            }
         }
     }
     result
@@ -600,13 +602,18 @@ pub(crate) fn fixup(doc: Doc) -> Doc {
 /// adjacent spacings across a group boundary merge exactly as in the Haskell
 /// `ys ++ xs` recursion, and so comment text inside a group never gets
 /// double-counted against `c`.
-fn fits(mut ni: isize, mut c: isize, doc: &[DocE], out: &mut String) -> Option<usize> {
+fn fits(mut ni: isize, mut c: isize, chain: &[&[DocE]], out: &mut String) -> Option<usize> {
     let mark = out.len();
     if c < 0 {
         return None;
     }
 
-    let mut stack: Vec<std::slice::Iter<'_, DocE>> = vec![doc.iter()];
+    let mut stack: Vec<std::slice::Iter<'_, DocE>> = Vec::with_capacity(chain.len() + 4);
+    for s in chain.iter().rev() {
+        if !s.is_empty() {
+            stack.push(s.iter());
+        }
+    }
     let mut pending: Option<Spacing> = None;
 
     loop {
@@ -829,97 +836,65 @@ fn first_line_fits(target_width: usize, max_width: usize, chain: Look<'_>) -> bo
 
 /// Mirrors `nextIndent` in Nixfmt/Predoc.hs.
 fn next_indent(chain: Look<'_>) -> (usize, usize) {
-    for elem in LookIter::new(chain) {
-        match elem {
-            DocE::Text(i, o, _, _) => return (*i, *o),
-            DocE::Group(_, xs) => return next_indent(&[xs]),
-            DocE::Spacing(_) => {}
+    for s in chain {
+        for elem in *s {
+            match elem {
+                DocE::Text(i, o, _, _) => return (*i, *o),
+                DocE::Group(_, xs) => return next_indent(&[xs]),
+                DocE::Spacing(_) => {}
+            }
         }
     }
     (0, 0)
 }
 
-/// Extract and list priority groups
-/// Returns (pre, prio, post) triples
-fn priority_groups(doc: &[DocE]) -> Vec<(Doc, Doc, Doc)> {
-    // Segment the document into (is_priority, content) pairs
-    fn segments(doc: &[DocE]) -> Vec<(bool, Doc)> {
-        let mut result = Vec::new();
-        for elem in doc {
-            match elem {
+type Chain<'a> = Vec<&'a [DocE]>;
+
+/// One `(pre, prio, post)` triple per `Priority` child (in document order),
+/// each as a chain of borrowed slices into `doc`. `Transparent` groups are
+/// flattened so their `Priority` children associate with this parent.
+fn priority_groups(doc: &[DocE]) -> Vec<(Chain<'_>, Chain<'_>, Chain<'_>)> {
+    fn segments<'a>(doc: &'a [DocE], out: &mut Vec<(bool, &'a [DocE])>) {
+        let mut i = 0;
+        while i < doc.len() {
+            match &doc[i] {
                 DocE::Group(GroupAnn::Priority, ys) => {
-                    result.push((true, ys.clone()));
+                    out.push((true, ys));
+                    i += 1;
                 }
                 DocE::Group(GroupAnn::Transparent, ys) => {
-                    result.extend(segments(ys));
+                    segments(ys, out);
+                    i += 1;
                 }
                 _ => {
-                    result.push((false, vec![elem.clone()]));
+                    let start = i;
+                    while i < doc.len()
+                        && !matches!(
+                            &doc[i],
+                            DocE::Group(GroupAnn::Priority | GroupAnn::Transparent, _)
+                        )
+                    {
+                        i += 1;
+                    }
+                    out.push((false, &doc[start..i]));
                 }
             }
         }
-        result
     }
 
-    // Merge consecutive non-priority segments
-    fn merge_segments(segs: Vec<(bool, Doc)>) -> Vec<(bool, Doc)> {
-        let mut result = Vec::new();
-        let mut i = 0;
-        while i < segs.len() {
-            let (is_prio, mut content) = segs[i].clone();
-            if !is_prio {
-                while i + 1 < segs.len() && !segs[i + 1].0 {
-                    i += 1;
-                    content.extend(segs[i].1.clone());
-                }
-            }
-            result.push((is_prio, content));
-            i += 1;
+    let mut segs = Vec::new();
+    segments(doc, &mut segs);
+
+    let mut result = Vec::new();
+    for (idx, (is_prio, body)) in segs.iter().enumerate() {
+        if !is_prio {
+            continue;
         }
-        result
+        let pre: Chain<'_> = segs[..idx].iter().map(|(_, s)| *s).collect();
+        let post: Chain<'_> = segs[idx + 1..].iter().map(|(_, s)| *s).collect();
+        result.push((pre, vec![*body], post));
     }
-
-    // Explode into (pre, prio, post) triples
-    fn explode(segs: &[(bool, Doc)]) -> Vec<(Doc, Doc, Doc)> {
-        if segs.is_empty() {
-            return Vec::new();
-        }
-        if segs.len() == 1 {
-            let (is_prio, content) = &segs[0];
-            return if *is_prio {
-                vec![(Vec::new(), content.clone(), Vec::new())]
-            } else {
-                Vec::new()
-            };
-        }
-
-        let (is_prio, content) = &segs[0];
-        let rest = &segs[1..];
-
-        if *is_prio {
-            let post: Doc = rest.iter().flat_map(|(_, c)| c.clone()).collect();
-            let mut result = vec![(Vec::new(), content.clone(), post.clone())];
-            for (pre, prio, post) in explode(rest) {
-                let mut new_pre = content.clone();
-                new_pre.extend(pre);
-                result.push((new_pre, prio, post));
-            }
-            result
-        } else {
-            explode(rest)
-                .into_iter()
-                .map(|(pre, prio, post)| {
-                    let mut new_pre = content.clone();
-                    new_pre.extend(pre);
-                    (new_pre, prio, post)
-                })
-                .collect()
-        }
-    }
-
-    let segs = segments(doc);
-    let merged = merge_segments(segs);
-    explode(&merged)
+    result
 }
 
 /// State for layout algorithm
@@ -1128,36 +1103,71 @@ fn render_text(
     out.push_str(text);
 }
 
+/// Render a chain of slices as one document, threading lookahead so each
+/// slice sees the remaining slices plus the outer lookahead.
+fn render_chain(
+    out: &mut String,
+    chain: &[&[DocE]],
+    lookahead: Look<'_>,
+    state: &mut LayoutState,
+    tw: usize,
+    iw: usize,
+) {
+    let mut la: Vec<&[DocE]> = Vec::with_capacity(chain.len() + lookahead.len());
+    for i in 0..chain.len() {
+        la.clear();
+        la.extend_from_slice(&chain[i + 1..]);
+        la.extend_from_slice(lookahead);
+        render_doc(out, chain[i], &la, state, tw, iw);
+    }
+}
+
 /// Try to render a group compactly. On success, appends to `out` and updates
 /// `state` in place; on failure leaves both untouched.
 fn try_render_group(
     out: &mut String,
-    grp: &[DocE],
+    grp: &[&[DocE]],
     lookahead: Look<'_>,
     state: &mut LayoutState,
     tw: usize,
     iw: usize,
 ) -> bool {
     // Mirrors `goGroup` in Nixfmt/Predoc.hs.
-    if grp.is_empty() {
+    if grp.iter().all(|s| s.is_empty()) {
         return true;
     }
 
     let (cc, indents) = (state.0, &state.1);
 
     if cc == 0 {
-        // At start of line - drop leading whitespace
-        let grp = match grp.first() {
-            Some(DocE::Spacing(_)) => &grp[1..],
+        // At start of line - drop leading whitespace.
+        let mut h = 0;
+        while h < grp.len() && grp[h].is_empty() {
+            h += 1;
+        }
+        let grp = &grp[h..];
+        let adj_storage: Vec<&[DocE]>;
+        let grp: &[&[DocE]] = match grp[0].first() {
+            Some(DocE::Spacing(_)) => {
+                adj_storage = std::iter::once(&grp[0][1..])
+                    .chain(grp[1..].iter().copied())
+                    .collect();
+                &adj_storage
+            }
             Some(DocE::Group(ann, inner)) if matches!(inner.first(), Some(DocE::Spacing(_))) => {
-                let mut new_grp = vec![DocE::Group(*ann, inner[1..].to_vec())];
-                new_grp.extend_from_slice(&grp[1..]);
-                return try_render_group(out, &new_grp, lookahead, state, tw, iw);
+                // Rare: leading subgroup itself starts with spacing. Rebuild
+                // that one element; the rest stays borrowed.
+                let owned = vec![DocE::Group(*ann, inner[1..].to_vec())];
+                let mut new: Vec<&[DocE]> = Vec::with_capacity(grp.len() + 1);
+                new.push(&owned);
+                new.push(&grp[0][1..]);
+                new.extend_from_slice(&grp[1..]);
+                return try_render_group(out, &new, lookahead, state, tw, iw);
             }
             _ => grp,
         };
 
-        let (nl, off) = next_indent(&[grp]);
+        let (nl, off) = next_indent(grp);
         // Haskell `goGroup` (cc == 0): the budget is `tw - firstLineWidth rest`;
         // the pending indentation is *not* subtracted here, so a compact group
         // at the start of a line may overshoot by its indent. This matches the
@@ -1217,7 +1227,7 @@ fn render_group(
     iw: usize,
 ) {
     // Try to fit group compactly
-    if try_render_group(out, ys, lookahead, state, tw, iw) {
+    if try_render_group(out, &[ys], lookahead, state, tw, iw) {
         return;
     }
 
@@ -1226,9 +1236,10 @@ fn render_group(
         let state_backup = state.clone();
         let out_len = out.len();
         for (pre, prio, post) in priority_groups(ys).into_iter().rev() {
-            let mut pre_lookahead: Vec<&[DocE]> = Vec::with_capacity(2 + lookahead.len());
-            pre_lookahead.push(&prio);
-            pre_lookahead.push(&post);
+            let mut pre_lookahead: Vec<&[DocE]> =
+                Vec::with_capacity(prio.len() + post.len() + lookahead.len());
+            pre_lookahead.extend_from_slice(&prio);
+            pre_lookahead.extend_from_slice(&post);
             pre_lookahead.extend_from_slice(lookahead);
             if try_render_group(out, &pre, &pre_lookahead, state, tw, iw) {
                 // Render prio expanded
@@ -1236,7 +1247,7 @@ fn render_group(
                 let mut prio_lookahead: Vec<&[DocE]> = Vec::with_capacity(1 + lookahead.len());
                 prio_lookahead.push(&unexpanded_post);
                 prio_lookahead.extend_from_slice(lookahead);
-                render_doc(out, &prio, &prio_lookahead, state, tw, iw);
+                render_chain(out, &prio, &prio_lookahead, state, tw, iw);
 
                 if try_render_group(out, &post, lookahead, state, tw, iw) {
                     return;
