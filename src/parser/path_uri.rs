@@ -38,13 +38,15 @@ impl Parser {
         let Token::Identifier(scheme) = &self.current.value else {
             return false;
         };
-        if !scheme.chars().all(is_scheme_char) {
-            return false;
-        }
+        // Cheap checks first: invoked for every identifier term, so avoid
+        // scanning the scheme unless `:<uri-char>` already follows.
         if self.lexer.peek() != Some(':') {
             return false;
         }
-        matches!(self.lexer.peek_ahead(1), Some(c) if is_uri_char(c))
+        if !matches!(self.lexer.peek_ahead(1), Some(c) if is_uri_char(c)) {
+            return false;
+        }
+        scheme.chars().all(is_scheme_char)
     }
 
     /// Parse a Nix path (e.g., ./foo, ../bar, /abs, ~/home, foo/bar.nix)

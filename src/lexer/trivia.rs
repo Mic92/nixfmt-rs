@@ -97,9 +97,26 @@ pub(super) fn convert_leading(pts: &[ParseTrivium]) -> Trivia {
 /// - If a trailing comment visually forms a block with the following line,
 ///   treat it as leading instead to preserve formatting intent
 pub(crate) fn convert_trivia(
-    pts: Vec<ParseTrivium>,
+    pts: &[ParseTrivium],
     next_col: usize,
 ) -> (Option<TrailingComment>, Trivia) {
+    // Fast path: the overwhelmingly common case between two tokens is a single
+    // run of newlines (or nothing at all) with no comments.
+    match pts {
+        [] => return (None, Trivia::new()),
+        [ParseTrivium::Newlines(n)] => {
+            return (
+                None,
+                if *n > 1 {
+                    Trivia(vec![Trivium::EmptyLine()])
+                } else {
+                    Trivia::new()
+                },
+            );
+        }
+        _ => {}
+    }
+
     // Split into trailing and leading parts
     let split_pos = pts
         .iter()
@@ -118,13 +135,13 @@ pub(crate) fn convert_trivia(
                 ParseTrivium::LineComment { col: col2, .. },
                 ..,
             ],
-        ) if col1 == col2 => (None, convert_leading(&pts)),
+        ) if col1 == col2 => (None, convert_leading(pts)),
 
         // Case 2: [ # comment ] followed by single newline, and next token is at same column
         ([ParseTrivium::LineComment { col, .. }], [ParseTrivium::Newlines(1)])
             if *col == next_col =>
         {
-            (None, convert_leading(&pts))
+            (None, convert_leading(pts))
         }
 
         // Default: split normally

@@ -7,7 +7,6 @@ use crate::types::{Token, Trivia};
 mod comments;
 mod numbers;
 mod trivia;
-pub(crate) use trivia::convert_trivia;
 
 #[cfg(test)]
 mod tests;
@@ -48,6 +47,9 @@ pub(crate) struct LexerState {
 
 pub(crate) struct Lexer {
     input: Vec<char>,
+    /// Original source, kept so byte ranges can be sliced directly instead of
+    /// re-collecting chars (e.g. identifier text).
+    source: Box<str>,
     pos: usize,
     /// Byte offset corresponding to `pos`, kept in lockstep so span
     /// construction is O(1) instead of re-scanning the prefix per token.
@@ -66,12 +68,16 @@ pub(crate) struct Lexer {
     line_comment_buffer: String,
     /// Scratch buffer reused while collecting block comments
     block_comment_buffer: String,
+    /// Scratch buffer reused by `parse_trivia` so the per-token trivia list
+    /// does not allocate on every call.
+    trivia_scratch: Vec<ParseTrivium>,
 }
 
 impl Lexer {
     pub(crate) fn new(source: &str) -> Self {
         Lexer {
             input: source.chars().collect(),
+            source: source.into(),
             pos: 0,
             byte_pos: 0,
             line: 1,
@@ -82,6 +88,7 @@ impl Lexer {
             trivia_start: None,
             line_comment_buffer: String::new(),
             block_comment_buffer: String::new(),
+            trivia_scratch: Vec::new(),
         }
     }
 
@@ -123,8 +130,8 @@ impl Lexer {
         // body token. There is no preceding Nix token here, so treat all of it
         // as leading trivia rather than splitting off a discarded "trailing".
         if matches!(self.peek(), Some('\n') | Some('\r') | Some('#') | Some('/')) {
-            let extra_trivia = self.parse_trivia();
-            leading_trivia.extend(trivia::convert_leading(&extra_trivia));
+            self.parse_trivia();
+            leading_trivia.extend(trivia::convert_leading(&self.trivia_scratch));
 
             // Skip hspace after trivia
             let _ = self.skip_hspace();
@@ -151,14 +158,8 @@ impl Lexer {
             // Don't parse trivia yet - parser will handle string content
             (None, Trivia::new())
         } else {
-            // Parse trivia after the token
-            let parsed_trivia = self.parse_trivia();
-
-            // Get the column of the next token
-            let next_col = self.column;
-
-            // Convert trivia to (trailing_comment, next_leading_trivia)
-            trivia::convert_trivia(parsed_trivia, next_col)
+            self.parse_trivia();
+            trivia::convert_trivia(&self.trivia_scratch, self.column)
         };
 
         // Store leading trivia for next token
@@ -176,9 +177,18 @@ impl Lexer {
     /// Parse a whole file (expression + final trivia)
     pub(crate) fn start_parse(&mut self) -> crate::error::Result<()> {
         // Parse initial trivia and convert to leading
-        let initial_trivia = self.parse_trivia();
-        self.trivia_buffer = trivia::convert_leading(&initial_trivia);
+        self.parse_trivia();
+        self.trivia_buffer = trivia::convert_leading(&self.trivia_scratch);
         Ok(())
+    }
+
+    /// Parse trivia and classify it into `(trailing, next_leading)` so the
+    /// parser does not need direct access to the scratch buffer.
+    pub(crate) fn parse_and_convert_trivia(
+        &mut self,
+    ) -> (Option<crate::types::TrailingComment>, Trivia) {
+        self.parse_trivia();
+        trivia::convert_trivia(&self.trivia_scratch, self.column)
     }
 
     /// Get current position as a zero-length span (in byte offsets)
@@ -389,21 +399,25 @@ impl Lexer {
 
     /// Parse identifier or keyword
     fn parse_ident_or_keyword(&mut self) -> crate::error::Result<Token> {
-        let mut ident = String::new();
+        let start_byte = self.byte_pos;
 
-        while let Some(ch) = self.peek() {
-            // Nix identifiers must be ASCII-only: [a-zA-Z_][a-zA-Z0-9_'-]*
-            // Use is_ascii_alphanumeric() instead of is_alphanumeric() to reject Unicode
-            if ch.is_ascii_alphanumeric() || ch == '_' || ch == '-' || ch == '\'' {
-                ident.push(ch);
-                self.advance();
+        // Nix identifiers are ASCII-only: [a-zA-Z_][a-zA-Z0-9_'-]*, so every
+        // accepted char is exactly one byte and cannot be a newline. Advance
+        // the cursor fields directly instead of going through `advance()`.
+        while self.pos < self.input.len() {
+            let ch = self.input[self.pos];
+            if ch.is_ascii_alphanumeric() || matches!(ch, '_' | '-' | '\'') {
+                self.pos += 1;
+                self.byte_pos += 1;
+                self.column += 1;
             } else {
                 break;
             }
         }
 
-        // Check for keywords
-        let token = match ident.as_str() {
+        let text = &self.source[start_byte..self.byte_pos];
+
+        let token = match text {
             "assert" => Token::KAssert,
             "else" => Token::KElse,
             "if" => Token::KIf,
@@ -413,7 +427,7 @@ impl Lexer {
             "rec" => Token::KRec,
             "then" => Token::KThen,
             "with" => Token::KWith,
-            _ => Token::Identifier(ident),
+            _ => Token::Identifier(text.to_owned()),
         };
 
         Ok(token)
@@ -557,12 +571,12 @@ impl Lexer {
         self.pos - start_pos
     }
 
-    /// Parse trivia (comments and whitespace)
-    pub(crate) fn parse_trivia(&mut self) -> Vec<ParseTrivium> {
+    /// Parse trivia (comments and whitespace) into `self.trivia_scratch`.
+    fn parse_trivia(&mut self) {
         // Save position before parsing trivia, so we can rewind if needed
         self.trivia_start = Some(self.mark());
 
-        let mut trivia = Vec::new();
+        self.trivia_scratch.clear();
         self.recent_newlines = 0;
         self.recent_hspace = 0;
 
@@ -578,45 +592,55 @@ impl Lexer {
                 Some('\n') | Some('\r') => {
                     let count = self.parse_newlines();
                     self.recent_newlines = count;
-                    trivia.push(ParseTrivium::Newlines(count));
+                    self.trivia_scratch.push(ParseTrivium::Newlines(count));
                 }
                 Some('#') => {
-                    trivia.push(self.parse_line_comment());
+                    let c = self.parse_line_comment();
+                    self.trivia_scratch.push(c);
                 }
                 Some('/') if self.at("/*") => {
                     // Try language annotation first, fall back to block comment
                     let saved_state = self.save_state();
 
                     if let Some(lang_annot) = self.try_parse_language_annotation() {
-                        trivia.push(lang_annot);
+                        self.trivia_scratch.push(lang_annot);
                     } else {
                         // Restore position and parse as block comment
                         self.restore_state(saved_state);
-                        trivia.push(self.parse_block_comment());
+                        let c = self.parse_block_comment();
+                        self.trivia_scratch.push(c);
                     }
                 }
                 _ => break,
             }
         }
-
-        trivia
     }
 
     /// Parse consecutive newlines, return count
     fn parse_newlines(&mut self) -> usize {
         let mut count = 0;
-        while let Some(ch) = self.peek() {
-            if ch == '\r' {
-                self.advance();
-                if self.peek() == Some('\n') {
-                    self.advance();
+        while self.pos < self.input.len() {
+            match self.input[self.pos] {
+                '\n' => {
+                    self.pos += 1;
+                    self.byte_pos += 1;
+                    self.line += 1;
+                    self.column = 0;
+                    count += 1;
                 }
-                count += 1;
-            } else if ch == '\n' {
-                self.advance();
-                count += 1;
-            } else {
-                break;
+                '\r' => {
+                    self.pos += 1;
+                    self.byte_pos += 1;
+                    self.column += 1;
+                    if self.input.get(self.pos) == Some(&'\n') {
+                        self.pos += 1;
+                        self.byte_pos += 1;
+                        self.line += 1;
+                        self.column = 0;
+                    }
+                    count += 1;
+                }
+                _ => break,
             }
         }
         count

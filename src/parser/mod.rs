@@ -206,8 +206,8 @@ impl Parser {
             Token::Identifier(_) => {
                 // Try to parse as parameter attributes first
                 // If it fails (sees = or .), parse as bindings
-                match self.parse_param_attrs() {
-                    Ok(attrs) => {
+                match self.try_parse_param_attrs()? {
+                    Some(attrs) => {
                         self.check_duplicate_formals(&attrs)?;
 
                         let close_brace =
@@ -252,7 +252,7 @@ impl Parser {
                             })
                         }
                     }
-                    Err(_) => {
+                    None => {
                         // Failed to parse as parameters (saw `=` or `.`); retry as set literal
                         self.restore_state(saved_state);
 
@@ -756,9 +756,7 @@ impl Parser {
     fn parse_trailing_trivia_and_advance(
         &mut self,
     ) -> Result<Option<crate::types::TrailingComment>> {
-        let parsed_trivia = self.lexer.parse_trivia();
-        let next_col = self.lexer.column;
-        let (trail_comment, next_leading) = crate::lexer::convert_trivia(parsed_trivia, next_col);
+        let (trail_comment, next_leading) = self.lexer.parse_and_convert_trivia();
 
         // Store the leading trivia for the next token
         self.lexer.trivia_buffer = next_leading;

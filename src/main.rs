@@ -13,12 +13,15 @@ fn main() {
 
     let mut dump_ast = false;
     let mut dump_ir = false;
+    let mut parse_only = false;
     let mut files = Vec::new();
 
     // Parse arguments
     for arg in &args[1..] {
         if arg == "--ast" {
             dump_ast = true;
+        } else if arg == "--parse-only" {
+            parse_only = true;
         } else if arg == "--ir" {
             dump_ir = true;
         } else if !arg.starts_with('-') {
@@ -47,7 +50,9 @@ fn main() {
     };
 
     // Process based on mode
-    if dump_ast {
+    if parse_only {
+        nixfmt_rs::parse(&source).unwrap_or_else(|e| handle_error(&source, filename, e));
+    } else if dump_ast {
         let output =
             nixfmt_rs::format_ast(&source).unwrap_or_else(|e| handle_error(&source, filename, e));
         print!("{}", output);

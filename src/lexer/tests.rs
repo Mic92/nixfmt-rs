@@ -54,15 +54,15 @@ fn test_remove_stars() {
 #[test]
 fn test_parse_line_comment() {
     let mut lexer = Lexer::new("# hello world\n");
-    let trivia = lexer.parse_trivia();
-    assert_eq!(trivia.len(), 2); // comment + newline
+    lexer.parse_trivia();
+    assert_eq!(lexer.trivia_scratch.len(), 2); // comment + newline
 }
 
 #[test]
 fn test_parse_block_comment() {
     let mut lexer = Lexer::new("/* hello */");
-    let trivia = lexer.parse_trivia();
-    assert_eq!(trivia.len(), 1);
+    lexer.parse_trivia();
+    assert_eq!(lexer.trivia_scratch.len(), 1);
 }
 
 #[test]

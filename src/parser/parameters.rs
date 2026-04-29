@@ -74,6 +74,25 @@ impl Parser {
     /// Parse parameter attributes: x, y, z ? 1, ...
     /// Returns Err if this looks like bindings (sees = or .) instead
     pub(super) fn parse_param_attrs(&mut self) -> Result<Vec<ParamAttr>> {
+        match self.try_parse_param_attrs()? {
+            Some(attrs) => Ok(attrs),
+            None => Err(ParseError {
+                span: self.current.span,
+                kind: ErrorKind::InvalidSyntax {
+                    description: "not a parameter - looks like binding".to_string(),
+                    hint: Some("parameters cannot have '=' or '.'".to_string()),
+                },
+                labels: vec![],
+            }),
+        }
+    }
+
+    /// Like [`parse_param_attrs`] but returns `Ok(None)` (instead of an
+    /// allocated `ParseError`) when the input turns out to be attribute
+    /// bindings rather than a parameter list. The set/parameter disambiguation
+    /// in `parse_set_parameter_or_literal` hits this for every `{ x = ...; }`
+    /// literal, so the "not a parameter" signal must be allocation-free.
+    pub(super) fn try_parse_param_attrs(&mut self) -> Result<Option<Vec<ParamAttr>>> {
         let mut attrs = Vec::new();
 
         while !matches!(self.current.value, Token::TBraceClose | Token::Sof) {
@@ -90,14 +109,7 @@ impl Parser {
 
                 if matches!(self.current.value, Token::TAssign | Token::TDot) {
                     // This is a binding (a = ...), not a parameter!
-                    return Err(ParseError {
-                        span: name.span,
-                        kind: ErrorKind::InvalidSyntax {
-                            description: "not a parameter - looks like binding".to_string(),
-                            hint: Some("parameters cannot have '=' or '.'".to_string()),
-                        },
-                        labels: vec![],
-                    });
+                    return Ok(None);
                 }
 
                 let default = if matches!(self.current.value, Token::TQuestion) {
@@ -120,7 +132,7 @@ impl Parser {
             }
         }
 
-        Ok(attrs)
+        Ok(Some(attrs))
     }
 
     /// Check for duplicate formal parameters
