@@ -31,7 +31,7 @@ pub fn format(source: &str) -> Result<String> {
     let mut doc = predoc::Doc::new();
     ast.pretty(&mut doc);
     let config = RenderConfig::default();
-    let output = render_with_config(&doc, &config);
+    let output = render_with_config(doc, &config);
     Ok(output)
 }
 
@@ -40,7 +40,7 @@ pub fn format(source: &str) -> Result<String> {
 pub fn ast_to_ir(ast: &File) -> predoc::IR {
     let mut doc = predoc::Doc::new();
     ast.pretty(&mut doc);
-    let doc = predoc::fixup(&doc);
+    let doc = predoc::fixup(doc);
     predoc::IR(doc)
 }
 
