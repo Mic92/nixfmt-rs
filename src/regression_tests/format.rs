@@ -235,3 +235,20 @@ fn format_comparison_op_softline() {
     // dev-shell-tools: LHS is `//` chain, RHS is an attrset.
     test_format("a // { b = 1; } == { c = 1; }");
 }
+
+/// A binding whose LHS is long or uses a non-ID selector (string /
+/// interpolation key) gets a `line'` before the RHS so the value can move to
+/// its own indented line when the whole binding overflows.
+/// Haskell: `Nixfmt.Pretty.instance Pretty Binder` `Assignment` `rhs` guard.
+#[test]
+fn format_assignment_non_simple_selector_breaks_rhs() {
+    test_format(concat!(
+        "{\n  \"PKG_CONFIG_GIMP_${pkgConfigMajorVersion}_0_GIMPLIBDIR\" = ",
+        "\"${placeholder \"out\"}/${gimp.targetLibDir}\";\n}",
+    ));
+    // >4 selectors also triggers the break even when each is a plain id.
+    test_format(concat!(
+        "{\n  a.b.c.d.e = \"",
+        "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\";\n}",
+    ));
+}
