@@ -10,8 +10,8 @@ A from-scratch Rust reimplementation of [nixfmt] that produces byte-identical ou
 
 - Byte-identical output across the entire nixpkgs tree
   (`LIMIT=0 cargo run --release --example diff_sweep`).
-- Formats all of nixpkgs (≈43 k `.nix` files) in ≈2.2 s versus
-  ≈67 s for the Haskell original — about 30× (Apple M3, 8‑core,
+- Formats all of nixpkgs (≈43 k `.nix` files) in ≈2 s versus
+  ≈70 s for the Haskell original — about 35× (Apple M3, 8‑core,
   16 GB).
 
 See [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) for how the pieces fit
