@@ -262,11 +262,6 @@ fn collect_application_parts<'a>(expr: &'a Expression, parts: &mut Vec<&'a Expre
     }
 }
 
-/// Convert a trailing comment into a regular line-comment trivium (Haskell `toLineComment`).
-fn to_line_comment(tc: &TrailingComment) -> Trivium {
-    Trivium::LineComment(format!(" {}", tc.0))
-}
-
 /// Shared trivia juggling for parenthesized rendering: strips the opening
 /// token's trailing comment (returned as `Trivia`) and the closing token's
 /// leading trivia so callers can re-emit them inside the nested body.
@@ -278,7 +273,7 @@ fn split_paren_trivia(
     let trail: Trivia = open
         .trail_comment
         .take()
-        .map(|tc| vec![to_line_comment(&tc)])
+        .map(|tc| vec![Trivium::LineComment(format!(" {}", tc.0))])
         .unwrap_or_default()
         .into();
     let mut close = close.clone();
@@ -375,8 +370,7 @@ fn items_has_only_comments<T>(items: &Items<T>) -> bool {
     !items.0.is_empty() && items.0.iter().all(|i| matches!(i, Item::Comments(_)))
 }
 
-/// Render the last argument of a function application (absorbLast in nixfmt)
-/// Uses Priority group for absorbable or parenthesized args, RegularG otherwise
+/// Render the last argument of a function application (Haskell `absorbLast`).
 fn push_last_arg(doc: &mut Doc, arg: &Expression) {
     match arg {
         Expression::Term(Term::Parenthesized(open, expr, close)) => {
@@ -407,21 +401,11 @@ fn push_pretty_app(
     has_post: bool,
     expr: &Expression,
 ) {
+    debug_assert!(matches!(expr, Expression::Application(_, _)));
     let mut parts = Vec::new();
     collect_application_parts(expr, &mut parts);
-
-    let (first, rest) = match parts.split_first() {
-        Some(x) => x,
-        None => return,
-    };
-    let (last, middle) = match rest.split_last() {
-        Some(x) => x,
-        None => {
-            // Degenerate single-term "application"; just pretty it.
-            first.pretty(doc);
-            return;
-        }
-    };
+    let (last, init) = parts.split_last().expect("application has >= 2 parts");
+    let (first, middle) = init.split_first().expect("application has >= 2 parts");
 
     // absorbApp fWithoutComment: each application level wraps the previously
     // accumulated chain in a Transparent group, matching the recursive
@@ -469,6 +453,7 @@ fn push_pretty_app(
         }
     });
 }
+
 fn flatten_operation_chain<'a>(
     target: &'a Leaf,
     expr: &'a Expression,
