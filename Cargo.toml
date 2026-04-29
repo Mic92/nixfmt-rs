@@ -26,6 +26,7 @@ memchr = "2"
 compact_str = "0.8"
 rayon = "1"
 walkdir = "2"
+mimalloc = { version = "0.1", default-features = false }
 
 [dev-dependencies]
 criterion = "0.5"

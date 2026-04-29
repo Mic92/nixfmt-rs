@@ -5,6 +5,9 @@
 
 use rayon::prelude::*;
 use std::io::{self, Read, Write};
+
+#[global_allocator]
+static GLOBAL: mimalloc::MiMalloc = mimalloc::MiMalloc;
 use std::path::{Path, PathBuf};
 use std::process::exit;
 use walkdir::WalkDir;
