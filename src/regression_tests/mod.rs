@@ -3,3 +3,4 @@
 pub mod format;
 pub mod ir;
 pub mod parser;
+pub mod properties;

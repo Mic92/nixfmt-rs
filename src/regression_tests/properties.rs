@@ -1,0 +1,426 @@
+//! Property-based regression harness over the vendored upstream nixfmt test
+//! corpus (`tests/fixtures/nixfmt/`).
+//!
+//! Asserts two invariants the formatter must always uphold:
+//!   1. Idempotency:      format(format(x)) == format(x)
+//!   2. AST preservation: parse(format(x)) ==_strip_trivia parse(x)
+//!
+//! The corpus is checked into this repo so the tests are hermetic. Files our
+//! parser cannot parse yet are skipped (those are tracked by the parser
+//! regression tests, not here).
+
+use crate::tests_common::diff;
+use crate::types::*;
+use std::path::{Path as FsPath, PathBuf};
+
+// ---------------------------------------------------------------------------
+// Trivia stripping
+// ---------------------------------------------------------------------------
+
+/// Zero out all source-position / comment information so two ASTs can be
+/// compared purely on syntactic structure. The derived `PartialEq` on the
+/// AST types then gives us the equality we want.
+trait StripTrivia {
+    fn strip_trivia(&mut self);
+}
+
+fn scrub<T>(ann: &mut Ann<T>) {
+    ann.pre_trivia = Trivia::new();
+    ann.trail_comment = None;
+    ann.span = Span::new(0, 0);
+}
+
+impl StripTrivia for Leaf {
+    fn strip_trivia(&mut self) {
+        scrub(self);
+    }
+}
+
+impl StripTrivia for StringPart {
+    fn strip_trivia(&mut self) {
+        if let StringPart::Interpolation(whole) = self {
+            whole.strip_trivia();
+        }
+    }
+}
+
+impl StripTrivia for Ann<StringPart> {
+    fn strip_trivia(&mut self) {
+        scrub(self);
+        self.value.strip_trivia();
+    }
+}
+
+impl StripTrivia for Path {
+    fn strip_trivia(&mut self) {
+        scrub(self);
+        for p in &mut self.value {
+            p.strip_trivia();
+        }
+    }
+}
+
+impl StripTrivia for NixString {
+    fn strip_trivia(&mut self) {
+        scrub(self);
+        for line in &mut self.value {
+            for p in line {
+                p.strip_trivia();
+            }
+        }
+    }
+}
+
+impl StripTrivia for SimpleSelector {
+    fn strip_trivia(&mut self) {
+        match self {
+            SimpleSelector::ID(l) => l.strip_trivia(),
+            SimpleSelector::Interpol(a) => a.strip_trivia(),
+            SimpleSelector::String(s) => s.strip_trivia(),
+        }
+    }
+}
+
+impl StripTrivia for Selector {
+    fn strip_trivia(&mut self) {
+        if let Some(d) = &mut self.dot {
+            d.strip_trivia();
+        }
+        self.selector.strip_trivia();
+    }
+}
+
+impl<T: StripTrivia> StripTrivia for Items<T> {
+    fn strip_trivia(&mut self) {
+        // Interleaved comment items are pure trivia.
+        self.0.retain(|i| matches!(i, Item::Item(_)));
+        for item in &mut self.0 {
+            if let Item::Item(v) = item {
+                v.strip_trivia();
+            }
+        }
+    }
+}
+
+impl StripTrivia for Binder {
+    fn strip_trivia(&mut self) {
+        match self {
+            Binder::Inherit(kw, from, sels, semi) => {
+                kw.strip_trivia();
+                if let Some(t) = from {
+                    t.strip_trivia();
+                }
+                for s in sels {
+                    s.strip_trivia();
+                }
+                semi.strip_trivia();
+            }
+            Binder::Assignment(sels, eq, expr, semi) => {
+                for s in sels {
+                    s.strip_trivia();
+                }
+                eq.strip_trivia();
+                expr.strip_trivia();
+                semi.strip_trivia();
+            }
+        }
+    }
+}
+
+impl StripTrivia for ParamAttr {
+    fn strip_trivia(&mut self) {
+        match self {
+            ParamAttr::ParamAttr(name, def, comma) => {
+                name.strip_trivia();
+                if let Some((q, e)) = def.as_mut() {
+                    q.strip_trivia();
+                    e.strip_trivia();
+                }
+                if let Some(c) = comma {
+                    c.strip_trivia();
+                }
+            }
+            ParamAttr::ParamEllipsis(l) => l.strip_trivia(),
+        }
+    }
+}
+
+impl StripTrivia for Parameter {
+    fn strip_trivia(&mut self) {
+        match self {
+            Parameter::ID(l) => l.strip_trivia(),
+            Parameter::Set(open, attrs, close) => {
+                open.strip_trivia();
+                // The formatter intentionally normalises the trailing comma on
+                // the last attr; treat its presence/absence as trivia.
+                if let Some(ParamAttr::ParamAttr(_, _, c)) = attrs.last_mut() {
+                    *c = None;
+                }
+                for a in attrs {
+                    a.strip_trivia();
+                }
+                close.strip_trivia();
+            }
+            Parameter::Context(a, at, b) => {
+                a.strip_trivia();
+                at.strip_trivia();
+                b.strip_trivia();
+            }
+        }
+    }
+}
+
+impl StripTrivia for Term {
+    fn strip_trivia(&mut self) {
+        match self {
+            Term::Token(l) => l.strip_trivia(),
+            Term::SimpleString(s) | Term::IndentedString(s) => s.strip_trivia(),
+            Term::Path(p) => p.strip_trivia(),
+            Term::List(o, items, c) => {
+                o.strip_trivia();
+                items.strip_trivia();
+                c.strip_trivia();
+            }
+            Term::Set(rec, o, items, c) => {
+                if let Some(r) = rec {
+                    r.strip_trivia();
+                }
+                o.strip_trivia();
+                items.strip_trivia();
+                c.strip_trivia();
+            }
+            Term::Selection(t, sels, default) => {
+                t.strip_trivia();
+                for s in sels {
+                    s.strip_trivia();
+                }
+                if let Some((or_kw, d)) = default {
+                    or_kw.strip_trivia();
+                    d.strip_trivia();
+                }
+            }
+            Term::Parenthesized(o, e, c) => {
+                o.strip_trivia();
+                e.strip_trivia();
+                c.strip_trivia();
+            }
+        }
+    }
+}
+
+impl StripTrivia for Expression {
+    fn strip_trivia(&mut self) {
+        match self {
+            Expression::Term(t) => t.strip_trivia(),
+            Expression::With(kw, a, semi, b) | Expression::Assert(kw, a, semi, b) => {
+                kw.strip_trivia();
+                a.strip_trivia();
+                semi.strip_trivia();
+                b.strip_trivia();
+            }
+            Expression::Let(kw, binders, in_kw, body) => {
+                kw.strip_trivia();
+                binders.strip_trivia();
+                in_kw.strip_trivia();
+                body.strip_trivia();
+            }
+            Expression::If(i, c, t, a, e, b) => {
+                i.strip_trivia();
+                c.strip_trivia();
+                t.strip_trivia();
+                a.strip_trivia();
+                e.strip_trivia();
+                b.strip_trivia();
+            }
+            Expression::Abstraction(p, colon, body) => {
+                p.strip_trivia();
+                colon.strip_trivia();
+                body.strip_trivia();
+            }
+            Expression::Application(f, a) => {
+                f.strip_trivia();
+                a.strip_trivia();
+            }
+            Expression::Operation(a, op, b) => {
+                a.strip_trivia();
+                op.strip_trivia();
+                b.strip_trivia();
+            }
+            Expression::MemberCheck(e, q, sels) => {
+                e.strip_trivia();
+                q.strip_trivia();
+                for s in sels {
+                    s.strip_trivia();
+                }
+            }
+            Expression::Negation(op, e) | Expression::Inversion(op, e) => {
+                op.strip_trivia();
+                e.strip_trivia();
+            }
+        }
+    }
+}
+
+impl<T: StripTrivia> StripTrivia for Whole<T> {
+    fn strip_trivia(&mut self) {
+        self.value.strip_trivia();
+        self.trailing_trivia = Trivia::new();
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Input collection
+// ---------------------------------------------------------------------------
+
+fn collect_fixture_nix_files(dir: &FsPath, out: &mut Vec<PathBuf>) {
+    let Ok(entries) = std::fs::read_dir(dir) else {
+        return;
+    };
+    for e in entries.flatten() {
+        let p = e.path();
+        if p.is_dir() {
+            collect_fixture_nix_files(&p, out);
+        } else if p.extension().map(|e| e == "nix").unwrap_or(false) {
+            out.push(p);
+        }
+    }
+}
+
+fn collect_inputs() -> Vec<PathBuf> {
+    let root = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/nixfmt");
+    let mut files = Vec::new();
+    // `correct/` are already-formatted snippets; `diff/*/` contain in/out pairs.
+    collect_fixture_nix_files(&root.join("correct"), &mut files);
+    collect_fixture_nix_files(&root.join("diff"), &mut files);
+    files.sort();
+    files
+}
+
+// ---------------------------------------------------------------------------
+// Diff helper: only show changed hunks with a couple of lines of context.
+// ---------------------------------------------------------------------------
+
+fn minimised_diff(a: &str, b: &str) -> String {
+    use diff::DiffResult::*;
+    const CTX: usize = 2;
+    let results = diff::lines(a, b);
+    let mut keep = vec![false; results.len()];
+    for (i, r) in results.iter().enumerate() {
+        if !matches!(r, Both(..)) {
+            let lo = i.saturating_sub(CTX);
+            let hi = (i + CTX + 1).min(results.len());
+            #[allow(clippy::needless_range_loop)]
+            for k in lo..hi {
+                keep[k] = true;
+            }
+        }
+    }
+    let mut out = String::new();
+    let mut last_kept = true;
+    for (i, r) in results.iter().enumerate() {
+        if !keep[i] {
+            if last_kept {
+                out.push_str("  ...\n");
+            }
+            last_kept = false;
+            continue;
+        }
+        last_kept = true;
+        match r {
+            Left(l) => out.push_str(&format!("- {l}\n")),
+            Right(r) => out.push_str(&format!("+ {r}\n")),
+            Both(l, _) => out.push_str(&format!("  {l}\n")),
+        }
+    }
+    out
+}
+
+// ---------------------------------------------------------------------------
+// Tests
+// ---------------------------------------------------------------------------
+
+#[test]
+fn idempotent_on_fixture_corpus() {
+    let files = collect_inputs();
+    assert!(!files.is_empty(), "fixture corpus missing");
+    let mut failures = 0usize;
+    let mut checked = 0usize;
+    for path in &files {
+        let Ok(src) = std::fs::read_to_string(path) else {
+            continue;
+        };
+        let once = match crate::format(&src) {
+            Ok(s) => s,
+            // Parser gaps are tracked elsewhere.
+            Err(_) => continue,
+        };
+        checked += 1;
+        let twice = match crate::format(&once) {
+            Ok(s) => s,
+            Err(e) => {
+                eprintln!("\n[idempotency] {}: reparse failed: {e:?}", path.display());
+                failures += 1;
+                continue;
+            }
+        };
+        if once != twice {
+            eprintln!(
+                "\n[idempotency] {}: format is not idempotent",
+                path.display()
+            );
+            eprintln!("{}", minimised_diff(&once, &twice));
+            failures += 1;
+        }
+    }
+    eprintln!("[idempotency] checked {checked} files, {failures} failures");
+    if failures > 0 {
+        panic!("{failures} file(s) not idempotent");
+    }
+}
+
+#[test]
+fn ast_preserved_on_fixture_corpus() {
+    let files = collect_inputs();
+    assert!(!files.is_empty(), "fixture corpus missing");
+    let mut failures = 0usize;
+    let mut checked = 0usize;
+    for path in &files {
+        let Ok(src) = std::fs::read_to_string(path) else {
+            continue;
+        };
+        let mut before = match crate::parse(&src) {
+            Ok(a) => a,
+            Err(_) => continue,
+        };
+        let formatted = match crate::format(&src) {
+            Ok(s) => s,
+            Err(_) => continue,
+        };
+        checked += 1;
+        let mut after = match crate::parse(&formatted) {
+            Ok(a) => a,
+            Err(e) => {
+                eprintln!(
+                    "\n[ast-preservation] {}: formatted output failed to parse: {e:?}",
+                    path.display()
+                );
+                failures += 1;
+                continue;
+            }
+        };
+        before.strip_trivia();
+        after.strip_trivia();
+        if before != after {
+            eprintln!(
+                "\n[ast-preservation] {}: AST changed by formatting",
+                path.display()
+            );
+            eprintln!("{}", minimised_diff(&src, &formatted));
+            failures += 1;
+        }
+    }
+    eprintln!("[ast-preservation] checked {checked} files, {failures} failures");
+    if failures > 0 {
+        panic!("{failures} file(s) changed AST after formatting");
+    }
+}
