@@ -298,9 +298,15 @@ impl Parser {
                             // ''\ escapes next char
                             text.push_str("''\\");
                             self.lexer.advance_by(3);
-                            if let Some(ch) = self.lexer.peek() {
-                                text.push(ch);
-                                self.lexer.advance();
+                            // Leave a following '\n' for the line loop so the
+                            // next line is visible to common-indent stripping
+                            // (matches Haskell `indentedStringPart`).
+                            match self.lexer.peek() {
+                                None | Some('\n') => {}
+                                Some(ch) => {
+                                    text.push(ch);
+                                    self.lexer.advance();
+                                }
                             }
                         }
                         _ => {
@@ -553,11 +559,20 @@ fn remove_empty_last_line(mut lines: Vec<Vec<StringPart>>) -> Vec<Vec<StringPart
     }
 }
 
-/// Get the text content at the start of a line (for indentation calculation)
+/// Get the text content at the start of a line (for indentation calculation).
+///
+/// Whitespace-only lines are ignored, matching Nix: a short blank line must
+/// not cap the strippable indent.
 fn line_prefix(line: &[StringPart]) -> Option<String> {
     match line.first() {
         None => None,
-        Some(StringPart::TextPart(text)) => Some(text.clone()),
+        Some(StringPart::TextPart(text)) => {
+            if line.len() == 1 && is_only_spaces(text) {
+                None
+            } else {
+                Some(text.clone())
+            }
+        }
         Some(StringPart::Interpolation(_)) => Some(String::new()),
     }
 }
@@ -587,15 +602,21 @@ fn find_common_space_prefix(prefixes: Vec<String>) -> Option<String> {
     Some(common)
 }
 
-/// Strip a prefix from the first text part of a line
+/// Strip a prefix from the first text part of a line.
+///
+/// A whitespace-only line shorter than the prefix is cleared (Nix treats it
+/// as empty); longer ones keep their excess spaces.
 fn strip_prefix_from_line(prefix: &str, mut line: Vec<StringPart>) -> Vec<StringPart> {
     if prefix.is_empty() {
         return line;
     }
 
+    let single = line.len() == 1;
     if let Some(StringPart::TextPart(text)) = line.first_mut() {
         if let Some(stripped) = text.strip_prefix(prefix) {
             *text = stripped.to_string();
+        } else if single && is_only_spaces(text) {
+            return Vec::new();
         }
     }
     line
