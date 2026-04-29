@@ -678,8 +678,11 @@ fn fits(ni: isize, c: isize, doc: &[DocE]) -> Option<String> {
                 result.push_str(t);
             }
             DocE::Text(_, _, TextAnn::TrailingComment, t) => {
-                if next_indent < 0 {
-                    return None;
+                // Trailing comments never count toward the width budget; they
+                // only affect whether a leading space is needed (Haskell
+                // `fits`: `ni == 0` branch).
+                if next_indent == 0 {
+                    result.push(' ');
                 }
                 result.push_str(t);
             }

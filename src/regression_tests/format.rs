@@ -15,6 +15,30 @@ fn format_trailing_comma_compact_param_set() {
     test_format("{\n  a,\n  b,\n}: a");
 }
 
+/// Trailing comments must not count toward line width in `fits`; the
+/// binding body stays on the `=` line. The second case checks that a
+/// genuinely over-wide *non-comment* RHS still wraps.
+/// Haskell: `Nixfmt.Predoc.fits` (`Text TrailingComment` arm).
+#[test]
+fn format_trailing_comment_ignored_for_width() {
+    // From nixpkgs melpa.nix: well under 100 columns, must not wrap.
+    test_format("{\n  unstableVersionInNixFormat = parsed != null; # heuristics\n}\n");
+    // Short binding + long trailing comment: still must not wrap.
+    test_format(concat!(
+        "{\n  x = a != null; ",
+        "# a trailing comment that is quite a bit longer than the binding itself but still irrelevant\n",
+        "}\n",
+    ));
+    // List element on its own line: `ni` must reflect the indent step so
+    // `fits` does not inject a second space before the comment.
+    test_format("[\n  a # c\n  b\n]\n");
+    // Non-comment part alone exceeds 100 cols → must wrap regardless of comment.
+    test_format(concat!(
+        "{\n  someVeryVeryVeryVeryVeryVeryVeryVeryVeryVeryVeryVeryVeryLongName = ",
+        "aaaaaaaa != bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb; # c\n}\n",
+    ));
+}
+
 /// `f (x: { ... })` should absorb the parenthesised abstraction onto the
 /// function line. Haskell: `Nixfmt.Pretty.absorbLast` / `isAbsorbableExpr`.
 #[test]
