@@ -184,12 +184,13 @@ impl Parser {
             });
         }
 
-        // The `}` token was already consumed by the lexer when creating TBraceClose,
-        // so lexer.pos is already past it; do not advance here.
+        // The lexer is positioned past `}` and any following trivia; rewind to
+        // immediately after `}` so the string scanner resumes on raw content.
+        let trailing_trivia = std::mem::take(&mut self.current.pre_trivia);
         self.lexer.rewind_trivia();
         Ok(StringPart::Interpolation(Box::new(Whole {
             value: expr,
-            trailing_trivia: Trivia::new(),
+            trailing_trivia,
         })))
     }
 
