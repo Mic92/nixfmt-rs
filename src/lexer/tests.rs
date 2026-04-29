@@ -186,7 +186,7 @@ fn test_lexeme_preserves_trivia() {
     // 'a' should have EmptyLine and comment
     let a_tok = lexer.lexeme().unwrap();
     assert!(matches!(&a_tok.value, Token::Identifier(s) if s == "a"));
-    assert!(a_tok.pre_trivia.len() >= 1);
+    assert!(!a_tok.pre_trivia.is_empty());
     // Should have EmptyLine and LineComment
     assert!(
         a_tok

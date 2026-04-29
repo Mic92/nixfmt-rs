@@ -359,20 +359,44 @@ fn merge_spacings(a: Spacing, b: Spacing) -> Spacing {
     }
 }
 
-/// Try to force a document to its compact layout, recursively flattening groups.
-/// Mirrors Haskell `unexpandSpacing' Nothing`: returns `None` if a hard line
-/// break would be required (Hardline / Emptyline / Newlines).
-pub(crate) fn unexpand_spacing_prime(doc: &[DocE]) -> Option<Doc> {
+/// Manually force a doc to its compact layout, replacing all soft whitespace.
+/// Recurses into inner groups (flattening them). Returns `None` if the doc
+/// contains hard line breaks or exceeds the optional width limit.
+/// Mirrors Haskell `unexpandSpacing'` (Predoc.hs).
+pub(crate) fn unexpand_spacing_prime(mut limit: Option<i32>, doc: &[DocE]) -> Option<Doc> {
     let mut result = Vec::new();
-    for elem in doc {
+    let mut stack: Vec<std::slice::Iter<'_, DocE>> = vec![doc.iter()];
+    while let Some(iter) = stack.last_mut() {
+        let Some(elem) = iter.next() else {
+            stack.pop();
+            continue;
+        };
         match elem {
-            DocE::Text(..) => result.push(elem.clone()),
+            DocE::Text(_, _, _, t) => {
+                if let Some(n) = limit.as_mut() {
+                    *n -= text_width(t) as i32;
+                    if *n < 0 {
+                        return None;
+                    }
+                }
+                result.push(elem.clone());
+            }
             DocE::Spacing(Spacing::Hardspace)
             | DocE::Spacing(Spacing::Space)
-            | DocE::Spacing(Spacing::Softspace) => result.push(DocE::Spacing(Spacing::Hardspace)),
+            | DocE::Spacing(Spacing::Softspace) => {
+                if let Some(n) = limit.as_mut() {
+                    *n -= 1;
+                    if *n < 0 {
+                        return None;
+                    }
+                }
+                result.push(DocE::Spacing(Spacing::Hardspace));
+            }
             DocE::Spacing(Spacing::Break) | DocE::Spacing(Spacing::Softbreak) => {}
             DocE::Spacing(_) => return None,
-            DocE::Group(_, inner) => result.extend(unexpand_spacing_prime(inner)?),
+            DocE::Group(_, inner) => {
+                stack.push(inner.iter());
+            }
         }
     }
     Some(result)
@@ -451,18 +475,15 @@ fn split_trailing(doc: Doc) -> (Doc, Doc) {
     }
 
     // If the last element is a group, try peeling from inside it
-    if let Some(last) = body.last().cloned() {
-        if let DocE::Group(last_ann, last_inner) = last {
-            let (new_inner, inner_post) = split_trailing(last_inner);
-            if !inner_post.is_empty() {
-                // Replace the last element with the updated group if not empty after peel
-                body.pop();
-                let new_inner = simplify_group(last_ann, new_inner);
-                if !new_inner.is_empty() {
-                    body.push(DocE::Group(last_ann, new_inner));
-                }
-                return (body, inner_post);
+    if let Some(DocE::Group(last_ann, last_inner)) = body.last().cloned() {
+        let (new_inner, inner_post) = split_trailing(last_inner);
+        if !inner_post.is_empty() {
+            body.pop();
+            let new_inner = simplify_group(last_ann, new_inner);
+            if !new_inner.is_empty() {
+                body.push(DocE::Group(last_ann, new_inner));
             }
+            return (body, inner_post);
         }
     }
 

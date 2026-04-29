@@ -53,6 +53,36 @@ fn test_update_absorbable_rhs_structure() {
 }
 
 #[test]
+fn test_app_selection_inner_arg() {
+    // Selection as a non-final argument must use a RegularG (not Priority) group.
+    test_ir_format("f a.b c");
+}
+
+#[test]
+fn test_app_two_consecutive_list_args() {
+    // Two consecutive list arguments share a RegularG so they wrap together.
+    test_ir_format("f [ 1 ] [ 2 ] x");
+}
+
+#[test]
+fn test_app_two_trailing_list_args() {
+    // Two trailing list arguments take the dedicated prettyApp branch.
+    test_ir_format("f a b [ 1 ] [ 2 ]");
+}
+
+#[test]
+fn test_app_absorb_last_paren_abstraction() {
+    // absorbLast: parenthesised `x: { ... }` renders the body wide inline.
+    test_ir_format("f (x: { a = 1; })");
+}
+
+#[test]
+fn test_app_absorb_last_paren_application() {
+    // absorbLast: parenthesised `ident { ... }` renders the body wide inline.
+    test_ir_format("f (g { a = 1; })");
+}
+
+#[test]
 fn test_inherit_many_identifiers_structure() {
     // Many identifiers trigger the hardline-based spacing path for inherits
     test_ir_format("let inherit foo bar baz qux; in foo");
