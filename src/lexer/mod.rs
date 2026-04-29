@@ -37,22 +37,22 @@ struct LexerPos {
 /// Saved lexer state for backtracking
 #[derive(Clone)]
 pub(crate) struct LexerState {
-    pub(crate) pos: usize,
-    pub(crate) byte_pos: usize,
-    pub(crate) line: usize,
-    pub(crate) column: usize,
-    pub(crate) trivia_buffer: Trivia,
-    pub(crate) recent_newlines: usize,
-    pub(crate) recent_hspace: usize,
+    pos: usize,
+    byte_pos: usize,
+    line: usize,
+    column: usize,
+    trivia_buffer: Trivia,
+    recent_newlines: usize,
+    recent_hspace: usize,
 }
 
 pub(crate) struct Lexer {
-    pub(crate) input: Vec<char>,
-    pub(crate) pos: usize,
+    input: Vec<char>,
+    pos: usize,
     /// Byte offset corresponding to `pos`, kept in lockstep so span
     /// construction is O(1) instead of re-scanning the prefix per token.
-    pub(crate) byte_pos: usize,
-    pub(crate) line: usize,
+    byte_pos: usize,
+    line: usize,
     pub(crate) column: usize,
     /// Accumulated leading trivia for next token
     pub(crate) trivia_buffer: Trivia,
@@ -197,7 +197,7 @@ impl Lexer {
     /// Parse next token (without trivia handling)
     /// Trivia should ONLY be managed by lexeme(), not by this function.
     /// This matches Haskell nixfmt's `rawSymbol` which parses tokens without trivia.
-    pub(crate) fn next_token(&mut self) -> crate::error::Result<Token> {
+    pub(super) fn next_token(&mut self) -> crate::error::Result<Token> {
         let _ = self.skip_hspace();
 
         if self.is_eof() {

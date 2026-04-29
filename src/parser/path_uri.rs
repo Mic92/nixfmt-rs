@@ -240,7 +240,7 @@ impl Parser {
 
     /// Check if there's path content at the given offset
     /// Used to validate that what follows is a valid path component
-    pub(super) fn is_path_content_at(&self, offset: usize) -> bool {
+    fn is_path_content_at(&self, offset: usize) -> bool {
         match self.lexer.peek_ahead(offset) {
             Some(c) if c.is_alphanumeric() || matches!(c, '.' | '_' | '-' | '+' | '~') => true,
             Some('$') => self.lexer.peek_ahead(offset + 1) == Some('{'), // interpolation ${

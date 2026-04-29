@@ -100,7 +100,7 @@ impl Lexer {
     }
 
     /// Check if next non-whitespace token is " or ''
-    pub(super) fn is_next_string_delimiter(&mut self) -> bool {
+    fn is_next_string_delimiter(&mut self) -> bool {
         let saved_state = self.save_state();
 
         let _ = self.skip_hspace();

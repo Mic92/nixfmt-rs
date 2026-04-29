@@ -30,7 +30,7 @@ pub(super) fn expr_end(expr: &Expression) -> Span {
 }
 
 /// Get the ending span of a term
-pub(super) fn term_end(term: &Term) -> Span {
+fn term_end(term: &Term) -> Span {
     match term {
         Term::Token(leaf) => leaf.span,
         Term::SimpleString(s) | Term::IndentedString(s) => s.span,
@@ -52,7 +52,7 @@ pub(super) fn term_end(term: &Term) -> Span {
 }
 
 /// Get the ending span of a simple selector
-pub(super) fn simple_selector_end(sel: &SimpleSelector) -> Span {
+fn simple_selector_end(sel: &SimpleSelector) -> Span {
     match sel {
         SimpleSelector::ID(leaf) => leaf.span,
         SimpleSelector::Interpol(ann) => ann.span,
