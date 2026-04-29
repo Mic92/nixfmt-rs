@@ -135,11 +135,10 @@ fn push_absorb_rhs(doc: &mut Doc, expr: &Expression) {
 
         // Parenthesized expression: same special case as for the last argument of
         // a function call.
-        Expression::Term(Term::Parenthesized(_, _, _)) => {
+        Expression::Term(Term::Parenthesized(open, inner, close)) => {
             push_nested(doc, |d| {
                 d.push(hardspace());
-                // absorbParen open expr' close
-                expr.pretty(d);
+                push_absorb_paren(d, open, inner, close);
             });
         }
 
@@ -167,8 +166,7 @@ fn push_absorb_rhs(doc: &mut Doc, expr: &Expression) {
         // Function call: absorb if all arguments except the last fit on the line,
         // start on a new line otherwise.
         Expression::Application(_, _) => {
-            // prettyApp False line False f a
-            push_nested(doc, |d| push_pretty_app(d, line(), false, false, expr));
+            push_nested(doc, |d| push_pretty_app(d, false, &[line()], false, expr));
         }
 
         // `with ...;` keeps the leading `line` inside the group so it can collapse
@@ -264,29 +262,50 @@ fn collect_application_parts<'a>(expr: &'a Expression, parts: &mut Vec<&'a Expre
     }
 }
 
-/// Render parenthesized expression in a Priority group (absorbParen in nixfmt)
-fn push_absorb_paren(doc: &mut Doc, open: &Ann<Token>, expr: &Expression, close: &Ann<Token>) {
-    let mut open_clean = open.clone();
-    let trailing = open_clean.trail_comment.take();
-    let close_pre = close.pre_trivia.clone();
-    let mut close_clean = close.clone();
-    close_clean.pre_trivia = Trivia::new();
+/// Convert a trailing comment into a regular line-comment trivium (Haskell `toLineComment`).
+fn to_line_comment(tc: &TrailingComment) -> Trivium {
+    Trivium::LineComment(format!(" {}", tc.0))
+}
 
-    open_clean.pretty(doc);
-    // Add Break spacing before inner content (matches nixfmt absorbParen)
-    doc.push(line_prime());
-    push_nested(doc, |nested| {
-        if let Some(trailing_comment) = trailing {
-            let comment: Trivia =
-                vec![Trivium::LineComment(format!(" {}", trailing_comment.0))].into();
-            comment.pretty(nested);
-        }
-        push_parenthesized_inner(nested, expr, false); // false = absorb context, no extra nesting
-        close_pre.pretty(nested);
+/// Shared trivia juggling for parenthesized rendering: strips the opening
+/// token's trailing comment (returned as `Trivia`) and the closing token's
+/// leading trivia so callers can re-emit them inside the nested body.
+fn split_paren_trivia(
+    open: &Ann<Token>,
+    close: &Ann<Token>,
+) -> (Ann<Token>, Trivia, Trivia, Ann<Token>) {
+    let mut open = open.clone();
+    let trail: Trivia = open
+        .trail_comment
+        .take()
+        .map(|tc| vec![to_line_comment(&tc)])
+        .unwrap_or_default()
+        .into();
+    let mut close = close.clone();
+    let close_pre = std::mem::replace(&mut close.pre_trivia, Trivia::new());
+    (open, trail, close_pre, close)
+}
+
+/// Render parenthesized expression in a Priority group (Haskell `absorbParen`).
+fn push_absorb_paren(doc: &mut Doc, open: &Ann<Token>, expr: &Expression, close: &Ann<Token>) {
+    let (open, trail, close_pre, close) = split_paren_trivia(open, close);
+    push_group_ann(doc, GroupAnn::Priority, |g| {
+        push_nested(g, |outer| {
+            open.pretty(outer);
+            outer.push(line_prime());
+            push_group(outer, |inner| {
+                push_nested(inner, |body| {
+                    // Any trailing comment on `(` is moved down into the body,
+                    // mirroring `mapFirstToken (\a -> a{preTrivia = post' <> preTrivia})`.
+                    trail.pretty(body);
+                    expr.pretty(body);
+                    close_pre.pretty(body);
+                });
+            });
+            outer.push(line_prime());
+            close.pretty(outer);
+        });
     });
-    // Add Break spacing before closing paren (matches nixfmt absorbParen)
-    doc.push(line_prime());
-    close_clean.pretty(doc);
 }
 
 /// Render an inner (non-last) argument of a function application.
@@ -361,183 +380,95 @@ fn items_has_only_comments<T>(items: &Items<T>) -> bool {
 fn push_last_arg(doc: &mut Doc, arg: &Expression) {
     match arg {
         Expression::Term(Term::Parenthesized(open, expr, close)) => {
-            // absorbParen: render parenthesized expr in Priority without extra group
-            push_group_ann(doc, GroupAnn::Priority, |priority_group| {
-                push_absorb_paren(priority_group, open, expr, close);
-            });
+            push_absorb_paren(doc, open, expr, close);
         }
         _ if is_absorbable_expr(arg) => {
             push_group_ann(doc, GroupAnn::Priority, |group| {
-                arg.pretty(group);
+                push_nested(group, |n| arg.pretty(n));
             });
         }
         _ => {
             push_group(doc, |group| {
-                arg.pretty(group);
+                push_nested(group, |n| arg.pretty(n));
             });
         }
     }
 }
 
-/// Render function in complex application (optionally with indentation)
-fn push_function(doc: &mut Doc, func: &Expression, indent: bool) {
-    if indent {
-        push_nested(doc, |nested| {
-            push_group(nested, |inner| {
-                inner.push(line_prime());
-                func.pretty(inner);
-            });
-        });
-    } else {
-        push_group_ann(doc, GroupAnn::Transparent, |func_group| {
-            func.pretty(func_group);
-        });
-    }
-}
-
-/// Render simple application with hardspace separators (nixfmt Pretty.hs:516)
-fn pretty_simple_application(doc: &mut Doc, parts: &[&Expression]) {
-    push_group(doc, |group_doc| {
-        match parts.split_first() {
-            Some((first, rest)) => {
-                first.pretty(group_doc);
-
-                match rest.split_last() {
-                    Some((last, middle)) => {
-                        // Render middle arguments
-                        for arg in middle {
-                            group_doc.push(hardspace());
-                            push_nested(group_doc, |nested| {
-                                arg.pretty(nested);
-                            });
-                        }
-
-                        // Render last argument using absorbLast (Pretty.hs:481)
-                        group_doc.push(hardspace());
-                        push_nested(group_doc, |nested| {
-                            push_last_arg(nested, last);
-                        });
-                    }
-                    None => {} // Only one element total
-                }
-            }
-            None => {} // Empty parts
-        }
-    });
-}
-
-/// Render simple application with flat nesting (for use inside parentheses)
-/// All parts are at the same nesting level
-fn pretty_simple_application_flat(doc: &mut Doc, parts: &[&Expression]) {
-    push_group(doc, |group_doc| {
-        match parts.split_first() {
-            Some((first, rest)) => {
-                first.pretty(group_doc);
-
-                for arg in rest {
-                    group_doc.push(hardspace());
-                    push_last_arg(group_doc, arg);
-                }
-            }
-            None => {} // Empty parts
-        }
-    });
-}
-
-/// Render complex application with Transparent/Priority groups
-fn pretty_complex_application(doc: &mut Doc, parts: &[&Expression]) {
-    pretty_complex_application_impl(doc, parts, false, false, true);
-}
-
-fn pretty_complex_application_indent_func(doc: &mut Doc, parts: &[&Expression]) {
-    pretty_complex_application_impl(doc, parts, true, true, true);
-}
-
-/// Port of Haskell `prettyApp indentFunction pre hasPost f a` for use from
-/// `push_absorb_rhs`. The simple/complex split lives here so callers can stay
-/// a single-line delegation that mirrors the Haskell call site.
+/// Render function applications (Haskell `prettyApp indentFunction pre hasPost f a`).
+///
+/// Builds the function chain via `absorbApp`, then mirrors `renderSimple`: if
+/// the whole application is simple it tries the unexpanded single-line layout,
+/// otherwise it falls back to the multi-line form.
 fn push_pretty_app(
     doc: &mut Doc,
-    pre: DocE,
     indent_function: bool,
+    pre: &[DocE],
     has_post: bool,
     expr: &Expression,
 ) {
     let mut parts = Vec::new();
     collect_application_parts(expr, &mut parts);
 
-    if is_simple_expression(expr) {
-        doc.push(pre);
-        pretty_simple_application(doc, &parts);
-    } else {
-        push_group(doc, |g| {
-            g.push(pre);
-            pretty_complex_application_impl(g, &parts, indent_function, has_post, false);
-        });
-    }
-}
-
-fn pretty_complex_application_impl(
-    doc: &mut Doc,
-    parts: &[&Expression],
-    indent_function: bool,
-    has_post: bool,
-    wrap_in_group: bool,
-) {
-    let make_body = |doc: &mut Doc| {
-        match parts.split_first() {
-            Some((first, rest)) if !rest.is_empty() => {
-                match rest.split_last() {
-                    Some((last, middle)) => {
-                        push_group_ann(doc, GroupAnn::Transparent, |outer| {
-                            push_function(outer, first, indent_function);
-
-                            for arg in middle {
-                                outer.push(line());
-                                push_nested(outer, |nested| {
-                                    push_inner_arg(nested, arg);
-                                });
-                            }
-                        });
-
-                        doc.push(line());
-                        push_nested(doc, |nested| {
-                            push_last_arg(nested, last);
-                        });
-                        if has_post {
-                            doc.push(line_prime());
-                        }
-                    }
-                    None => {
-                        // Only 1 element in rest, so 2 total (first + one in rest)
-                        push_group_ann(doc, GroupAnn::Transparent, |outer| {
-                            push_function(outer, first, indent_function);
-                        });
-
-                        doc.push(line());
-                        push_nested(doc, |nested| {
-                            push_last_arg(nested, rest[0]);
-                        });
-                        if has_post {
-                            doc.push(line_prime());
-                        }
-                    }
-                }
-            }
-            Some((only, _)) => {
-                only.pretty(doc);
-            } // Only one element
-            None => {} // Empty parts
+    let (first, rest) = match parts.split_first() {
+        Some(x) => x,
+        None => return,
+    };
+    let (last, middle) = match rest.split_last() {
+        Some(x) => x,
+        None => {
+            // Degenerate single-term "application"; just pretty it.
+            first.pretty(doc);
+            return;
         }
     };
 
-    if wrap_in_group {
-        push_group(doc, make_body);
+    // absorbApp fWithoutComment: each application level wraps the previously
+    // accumulated chain in a Transparent group, matching the recursive
+    // `group' Transparent (absorbApp f') <> line <> nest (... a')` structure.
+    let mut chain: Doc = Vec::new();
+    if indent_function {
+        push_nested(&mut chain, |nested| {
+            push_group(nested, |inner| {
+                inner.push(line_prime());
+                first.pretty(inner);
+            });
+        });
     } else {
-        make_body(doc);
+        first.pretty(&mut chain);
     }
-}
+    for arg in middle {
+        let prev = std::mem::take(&mut chain);
+        chain.push(DocE::Group(GroupAnn::Transparent, prev));
+        chain.push(line());
+        push_nested(&mut chain, |nested| {
+            push_inner_arg(nested, arg);
+        });
+    }
+    let mut rendered_f: Doc = pre.to_vec();
+    rendered_f.push(DocE::Group(GroupAnn::Transparent, chain));
 
+    // renderSimple
+    if is_simple_expression(expr) {
+        if let Some(unexpanded) = unexpand_spacing_prime(&rendered_f) {
+            push_group(doc, |g| {
+                g.extend(unexpanded);
+                g.push(hardspace());
+                push_last_arg(g, last);
+            });
+            return;
+        }
+    }
+
+    push_group(doc, |g| {
+        g.extend(rendered_f);
+        g.push(line());
+        push_last_arg(g, last);
+        if has_post {
+            g.push(line_prime());
+        }
+    });
+}
 fn flatten_operation_chain<'a>(
     target: &'a Leaf,
     expr: &'a Expression,
@@ -748,11 +679,8 @@ fn is_simple_expression(expr: &Expression) -> bool {
 }
 
 /// Render the nested document that appears between parentheses.
-/// Mirrors `inner` in nixfmt's `prettyTerm (Parenthesized ...)`.
-/// `add_nesting`: whether to add extra nesting for simple applications
-///   - true when called from push_pretty_parenthesized (regular parens)
-///   - false when called from push_absorb_paren (absorb context)
-fn push_parenthesized_inner(doc: &mut Doc, expr: &Expression, add_nesting: bool) {
+/// Mirrors `inner` in Haskell `prettyTerm (Parenthesized ...)`.
+fn push_parenthesized_inner(doc: &mut Doc, expr: &Expression) {
     match expr {
         _ if is_absorbable_expr(expr) => {
             push_group(doc, |inner| {
@@ -760,25 +688,7 @@ fn push_parenthesized_inner(doc: &mut Doc, expr: &Expression, add_nesting: bool)
             });
         }
         Expression::Application(_, _) => {
-            let mut parts = Vec::new();
-            collect_application_parts(expr, &mut parts);
-
-            if is_simple_expression(expr) {
-                if add_nesting {
-                    // Simple applications inside regular parentheses have extra nesting
-                    // but flat nesting between parts
-                    push_nested(doc, |nested| {
-                        pretty_simple_application_flat(nested, &parts);
-                    });
-                } else {
-                    // In absorb context, use normal application with nesting
-                    push_group(doc, |inner| {
-                        expr.pretty(inner);
-                    });
-                }
-            } else {
-                pretty_complex_application_indent_func(doc, &parts);
-            }
+            push_pretty_app(doc, true, &[], true, expr);
         }
         Expression::Term(Term::Selection(term, _, _)) if is_absorbable_term(term) => {
             doc.push(line_prime());
@@ -803,34 +713,24 @@ fn push_parenthesized_inner(doc: &mut Doc, expr: &Expression, add_nesting: bool)
     }
 }
 
-/// Pretty print a parenthesized expression following nixfmt's structure.
+/// Pretty print a parenthesized expression (Haskell `prettyTerm (Parenthesized ...)`).
 fn push_pretty_parenthesized(
     doc: &mut Doc,
     open: &Ann<Token>,
     expr: &Expression,
     close: &Ann<Token>,
 ) {
-    let mut open_clean = open.clone();
-    let trailing = open_clean.trail_comment.take();
+    let (mut open, trail, close_pre, close) = split_paren_trivia(open, close);
+    // moveTrailingCommentUp: a trailing comment on `(` becomes its own pre-trivia.
+    open.pre_trivia.extend(trail);
 
-    let close_pre = close.pre_trivia.clone();
-    let mut close_clean = close.clone();
-    close_clean.pre_trivia = Trivia::new();
-
-    push_group(doc, |group_doc| {
-        open_clean.pretty(group_doc);
-
-        push_nested(group_doc, |nested| {
-            if let Some(trailing_comment) = trailing {
-                let comment: Trivia =
-                    vec![Trivium::LineComment(format!(" {}", trailing_comment.0))].into();
-                comment.pretty(nested);
-            }
-            push_parenthesized_inner(nested, expr, true); // true = regular context, add extra nesting
+    push_group(doc, |g| {
+        open.pretty(g);
+        push_nested(g, |nested| {
+            push_parenthesized_inner(nested, expr);
             close_pre.pretty(nested);
         });
-
-        close_clean.pretty(group_doc);
+        close.pretty(g);
     });
 }
 
@@ -1387,14 +1287,7 @@ impl Pretty for Expression {
         match self {
             Expression::Term(t) => t.pretty(doc),
             Expression::Application(_, _) => {
-                let mut parts = Vec::new();
-                collect_application_parts(self, &mut parts);
-
-                if is_simple_expression(self) {
-                    pretty_simple_application(doc, &parts);
-                } else {
-                    pretty_complex_application(doc, &parts);
-                }
+                push_pretty_app(doc, false, &[], false, self);
             }
             Expression::Operation(left, op, right) => {
                 // Special case: absorbable RHS with update/concat/plus operator
@@ -1509,9 +1402,7 @@ impl Pretty for Expression {
                     let assert_term = Expression::Term(Term::Token(assert_kw.clone()));
                     let (f, a) = insert_into_app(assert_term, (**cond).clone());
                     let app = Expression::Application(Box::new(f), Box::new(a));
-                    let mut parts = Vec::new();
-                    collect_application_parts(&app, &mut parts);
-                    pretty_complex_application(g, &parts);
+                    push_pretty_app(g, false, &[], false, &app);
                     semicolon.pretty(g);
                     g.push(hardline());
                     expr.pretty(g);

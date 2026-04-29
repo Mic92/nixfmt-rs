@@ -359,6 +359,25 @@ fn merge_spacings(a: Spacing, b: Spacing) -> Spacing {
     }
 }
 
+/// Try to force a document to its compact layout, recursively flattening groups.
+/// Mirrors Haskell `unexpandSpacing' Nothing`: returns `None` if a hard line
+/// break would be required (Hardline / Emptyline / Newlines).
+pub(crate) fn unexpand_spacing_prime(doc: &[DocE]) -> Option<Doc> {
+    let mut result = Vec::new();
+    for elem in doc {
+        match elem {
+            DocE::Text(..) => result.push(elem.clone()),
+            DocE::Spacing(Spacing::Hardspace)
+            | DocE::Spacing(Spacing::Space)
+            | DocE::Spacing(Spacing::Softspace) => result.push(DocE::Spacing(Spacing::Hardspace)),
+            DocE::Spacing(Spacing::Break) | DocE::Spacing(Spacing::Softbreak) => {}
+            DocE::Spacing(_) => return None,
+            DocE::Group(_, inner) => result.extend(unexpand_spacing_prime(inner)?),
+        }
+    }
+    Some(result)
+}
+
 /// Manually force a group to compact layout (does not recurse into inner groups)
 fn unexpand_spacing(doc: &Doc) -> Doc {
     let mut result = Vec::new();

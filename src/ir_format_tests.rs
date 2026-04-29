@@ -282,3 +282,34 @@ fn test_assignment_rhs_operation_lhs_set() {
     // which forces wide rendering (hardlines) for the LHS set
     test_ir_format("{ x = { a = 1; } // y; }");
 }
+
+#[test]
+fn test_paren_simple_term() {
+    // prettyTerm (Parenthesized ...) default branch: line' <> group expr <> line'
+    test_ir_format("(a)");
+}
+
+#[test]
+fn test_paren_simple_application() {
+    // prettyTerm (Parenthesized ...) Application branch: prettyApp True mempty True
+    test_ir_format("(f a)");
+}
+
+#[test]
+fn test_paren_trailing_comment_on_open() {
+    // moveTrailingCommentUp: trailing comment on `(` becomes pre-trivia before it
+    test_ir_format("( # c\n a )");
+}
+
+#[test]
+fn test_paren_absorb_rhs() {
+    // absorbRHS for parenthesized: nest $ hardspace <> absorbParen
+    test_ir_format("{ x = (a b); }");
+}
+
+#[test]
+fn test_paren_inner_arg_unexpanded() {
+    // renderSimple unexpands the function chain so an inner parenthesized arg
+    // is flattened into the surrounding hardspace-separated token stream
+    test_ir_format("f (a b) c");
+}
