@@ -1,8 +1,6 @@
 # nixfmt-rs
 
-A from-scratch Rust reimplementation of [nixfmt] that produces
-byte-identical output to the Haskell original, with no runtime
-dependencies and a single static binary.
+A from-scratch Rust reimplementation of [nixfmt] that produces byte-identical output to the Haskell original.
 
 [nixfmt]: https://github.com/NixOS/nixfmt
 
