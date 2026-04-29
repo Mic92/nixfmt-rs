@@ -312,6 +312,25 @@ impl Pretty for Expression {
                 push_pretty_app(doc, false, &[], false, self);
             }
             Expression::Operation(left, op, right) => {
+                // Non-chainable comparison operators: `softline` lets the op
+                // stay on the LHS's last line whenever the remainder fits.
+                if matches!(
+                    op.value,
+                    Token::TLess
+                        | Token::TGreater
+                        | Token::TLessEqual
+                        | Token::TGreaterEqual
+                        | Token::TEqual
+                        | Token::TUnequal
+                ) {
+                    left.pretty(doc);
+                    doc.push(softline());
+                    op.pretty(doc);
+                    doc.push(hardspace());
+                    right.pretty(doc);
+                    return;
+                }
+
                 // `//`, `++`, `+` with an absorbable RHS get a compact layout
                 // (cf. the corresponding clause in `absorbRHS`).
                 if let Expression::Term(t) = &**right {
