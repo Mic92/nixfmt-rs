@@ -261,3 +261,12 @@ fn format_trailing_file_trivia_preserved() {
     test_format("1\n/* block */\n");
     test_ir_format("{ a = 1; }\n# trailing\n");
 }
+
+/// A comment between the interpolation body and `}` must be preserved as the
+/// `Whole`'s trailing trivia and force the `${ … }` onto multiple lines.
+/// Haskell: `Nixfmt.Parser.interpolation` (`whole expression`).
+#[test]
+fn format_interp_trailing_trivia_preserved() {
+    test_format("''\n  ${ f a b\n  # c\n  }\n''");
+    test_format("\"${ x\n# c\n}\"");
+}
