@@ -3,7 +3,7 @@ use crate::types::*;
 
 use super::absorb::{is_absorbable_term, push_absorb_paren};
 use super::term::{push_pretty_term, push_pretty_term_wide, push_render_list};
-use super::util::{has_trivia, is_simple_expression, is_simple_term, move_trailing_comment_up};
+use super::util::{has_trivia, is_simple_expression, is_simple_term};
 
 /// `absorbInner` from Pretty.hs: short lists of simple terms get a soft `line`
 /// separator so they may stay on one line; everything else falls back to `pretty`.
@@ -21,157 +21,128 @@ fn push_absorb_inner(doc: &mut Doc, arg: &Expression) {
     arg.pretty(doc);
 }
 
-/// Strip and return the pre-trivia of the first token of an expression,
-/// after applying `move_trailing_comment_up` to that token. This is the
-/// `mapFirstToken' ((\a -> (a{preTrivia=[]}, preTrivia)) . moveTrailingCommentUp)`
-/// invocation from Haskell `prettyApp`.
-fn extract_first_comment_expr(expr: &Expression) -> (Expression, Trivia) {
-    fn go_ann<T: Clone>(ann: &Ann<T>) -> (Ann<T>, Trivia) {
-        let moved = move_trailing_comment_up(ann);
-        let trivia = moved.pre_trivia.clone();
-        (
-            Ann {
-                pre_trivia: Trivia::new(),
-                ..moved
-            },
-            trivia,
-        )
+/// Return the pre-trivia of the first token of `expr` after applying
+/// `move_trailing_comment_up` to it, without cloning the expression.
+/// This is the projection half of Haskell's
+/// `mapFirstToken' ((\a -> (a{preTrivia=[]}, preTrivia)) . moveTrailingCommentUp)`.
+fn first_token_comment(expr: &Expression) -> Trivia {
+    fn ann<T>(a: &Ann<T>) -> Trivia {
+        let mut t = a.pre_trivia.clone();
+        if let Some(tc) = &a.trail_comment {
+            t.push(Trivium::LineComment(format!(" {}", tc.0)));
+        }
+        t
     }
-    fn go_param(p: &Parameter) -> (Parameter, Trivia) {
+    fn term(t: &Term) -> Trivia {
+        match t {
+            Term::Token(l) => ann(l),
+            Term::SimpleString(s) | Term::IndentedString(s) => ann(s),
+            Term::Path(p) => ann(p),
+            Term::List(open, _, _) => ann(open),
+            Term::Set(Some(rec), _, _, _) => ann(rec),
+            Term::Set(None, open, _, _) => ann(open),
+            Term::Selection(inner, _, _) => term(inner),
+            Term::Parenthesized(open, _, _) => ann(open),
+        }
+    }
+    fn param(p: &Parameter) -> Trivia {
         match p {
-            Parameter::ID(n) => {
-                let (n, t) = go_ann(n);
-                (Parameter::ID(n), t)
-            }
+            Parameter::ID(n) => ann(n),
+            Parameter::Set(open, _, _) => ann(open),
+            Parameter::Context(first, _, _) => param(first),
+        }
+    }
+    match expr {
+        Expression::Term(t) => term(t),
+        Expression::With(kw, ..)
+        | Expression::Let(kw, ..)
+        | Expression::Assert(kw, ..)
+        | Expression::If(kw, ..)
+        | Expression::Negation(kw, _)
+        | Expression::Inversion(kw, _) => ann(kw),
+        Expression::Abstraction(p, _, _) => param(p),
+        Expression::Application(g, _)
+        | Expression::Operation(g, _, _)
+        | Expression::MemberCheck(g, _, _) => first_token_comment(g),
+    }
+}
+
+/// Rebuild `expr` with the first token's `pre_trivia` and `trail_comment`
+/// cleared. Only invoked on the leftmost (non-`Application`) head of a call
+/// chain, which is almost always a small `Term`, so the deep clone is cheap.
+fn strip_first_comment(expr: &Expression) -> Expression {
+    fn ann<T: Clone>(a: &Ann<T>) -> Ann<T> {
+        Ann {
+            pre_trivia: Trivia::new(),
+            trail_comment: None,
+            ..a.clone()
+        }
+    }
+    fn param(p: &Parameter) -> Parameter {
+        match p {
+            Parameter::ID(n) => Parameter::ID(ann(n)),
             Parameter::Set(open, attrs, close) => {
-                let (open, t) = go_ann(open);
-                (Parameter::Set(open, attrs.clone(), close.clone()), t)
+                Parameter::Set(ann(open), attrs.clone(), close.clone())
             }
             Parameter::Context(first, at, second) => {
-                let (first, t) = go_param(first);
-                (
-                    Parameter::Context(Box::new(first), at.clone(), second.clone()),
-                    t,
-                )
+                Parameter::Context(Box::new(param(first)), at.clone(), second.clone())
             }
         }
     }
-    fn go_term(term: &Term) -> (Term, Trivia) {
-        match term {
-            Term::Token(l) => {
-                let (l, t) = go_ann(l);
-                (Term::Token(l), t)
-            }
-            Term::SimpleString(s) => {
-                let (s, t) = go_ann(s);
-                (Term::SimpleString(s), t)
-            }
-            Term::IndentedString(s) => {
-                let (s, t) = go_ann(s);
-                (Term::IndentedString(s), t)
-            }
-            Term::Path(p) => {
-                let (p, t) = go_ann(p);
-                (Term::Path(p), t)
-            }
-            Term::List(open, items, close) => {
-                let (open, t) = go_ann(open);
-                (Term::List(open, items.clone(), close.clone()), t)
-            }
+    fn term(t: &Term) -> Term {
+        match t {
+            Term::Token(l) => Term::Token(ann(l)),
+            Term::SimpleString(s) => Term::SimpleString(ann(s)),
+            Term::IndentedString(s) => Term::IndentedString(ann(s)),
+            Term::Path(p) => Term::Path(ann(p)),
+            Term::List(open, items, close) => Term::List(ann(open), items.clone(), close.clone()),
             Term::Set(Some(rec), open, items, close) => {
-                let (rec, t) = go_ann(rec);
-                (
-                    Term::Set(Some(rec), open.clone(), items.clone(), close.clone()),
-                    t,
-                )
+                Term::Set(Some(ann(rec)), open.clone(), items.clone(), close.clone())
             }
             Term::Set(None, open, items, close) => {
-                let (open, t) = go_ann(open);
-                (Term::Set(None, open, items.clone(), close.clone()), t)
+                Term::Set(None, ann(open), items.clone(), close.clone())
             }
             Term::Selection(inner, sels, def) => {
-                let (inner, t) = go_term(inner);
-                (
-                    Term::Selection(Box::new(inner), sels.clone(), def.clone()),
-                    t,
-                )
+                Term::Selection(Box::new(term(inner)), sels.clone(), def.clone())
             }
             Term::Parenthesized(open, expr, close) => {
-                let (open, t) = go_ann(open);
-                (Term::Parenthesized(open, expr.clone(), close.clone()), t)
+                Term::Parenthesized(ann(open), expr.clone(), close.clone())
             }
         }
     }
     match expr {
-        Expression::Term(term) => {
-            let (term, t) = go_term(term);
-            (Expression::Term(term), t)
-        }
+        Expression::Term(t) => Expression::Term(term(t)),
         Expression::With(kw, e0, semi, e1) => {
-            let (kw, t) = go_ann(kw);
-            (
-                Expression::With(kw, e0.clone(), semi.clone(), e1.clone()),
-                t,
-            )
+            Expression::With(ann(kw), e0.clone(), semi.clone(), e1.clone())
         }
         Expression::Let(kw, items, in_, body) => {
-            let (kw, t) = go_ann(kw);
-            (
-                Expression::Let(kw, items.clone(), in_.clone(), body.clone()),
-                t,
-            )
+            Expression::Let(ann(kw), items.clone(), in_.clone(), body.clone())
         }
         Expression::Assert(kw, cond, semi, body) => {
-            let (kw, t) = go_ann(kw);
-            (
-                Expression::Assert(kw, cond.clone(), semi.clone(), body.clone()),
-                t,
-            )
+            Expression::Assert(ann(kw), cond.clone(), semi.clone(), body.clone())
         }
-        Expression::If(kw, e0, then_, e1, else_, e2) => {
-            let (kw, t) = go_ann(kw);
-            (
-                Expression::If(
-                    kw,
-                    e0.clone(),
-                    then_.clone(),
-                    e1.clone(),
-                    else_.clone(),
-                    e2.clone(),
-                ),
-                t,
-            )
-        }
-        Expression::Abstraction(param, colon, body) => {
-            let (param, t) = go_param(param);
-            (
-                Expression::Abstraction(param, colon.clone(), body.clone()),
-                t,
-            )
+        Expression::If(kw, e0, t, e1, el, e2) => Expression::If(
+            ann(kw),
+            e0.clone(),
+            t.clone(),
+            e1.clone(),
+            el.clone(),
+            e2.clone(),
+        ),
+        Expression::Abstraction(p, colon, body) => {
+            Expression::Abstraction(param(p), colon.clone(), body.clone())
         }
         Expression::Application(g, a) => {
-            let (g, t) = extract_first_comment_expr(g);
-            (Expression::Application(Box::new(g), a.clone()), t)
+            Expression::Application(Box::new(strip_first_comment(g)), a.clone())
         }
         Expression::Operation(l, op, r) => {
-            let (l, t) = extract_first_comment_expr(l);
-            (Expression::Operation(Box::new(l), op.clone(), r.clone()), t)
+            Expression::Operation(Box::new(strip_first_comment(l)), op.clone(), r.clone())
         }
         Expression::MemberCheck(e, dot, sels) => {
-            let (e, t) = extract_first_comment_expr(e);
-            (
-                Expression::MemberCheck(Box::new(e), dot.clone(), sels.clone()),
-                t,
-            )
+            Expression::MemberCheck(Box::new(strip_first_comment(e)), dot.clone(), sels.clone())
         }
-        Expression::Negation(tok, e) => {
-            let (tok, t) = go_ann(tok);
-            (Expression::Negation(tok, e.clone()), t)
-        }
-        Expression::Inversion(tok, e) => {
-            let (tok, t) = go_ann(tok);
-            (Expression::Inversion(tok, e.clone()), t)
-        }
+        Expression::Negation(tok, e) => Expression::Negation(ann(tok), e.clone()),
+        Expression::Inversion(tok, e) => Expression::Inversion(ann(tok), e.clone()),
     }
 }
 
@@ -226,17 +197,23 @@ fn push_absorb_app(doc: &mut Doc, expr: &Expression, indent_function: bool, comm
                 push_group_ann(n, GroupAnn::Priority, |g| push_absorb_inner(g, a));
             });
         }
-        // Base case: the function expression itself.
+        // Base case: the function expression itself. The first token's
+        // pre-trivia/trailing comment was already emitted by `push_pretty_app`,
+        // so render the head with that trivia stripped.
         _ => {
-            if indent_function && comment.is_empty() {
-                push_nested(doc, |n| {
-                    push_group_ann(n, GroupAnn::RegularG, |g| {
-                        g.push(line_prime());
-                        expr.pretty(g);
+            if comment.is_empty() {
+                if indent_function {
+                    push_nested(doc, |n| {
+                        push_group_ann(n, GroupAnn::RegularG, |g| {
+                            g.push(line_prime());
+                            expr.pretty(g);
+                        });
                     });
-                });
+                } else {
+                    expr.pretty(doc);
+                }
             } else {
-                expr.pretty(doc);
+                strip_first_comment(expr).pretty(doc);
             }
         }
     }
@@ -332,7 +309,7 @@ pub(super) fn push_pretty_app(
         unreachable!("push_pretty_app requires an Application");
     };
 
-    let (f_without_comment, comment) = extract_first_comment_expr(f);
+    let comment = first_token_comment(f);
 
     let post_hardline = |doc: &mut Doc| {
         if has_post && !comment.is_empty() {
@@ -344,9 +321,7 @@ pub(super) fn push_pretty_app(
 
     // Two trailing list arguments are rendered as a pair of regular groups so
     // they wrap together; lists are never "simple", so renderSimple cannot apply.
-    if let (Expression::Application(f2, l1), Expression::Term(Term::List(_, _, _))) =
-        (&f_without_comment, &**a)
-    {
+    if let (Expression::Application(f2, l1), Expression::Term(Term::List(_, _, _))) = (&**f, &**a) {
         if matches!(**l1, Expression::Term(Term::List(_, _, _))) {
             push_group(doc, |g| {
                 g.extend_from_slice(pre);
@@ -368,7 +343,7 @@ pub(super) fn push_pretty_app(
 
     let mut rendered_f: Doc = pre.to_vec();
     push_group_ann(&mut rendered_f, GroupAnn::Transparent, |g| {
-        push_absorb_app(g, &f_without_comment, indent_function, &comment);
+        push_absorb_app(g, f, indent_function, &comment);
     });
 
     // renderSimple

@@ -103,17 +103,17 @@ fn move_param_attr_comment(attr: ParamAttr) -> ParamAttr {
 
 /// Mirrors `moveParamsComments` in Nixfmt/Pretty.hs.
 fn move_params_comments(attrs: &[ParamAttr]) -> Vec<ParamAttr> {
-    let mut work: Vec<ParamAttr> = attrs.to_vec();
-    let mut out = Vec::with_capacity(work.len());
+    let mut out: Vec<ParamAttr> = attrs.to_vec();
     let mut i = 0;
-    while i < work.len() {
-        let is_last = i + 1 == work.len();
-        match &mut work[i] {
+    while i < out.len() {
+        let is_last = i + 1 == out.len();
+        let (head, tail) = out[i..].split_first_mut().unwrap();
+        match head {
             ParamAttr::ParamAttr(_, _, Some(comma))
                 if comma.trail_comment.is_none() && !is_last =>
             {
                 let mut trivia = std::mem::take(&mut comma.pre_trivia);
-                match &mut work[i + 1] {
+                match &mut tail[0] {
                     ParamAttr::ParamAttr(name, _, _) => {
                         trivia.extend(std::mem::take(&mut name.pre_trivia));
                         name.pre_trivia = trivia;
@@ -134,7 +134,6 @@ fn move_params_comments(attrs: &[ParamAttr]) -> Vec<ParamAttr> {
             }
             _ => {}
         }
-        out.push(work[i].clone());
         i += 1;
     }
     out
