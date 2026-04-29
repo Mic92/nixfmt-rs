@@ -200,32 +200,27 @@ where
     doc.push(DocE::Group(ann, inner));
 }
 
-/// Push a nested document (increase indentation) using a closure
+/// Push a nested document (increase indentation) using a closure.
+/// Appends directly into `doc` and bumps the nesting level in place so no
+/// intermediate `Vec` is built.
 pub(crate) fn push_nested<F>(doc: &mut Doc, f: F)
 where
     F: FnOnce(&mut Doc),
 {
-    let mut inner = Vec::new();
-    f(&mut inner);
-
-    for elem in inner {
-        doc.push(match elem {
-            DocE::Text(i, o, ann, t) => DocE::Text(i + 1, o, ann, t),
-            DocE::Group(ann, inner) => DocE::Group(ann, nest_doc(inner)),
-            DocE::Spacing(s) => DocE::Spacing(s),
-        });
-    }
+    let start = doc.len();
+    f(doc);
+    nest_slice(&mut doc[start..]);
 }
 
-/// Helper for nesting a Doc recursively
-fn nest_doc(doc: Doc) -> Doc {
-    doc.into_iter()
-        .map(|elem| match elem {
-            DocE::Text(i, o, ann, t) => DocE::Text(i + 1, o, ann, t),
-            DocE::Group(ann, inner) => DocE::Group(ann, nest_doc(inner)),
-            DocE::Spacing(s) => DocE::Spacing(s),
-        })
-        .collect()
+/// Bump the nesting depth of every `Text` in `doc` (recursing into groups).
+fn nest_slice(doc: &mut [DocE]) {
+    for elem in doc {
+        match elem {
+            DocE::Text(i, _, _, _) => *i += 1,
+            DocE::Group(_, inner) => nest_slice(inner),
+            DocE::Spacing(_) => {}
+        }
+    }
 }
 
 /// Line break or nothing (soft)
@@ -303,27 +298,20 @@ pub(crate) fn push_offset<F>(doc: &mut Doc, level: usize, f: F)
 where
     F: FnOnce(&mut Doc),
 {
-    let mut inner = Vec::new();
-    f(&mut inner);
-
-    for elem in inner {
-        doc.push(match elem {
-            DocE::Text(i, o, ann, t) => DocE::Text(i, o + level, ann, t),
-            DocE::Group(ann, inner) => DocE::Group(ann, offset_doc(level, inner)),
-            DocE::Spacing(s) => DocE::Spacing(s),
-        });
-    }
+    let start = doc.len();
+    f(doc);
+    offset_slice(level, &mut doc[start..]);
 }
 
-/// Helper for offsetting a Doc recursively
-fn offset_doc(level: usize, doc: Doc) -> Doc {
-    doc.into_iter()
-        .map(|elem| match elem {
-            DocE::Text(i, o, ann, t) => DocE::Text(i, o + level, ann, t),
-            DocE::Group(ann, inner) => DocE::Group(ann, offset_doc(level, inner)),
-            DocE::Spacing(s) => DocE::Spacing(s),
-        })
-        .collect()
+/// Add `level` to the offset of every `Text` in `doc` (recursing into groups).
+fn offset_slice(level: usize, doc: &mut [DocE]) {
+    for elem in doc {
+        match elem {
+            DocE::Text(_, o, _, _) => *o += level,
+            DocE::Group(_, inner) => offset_slice(level, inner),
+            DocE::Spacing(_) => {}
+        }
+    }
 }
 
 // Renderer: Convert IR (Doc) to formatted text
