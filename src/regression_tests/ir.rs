@@ -51,3 +51,9 @@ fn test_middle_arg_grouping() {
 fn test_with_grouping() {
     test_ir_format("{ x = with p; y; }");
 }
+
+/// Regression test: small simple list as inner application argument uses soft `line` separators
+#[test]
+fn test_inner_arg_simple_list() {
+    test_ir_format("f [ 1 2 3 ] x");
+}

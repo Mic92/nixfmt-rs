@@ -279,7 +279,61 @@ fn push_inner_arg(doc: &mut Doc, arg: &Expression) {
     } else {
         GroupAnn::Priority
     };
-    push_group_ann(doc, ann, |g| arg.pretty(g));
+    push_group_ann(doc, ann, |g| push_absorb_inner(g, arg));
+}
+
+/// `absorbInner` from Pretty.hs: short lists of simple terms get a soft `line`
+/// separator so they may stay on one line; everything else falls back to `pretty`.
+fn push_absorb_inner(doc: &mut Doc, arg: &Expression) {
+    if let Expression::Term(Term::List(open, items, close)) = arg {
+        let all_simple = items.0.iter().all(|item| match item {
+            Item::Item(t) => is_simple_term(t),
+            Item::Comments(_) => true,
+        });
+        if items.0.len() <= 6 && all_simple {
+            push_render_list(doc, line(), open, items, close);
+            return;
+        }
+    }
+    arg.pretty(doc);
+}
+
+/// `renderList` from Pretty.hs.
+fn push_render_list(
+    doc: &mut Doc,
+    item_sep: DocE,
+    open: &Ann<Token>,
+    items: &Items<Term>,
+    close: &Ann<Token>,
+) {
+    let open_clean = Ann {
+        trail_comment: None,
+        ..open.clone()
+    };
+    open_clean.pretty(doc);
+
+    let sur = if open.span.start_line != close.span.start_line
+        || items_has_only_comments(items)
+        || (!is_lone_ann(open) && items.0.is_empty())
+    {
+        hardline()
+    } else if items.0.is_empty() {
+        hardspace()
+    } else {
+        line()
+    };
+
+    push_surrounded(doc, &vec![sur], |d| {
+        push_nested(d, |inner| {
+            open.trail_comment.pretty(inner);
+            push_pretty_items_sep(inner, items, &item_sep);
+        });
+    });
+    close.pretty(doc);
+}
+
+fn items_has_only_comments<T>(items: &Items<T>) -> bool {
+    !items.0.is_empty() && items.0.iter().all(|i| matches!(i, Item::Comments(_)))
 }
 
 /// Render the last argument of a function application (absorbLast in nixfmt)
@@ -798,6 +852,10 @@ fn push_pretty_set(
 /// Format a list of items with interleaved comments
 /// Based on Haskell prettyItems (Pretty.hs:108-120)
 fn push_pretty_items<T: Pretty>(doc: &mut Doc, items: &Items<T>) {
+    push_pretty_items_sep(doc, items, &hardline());
+}
+
+fn push_pretty_items_sep<T: Pretty>(doc: &mut Doc, items: &Items<T>, sep: &DocE) {
     let items = &items.0;
     match items.as_slice() {
         [] => {}
@@ -806,7 +864,7 @@ fn push_pretty_items<T: Pretty>(doc: &mut Doc, items: &Items<T>) {
             let mut i = 0;
             while i < items.len() {
                 if i > 0 {
-                    doc.push(hardline());
+                    doc.push(sep.clone());
                 }
 
                 // Special case: language annotation comment followed by string item
