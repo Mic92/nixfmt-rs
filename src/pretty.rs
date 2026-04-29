@@ -1141,7 +1141,6 @@ fn push_pretty_items_sep<T: Pretty>(doc: &mut Doc, items: &Items<T>, sep: &DocE)
                         if trivia.0.len() == 1 {
                             if let Trivium::LanguageAnnotation(lang) = &trivia.0[0] {
                                 if let Item::Item(string_item) = &items[i + 1] {
-                                    // Language annotation + string on same line
                                     Trivium::LanguageAnnotation(lang.clone()).pretty(doc);
                                     doc.push(hardspace());
                                     push_group(doc, |d| string_item.pretty(d));
@@ -1438,7 +1437,6 @@ impl Pretty for Term {
                 s.trail_comment.pretty(doc);
             }
             Term::Path(p) => {
-                // Path is Ann<Vec<StringPart>>
                 p.pre_trivia.pretty(doc);
                 for part in &p.value {
                     part.pretty(doc);

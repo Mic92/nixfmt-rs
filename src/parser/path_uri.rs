@@ -35,22 +35,15 @@ impl Parser {
     /// Check if current position starts a URI
     /// Pattern: scheme_chars ":" uri_chars (e.g., http://example.com)
     pub(super) fn looks_like_uri(&self) -> bool {
-        // Must be an identifier
         let Token::Identifier(scheme) = &self.current.value else {
             return false;
         };
-
-        // All characters in scheme must be valid scheme chars
         if !scheme.chars().all(is_scheme_char) {
             return false;
         }
-
-        // Must be followed by ":"
         if self.lexer.peek() != Some(':') {
             return false;
         }
-
-        // Must be followed by at least one URI char after ":"
         matches!(self.lexer.peek_ahead(1), Some(c) if is_uri_char(c))
     }
 
@@ -67,21 +60,16 @@ impl Parser {
         match &self.current.value {
             Token::Identifier(ident) => {
                 // Path starting with identifier (e.g., common/file.nix, foo-bar/baz.nix)
-                // The identifier has already been consumed by the lexer
                 parts.push(StringPart::TextPart(ident.clone()));
             }
             Token::TDot => {
                 // ./ or ../
-                // The lexer is positioned just after the '.' character
                 if self.lexer.peek() == Some('.') {
-                    // ../
                     parts.push(StringPart::TextPart("..".to_string()));
                     self.lexer.advance();
                 } else {
-                    // ./
                     parts.push(StringPart::TextPart(".".to_string()));
                 }
-                // Now expect /
                 if self.lexer.peek() == Some('/') {
                     self.lexer.advance();
                     if let Some(StringPart::TextPart(text)) = parts.last_mut() {
@@ -91,13 +79,10 @@ impl Parser {
             }
             Token::TDiv => {
                 // Absolute path /
-                // The lexer is positioned just after the '/' character
-                // Don't call self.advance() - just start with "/"
                 parts.push(StringPart::TextPart("/".to_string()));
             }
             Token::TTilde => {
                 // ~/
-                // The lexer is positioned just after the '~' character
                 parts.push(StringPart::TextPart("~".to_string()));
                 if self.lexer.peek() == Some('/') {
                     self.lexer.advance();
@@ -109,11 +94,9 @@ impl Parser {
             _ => {}
         }
 
-        // Parse rest of path
         loop {
             match self.lexer.peek() {
                 Some('$') if self.lexer.peek_ahead(1) == Some('{') => {
-                    // Interpolation in path
                     let interp = self.parse_string_interpolation()?;
                     parts.push(interp);
                 }
@@ -121,7 +104,6 @@ impl Parser {
                     // Path text (not / here, that's handled specially)
                     let text = self.parse_path_part()?;
                     if !text.is_empty() {
-                        // Append to last TextPart if it exists, otherwise create new one
                         if let Some(StringPart::TextPart(last_text)) = parts.last_mut() {
                             last_text.push_str(&text);
                         } else {
@@ -130,7 +112,6 @@ impl Parser {
                     }
                 }
                 Some('/') => {
-                    // Path separator
                     self.lexer.advance();
                     if let Some(StringPart::TextPart(text)) = parts.last_mut() {
                         text.push('/');
@@ -184,7 +165,6 @@ impl Parser {
                 text.push(ch);
                 self.lexer.advance();
             } else if ch == '$' && self.lexer.peek_ahead(1) == Some('{') {
-                // Interpolation coming
                 break;
             } else if ch == '/' {
                 // Don't consume / here - it's handled in the main loop
@@ -203,7 +183,6 @@ impl Parser {
         let start_pos = self.current.span;
         let pre_trivia = self.current.pre_trivia.clone();
 
-        // Get the scheme (already tokenized as identifier)
         let Token::Identifier(scheme) = &self.current.value else {
             return Err(ParseError {
                 span: start_pos,
@@ -217,7 +196,6 @@ impl Parser {
 
         let mut uri_text = scheme.clone();
 
-        // Expect ":"
         if self.lexer.peek() != Some(':') {
             return Err(ParseError {
                 span: self.lexer.current_pos(),
@@ -231,7 +209,6 @@ impl Parser {
         self.lexer.advance();
         uri_text.push(':');
 
-        // Parse URI characters
         while let Some(ch) = self.lexer.peek() {
             if is_uri_char(ch) {
                 uri_text.push(ch);
@@ -241,10 +218,8 @@ impl Parser {
             }
         }
 
-        // Parse trailing trivia and advance
         let trail_comment = self.parse_trailing_trivia_and_advance()?;
 
-        // Wrap as SimpleString
         let parts = vec![vec![StringPart::TextPart(uri_text)]];
         let ann = Ann {
             pre_trivia,

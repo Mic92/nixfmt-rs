@@ -13,7 +13,6 @@ use super::Parser;
 impl Parser {
     /// Parse attribute set: { ... } or rec { ... } or let { ... }
     pub(super) fn parse_set(&mut self) -> Result<Term> {
-        // Check for 'rec' or 'let' keyword
         let prefix_tok = if matches!(self.current.value, Token::KRec | Token::KLet) {
             let tok = self.take_current();
             self.advance()?;
@@ -24,8 +23,6 @@ impl Parser {
 
         let open_brace = self.expect_token_match(|t| matches!(t, Token::TBraceOpen))?;
         let opening_span = open_brace.span;
-
-        // Parse bindings
         let bindings = self.parse_binders()?;
 
         let close_brace = self.expect_closing_delimiter(opening_span, '{', Token::TBraceClose)?;
@@ -37,8 +34,6 @@ impl Parser {
     pub(super) fn parse_list(&mut self) -> Result<Term> {
         let open_bracket = self.expect_token_match(|t| matches!(t, Token::TBrackOpen))?;
         let opening_span = open_bracket.span;
-
-        // Parse list items (terms separated by whitespace)
         let items = self.parse_list_items()?;
 
         let close_bracket = self.expect_closing_delimiter(opening_span, '[', Token::TBrackClose)?;
@@ -85,15 +80,12 @@ impl Parser {
                 });
             }
 
-            // Check for comments before item
             self.collect_trivia_as_comments(&mut items);
 
-            // Parse a term
             let term = self.parse_term()?;
             items.push(Item::Item(term));
         }
 
-        // Always collect trivia as comments
         if matches!(self.current.value, Token::TBrackClose) {
             self.collect_trivia_as_comments(&mut items);
         }

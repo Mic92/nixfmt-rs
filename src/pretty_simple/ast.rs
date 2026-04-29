@@ -25,7 +25,7 @@ impl PrettySimple for &str {
     }
 
     fn is_atomic(&self) -> bool {
-        true // Primitives are atomic
+        true
     }
 }
 
@@ -40,7 +40,7 @@ impl PrettySimple for String {
     }
 
     fn is_atomic(&self) -> bool {
-        true // Primitives are atomic
+        true
     }
 }
 
@@ -56,7 +56,7 @@ impl PrettySimple for usize {
     }
 
     fn is_atomic(&self) -> bool {
-        true // Primitives are atomic
+        true
     }
 }
 
@@ -71,11 +71,9 @@ impl PrettySimple for bool {
     }
 
     fn is_atomic(&self) -> bool {
-        true // Primitives are atomic
+        true
     }
 }
-
-// Implement for all AST types
 
 impl PrettySimple for Whole<Expression> {
     fn format<W: Writer>(&self, w: &mut W) {
@@ -208,10 +206,7 @@ impl PrettySimple for Trivium {
         match self {
             Trivium::EmptyLine() => true,    // Nullary constructor
             Trivium::LineComment(_) => true, // String arg is simple
-            Trivium::BlockComment(_is_doc, lines) => {
-                // Simple if the Vec is simple (empty or single simple element)
-                lines.is_simple()
-            }
+            Trivium::BlockComment(_is_doc, lines) => lines.is_simple(),
             Trivium::LanguageAnnotation(_) => true, // String arg is simple
         }
     }
@@ -285,8 +280,8 @@ impl PrettySimple for StringPart {
         // However, for structural simplicity (Vec::is_simple), this creates a multi-element row,
         // so the Brackets itself is NOT simple. That's handled by Vec::is_simple logic.
         match self {
-            StringPart::TextPart(_) => true,       // Simple argument
-            StringPart::Interpolation(_) => false, // Complex argument
+            StringPart::TextPart(_) => true,
+            StringPart::Interpolation(_) => false,
         }
     }
 }
@@ -300,7 +295,6 @@ impl PrettySimple for Token {
             Identifier(s) => [s],
             EnvPath(s) => [s],
             _ => {
-                // For all other tokens, use Debug output
                 w.write_plain(&format!("{:?}", self));
             }
         });
@@ -311,7 +305,6 @@ impl PrettySimple for Token {
     }
 }
 
-// Generic Ann<T> implementation for all T that implement PrettySimple
 /// Helper wrapper for formatting span as "Pos N" for Haskell compatibility
 /// Even though we use Span internally, the pretty-printed AST should match Haskell
 #[derive(Debug)]
@@ -322,8 +315,6 @@ impl PrettySimple for SpanWrapper {
         use crate::error::context::ErrorContext;
 
         w.write_plain("Pos ");
-
-        // Compute line number from byte offset
         let ctx = ErrorContext::new(w.source(), None);
         let pos = ctx.position(self.0.start);
         pos.line.format(w);
@@ -350,7 +341,7 @@ impl PrettySimple for TrailingComment {
     }
 
     fn has_delimiters(&self) -> bool {
-        true // Has parens
+        true
     }
 }
 
@@ -396,12 +387,8 @@ impl<T: PrettySimple> PrettySimple for Vec<T> {
         w.with_color(|w_color| {
             let bracket_color = w_color.current_color();
             w_color.with_depth(|w_inner| {
-                // EXACT Haskell logic: [xs] | all isSimple xs
-                // This matches when there is ONE row (single element in Vec) with all simple elements
-                // Multiple elements in Vec → multiple rows → takes else branch (multiline)
                 if self.len() == 1 && self[0].is_simple() {
                     // Case: [xs] | all isSimple xs (ONE row, all elements simple)
-                    // Inline format: [ elem1 elem2 ... ]
                     w_inner.write_colored("[", bracket_color);
                     w_inner.write_plain(" ");
                     for (i, item) in self.iter().enumerate() {
@@ -434,8 +421,6 @@ impl<T: PrettySimple> PrettySimple for Vec<T> {
         // isListSimple [[e]] = isSimple e && case e of Other s -> not $ any isSpace s ; _ -> True
         // isListSimple _:_ = False
         // isListSimple [] = True
-        //
-        // Empty list is simple
         if self.is_empty() {
             return true;
         }
@@ -452,7 +437,7 @@ impl<T: PrettySimple> PrettySimple for Vec<T> {
     }
 
     fn has_delimiters(&self) -> bool {
-        true // Vec formats with brackets
+        true
     }
 
     fn is_empty(&self) -> bool {
@@ -466,7 +451,6 @@ impl<T: PrettySimple> PrettySimple for Option<T> {
     fn format<W: Writer>(&self, w: &mut W) {
         match self {
             Some(value) => {
-                // Just value is a constructor application
                 format_constructor!(w, "Just", [value]);
             }
             None => {
@@ -485,7 +469,6 @@ impl<T: PrettySimple> PrettySimple for Option<T> {
 /// Based on Haskell's Show instance for tuples
 impl<A: PrettySimple, B: PrettySimple> PrettySimple for (A, B) {
     fn format<W: Writer>(&self, w: &mut W) {
-        // Tuple: (a, b)
         w.with_color(|w_color| {
             let paren_color = w_color.current_color();
             w_color.with_depth(|w_inner| {

@@ -43,21 +43,14 @@ impl Parser {
     pub(crate) fn new(source: &str) -> Result<Self> {
         let mut lexer = Lexer::new(source);
         lexer.start_parse()?;
-
-        // Parse first token
         let current = lexer.lexeme()?;
-
         Ok(Parser { lexer, current })
     }
 
     /// Parse a complete Nix file
     pub(crate) fn parse_file(&mut self) -> Result<File> {
         let expr = self.parse_expression()?;
-
-        // Expect EOF
         self.expect_eof()?;
-
-        // Get trailing trivia
         let trailing_trivia = self.lexer.finish_parse();
 
         Ok(Whole {
@@ -71,14 +64,10 @@ impl Parser {
         // Match Haskell's order: try operation, then abstraction, then keywords
         match &self.current.value {
             Token::KLet => {
-                // Check if this is old-style 'let { }' or modern 'let ... in ...'
-                // Old-style: let is followed by {
-                // Modern: let is followed by bindings
+                // Old-style `let { }` vs modern `let ... in ...`
                 if self.lexer.peek() == Some('{') {
-                    // Old-style let { } - parse as operation/term
                     self.parse_abstraction_or_operation()
                 } else {
-                    // Modern let ... in ...
                     self.parse_let()
                 }
             }
@@ -95,13 +84,8 @@ impl Parser {
 
     /// Parse abstraction or operation (handles ambiguity)
     fn parse_abstraction_or_operation(&mut self) -> Result<Expression> {
-        // Simple approach: Check what token we start with
         match &self.current.value {
-            Token::TBraceOpen => {
-                // Could be set literal OR set parameter
-                // Parse it as set parameter if possible, otherwise as set literal
-                self.parse_set_parameter_or_literal()
-            }
+            Token::TBraceOpen => self.parse_set_parameter_or_literal(),
             Token::Identifier(_) => {
                 // Check if this is a URI (identifier followed by : and URI chars)
                 // Must check BEFORE lambda parameter check (which also looks for :)
@@ -109,19 +93,15 @@ impl Parser {
                     return self.parse_operation_or_lambda();
                 }
 
-                // Check if this might be a path (identifier followed by /)
-                // But NOT the // operator (update)
-                // If so, parse it normally as an operation (which will handle the path)
+                // Might be a path (identifier followed by `/`, but not `//`)
                 if self.lexer.peek() == Some('/') && self.lexer.peek_ahead(1) != Some('/') {
                     return self.parse_operation_or_lambda();
                 }
 
-                // Could be identifier parameter OR identifier term
-                // Parse identifier and check for : or @
+                // Could be identifier parameter OR identifier term; check for `:` or `@`
                 let ident = self.take_and_advance()?;
 
                 if matches!(self.current.value, Token::TColon) {
-                    // It's a lambda: x: body
                     let colon = self.take_and_advance()?;
                     let body = self.parse_expression()?;
                     Ok(Expression::Abstraction(
@@ -134,7 +114,6 @@ impl Parser {
                     let at_tok = self.take_and_advance()?;
                     let second_param = self.parse_full_parameter()?;
 
-                    // Check for colon - if not present, give helpful error
                     if !matches!(self.current.value, Token::TColon) {
                         return Err(ParseError {
                             span: at_tok.span,
@@ -148,7 +127,6 @@ impl Parser {
                         });
                     }
 
-                    // Validate that pattern name doesn't shadow a formal
                     let first_param = Parameter::ID(ident.clone());
                     self.validate_context_parameter(&first_param, &second_param)?;
 
@@ -167,21 +145,15 @@ impl Parser {
                     self.continue_operation_from(term_expr)
                 }
             }
-            _ => {
-                // Parse normally as operation
-                self.parse_operation_or_lambda()
-            }
+            _ => self.parse_operation_or_lambda(),
         }
     }
 
     /// Parse { as either set parameter or set literal
     fn parse_set_parameter_or_literal(&mut self) -> Result<Expression> {
-        // Save state for potential backtracking
         let saved_state = self.save_state();
-
         let open_brace = self.take_and_advance()?;
 
-        // Look at next token to decide
         match &self.current.value {
             Token::TBraceClose => {
                 // Empty set: {} - could be parameter or literal
@@ -190,8 +162,7 @@ impl Parser {
                 self.advance()?;
 
                 if matches!(self.current.value, Token::TColon) {
-                    // Empty set parameter: {}: body
-                    // Keep trivia on the close brace for proper formatting
+                    // Empty set parameter `{}: body`; keep trivia on the close brace for proper formatting
                     let colon = self.take_and_advance()?;
                     let body = self.parse_expression()?;
                     Ok(Expression::Abstraction(
@@ -204,7 +175,6 @@ impl Parser {
                     let at_tok = self.take_and_advance()?;
                     let second_param = self.parse_full_parameter()?;
 
-                    // Validate that pattern name doesn't shadow a formal
                     let first_param =
                         Parameter::Set(open_brace.clone(), Vec::new(), close_brace.clone());
                     self.validate_context_parameter(&first_param, &second_param)?;
@@ -237,15 +207,11 @@ impl Parser {
                 // If it fails (sees = or .), parse as bindings
                 match self.parse_param_attrs() {
                     Ok(attrs) => {
-                        // Successfully parsed as parameter attributes
-
-                        // Check for duplicate formal parameters
                         self.check_duplicate_formals(&attrs)?;
 
                         let close_brace =
                             self.expect_token_match(|t| matches!(t, Token::TBraceClose))?;
 
-                        // Check if followed by : or @
                         if matches!(self.current.value, Token::TColon) {
                             // Set parameter: { x, y }: body
                             let colon = self.take_and_advance()?;
@@ -260,7 +226,6 @@ impl Parser {
                             let at_tok = self.take_and_advance()?;
                             let second_param = self.parse_full_parameter()?;
 
-                            // Validate that pattern name doesn't shadow a formal
                             let first_param = Parameter::Set(
                                 open_brace.clone(),
                                 attrs.clone(),
@@ -280,7 +245,6 @@ impl Parser {
                                 Box::new(body),
                             ))
                         } else {
-                            // Not a parameter - must be invalid
                             Err(ParseError {
                                 span: close_brace.span,
                                 kind: crate::error::ErrorKind::InvalidSyntax {
@@ -292,11 +256,9 @@ impl Parser {
                         }
                     }
                     Err(_) => {
-                        // Failed to parse as parameters (saw = or .)
-                        // Restore state to try parsing as set literal
+                        // Failed to parse as parameters (saw `=` or `.`); retry as set literal
                         self.restore_state(saved_state);
 
-                        // Now parse as set literal
                         let open_brace = self.take_current();
                         self.advance()?;
 
@@ -312,8 +274,6 @@ impl Parser {
             Token::TEllipsis => {
                 // Definitely a parameter: { ... }
                 let attrs = self.parse_param_attrs()?;
-
-                // Check for duplicate formal parameters
                 self.check_duplicate_formals(&attrs)?;
 
                 let close_brace = self.expect_token_match(|t| matches!(t, Token::TBraceClose))?;
@@ -331,7 +291,6 @@ impl Parser {
                     let at_tok = self.take_and_advance()?;
                     let second_param = self.parse_full_parameter()?;
 
-                    // Validate that pattern name doesn't shadow a formal
                     let first_param =
                         Parameter::Set(open_brace.clone(), attrs.clone(), close_brace.clone());
                     self.validate_context_parameter(&first_param, &second_param)?;
@@ -367,14 +326,12 @@ impl Parser {
 
     /// Continue parsing operation from a given left expression
     fn continue_operation_from(&mut self, expr: Expression) -> Result<Expression> {
-        // Check for member check (?), binary operations, or application
         let expr = if matches!(self.current.value, Token::TQuestion) {
             let question = self.take_current();
             self.advance()?;
             let selectors = self.parse_selector_path()?;
             Expression::MemberCheck(Box::new(expr), question, selectors)
         } else if self.is_term_start() {
-            // Application
             let mut app_expr = expr;
             while self.is_term_start() && !self.is_expression_end() {
                 let arg = Expression::Term(self.parse_term()?);
@@ -390,22 +347,15 @@ impl Parser {
 
     /// Parse operation or lambda (needs lookahead for :)
     fn parse_operation_or_lambda(&mut self) -> Result<Expression> {
-        // Try to parse initial term/application
         let expr = self.parse_application()?;
 
-        // Check for @ (context parameter) - special case
         if matches!(self.current.value, Token::TAt) {
-            // This is a context parameter pattern: param @ param
             let at_tok = self.take_and_advance()?;
-
             // Parse second part as a PARAMETER (not expression)
             let second_param = self.parse_full_parameter()?;
 
-            // Now we MUST see a colon for this to be valid
             if matches!(self.current.value, Token::TColon) {
                 let first_param = self.expr_to_parameter(expr)?;
-
-                // Validate that pattern name doesn't shadow a formal
                 self.validate_context_parameter(&first_param, &second_param)?;
 
                 let param =
@@ -421,18 +371,14 @@ impl Parser {
             }
         }
 
-        // NOTE: Member check (? operator) is now handled in parse_application
-        // This ensures correct precedence: ? has higher precedence than prefix ! and -
+        // Member check (?) is handled in parse_application so that `?` binds tighter than prefix `!`/`-`.
 
-        // Check if there's a colon (lambda)
         if matches!(self.current.value, Token::TColon) {
-            // It's a lambda! Convert expr back to parameter
             let param = self.expr_to_parameter(expr)?;
             let colon = self.expect_token_match(|t| matches!(t, Token::TColon))?;
             let body = self.parse_expression()?;
             Ok(Expression::Abstraction(param, colon, Box::new(body)))
         } else {
-            // Check for binary operation
             self.maybe_parse_binary_operation(expr)
         }
     }
@@ -440,26 +386,21 @@ impl Parser {
     /// Parse function application (left-associative)
     /// Application only consumes TERMS, not unary expressions
     fn parse_application(&mut self) -> Result<Expression> {
-        // Check for prefix unary operators
-        // For chained unary operators (like --5), we need to recurse
-        // But we need to parse ? (postfix) before applying ! or - (prefix) due to precedence
+        // Prefix unary operators recurse so that postfix `?` (handled below) binds tighter.
         match &self.current.value {
             Token::TMinus => {
                 let op = self.take_and_advance()?;
-                // Recursively parse to handle chained unary operators
                 let inner = self.parse_application()?;
                 return Ok(Expression::Negation(op, Box::new(inner)));
             }
             Token::TNot => {
                 let op = self.take_and_advance()?;
-                // Recursively parse to handle chained unary operators
                 let inner = self.parse_application()?;
                 return Ok(Expression::Inversion(op, Box::new(inner)));
             }
             _ => {}
         }
 
-        // Parse first term
         let mut expr = Expression::Term(self.parse_term()?);
 
         // Keep applying while we see more TERMS (not unary ops)
@@ -469,9 +410,8 @@ impl Parser {
             expr = Expression::Application(Box::new(expr), Box::new(arg));
         }
 
-        // Check for member check (? operator) - postfix, higher precedence than prefix !/-
-        // This is the KEY fix: we check for ? here, AFTER application but within the recursive call
-        // This ensures: !a ? b parses as !(a ? b), not (!a) ? b
+        // Postfix `?` has higher precedence than prefix `!`/`-`; checking it here ensures
+        // `!a ? b` parses as `!(a ? b)`, not `(!a) ? b`.
         if matches!(self.current.value, Token::TQuestion) {
             let question = self.take_and_advance()?;
             let selectors = self.parse_selector_path()?;
@@ -550,7 +490,7 @@ impl Parser {
             let op_token = self.take_current();
             let is_comparison = is_comparison_operator(&op_token.value);
             let prec = self.get_precedence_for(&op_token.value);
-            let op_string = op_token.value.text().to_string(); // User-friendly format
+            let op_string = op_token.value.text().to_string();
 
             // Check if we're chaining comparison operators at the same precedence level
             // This prevents: 1 < 2 < 3 (both < at precedence 9)
@@ -612,14 +552,12 @@ impl Parser {
             left = if matches!(op_token.value, Token::TPlus) {
                 if let Expression::Operation(one, op1, two) = left {
                     if matches!(op1.value, Token::TPlus) {
-                        // Restructure: Operation(one, op1, Operation(two, op2, three))
                         Expression::Operation(
                             one,
                             op1,
                             Box::new(Expression::Operation(two, op_token, Box::new(right))),
                         )
                     } else {
-                        // Left is an operation but not TPlus, create normal operation
                         Expression::Operation(
                             Box::new(Expression::Operation(one, op1, two)),
                             op_token,
@@ -627,11 +565,9 @@ impl Parser {
                         )
                     }
                 } else {
-                    // Left is not an operation, create normal operation
                     Expression::Operation(Box::new(left), op_token, Box::new(right))
                 }
             } else {
-                // Not TPlus, create normal operation
                 Expression::Operation(Box::new(left), op_token, Box::new(right))
             };
 
@@ -731,7 +667,6 @@ impl Parser {
             }),
         }?;
 
-        // Check for selection (.attr) or or-default
         self.parse_postfix_selection(base_term)
     }
 
@@ -739,7 +674,6 @@ impl Parser {
     fn parse_postfix_selection(&mut self, base_term: Term) -> Result<Term> {
         let mut selectors = Vec::new();
 
-        // Parse .attr chains
         while matches!(self.current.value, Token::TDot) {
             let saved_state = self.save_state();
 
@@ -770,7 +704,6 @@ impl Parser {
         // This makes sense: `fold or []` means "lookup fold, use [] if not found",
         // but simple variable lookups either succeed or error - there's no "not found" case.
         let or_default = if self.is_or_token() {
-            // Save state in case we need to backtrack
             let saved_state = self.save_state();
 
             let mut or_tok = self.take_current();
@@ -788,7 +721,6 @@ impl Parser {
                 let default_term = self.parse_term()?;
                 Some((or_tok, Box::new(default_term)))
             } else {
-                // Backtrack: restore parser state
                 self.restore_state(saved_state);
                 None
             }
@@ -826,23 +758,18 @@ impl Parser {
         Ok(Term::Token(token_ann))
     }
 
-    // Helper methods
-
     /// Parse trivia after manually consuming content (strings, paths, etc.)
     /// and return the trailing comment for the previous construct.
     /// This also stores leading trivia for the next token and advances to it.
     fn parse_trailing_trivia_and_advance(
         &mut self,
     ) -> Result<Option<crate::types::TrailingComment>> {
-        // Parse trivia after the construct and split into trailing/leading
         let parsed_trivia = self.lexer.parse_trivia();
         let next_col = self.lexer.column;
         let (trail_comment, next_leading) = crate::lexer::convert_trivia(parsed_trivia, next_col);
 
         // Store the leading trivia for the next token
         self.lexer.trivia_buffer = next_leading;
-
-        // Now get the next token
         self.current = self.lexer.lexeme()?;
 
         Ok(trail_comment)
@@ -856,7 +783,6 @@ impl Parser {
 
     /// Take current token (consumes it)
     fn take_current(&mut self) -> Ann<Token> {
-        // Create a dummy token to replace current
         let dummy = Ann {
             pre_trivia: Trivia::new(),
             span: Span::point(0),
@@ -903,7 +829,6 @@ impl Parser {
         }
     }
 
-    /// Get the ending span of an expression (the span of its last/rightmost token)
     /// Expect a closing delimiter, providing helpful error if not found
     fn expect_closing_delimiter(
         &mut self,
@@ -916,7 +841,6 @@ impl Parser {
             self.advance()?;
             Ok(token)
         } else if matches!(self.current.value, Token::Sof) {
-            // EOF reached without closing delimiter
             Err(ParseError {
                 span: self.current.span,
                 kind: crate::error::ErrorKind::UnclosedDelimiter {
@@ -938,7 +862,6 @@ impl Parser {
                 });
             }
 
-            // Some other token found
             Err(ParseError {
                 span: self.current.span,
                 kind: crate::error::ErrorKind::UnexpectedToken {

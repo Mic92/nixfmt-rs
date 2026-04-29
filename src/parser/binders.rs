@@ -17,14 +17,12 @@ impl Parser {
             self.current.value,
             Token::KIn | Token::TBraceClose | Token::Sof
         ) {
-            // Check for comments before binding
             self.collect_trivia_as_comments(&mut items);
 
             let binder = self.parse_binder()?;
             items.push(Item::Item(binder));
         }
 
-        // Always collect trivia as comments
         if matches!(self.current.value, Token::KIn | Token::TBraceClose) {
             self.collect_trivia_as_comments(&mut items);
         }
@@ -45,7 +43,6 @@ impl Parser {
     fn parse_inherit(&mut self) -> Result<Binder> {
         let inherit_tok = self.expect_token_match(|t| matches!(t, Token::KInherit))?;
 
-        // Check for optional (expr)
         let from = if matches!(self.current.value, Token::TParenOpen) {
             let open = self.take_current();
             self.advance()?;
@@ -56,7 +53,6 @@ impl Parser {
             None
         };
 
-        // Parse selectors (identifiers, strings, interpolations)
         let mut selectors = Vec::new();
         while self.is_simple_selector_start() {
             let sel = self.parse_simple_selector()?;
@@ -70,19 +66,15 @@ impl Parser {
 
     /// Parse assignment: selector = expr ;
     fn parse_assignment(&mut self) -> Result<Binder> {
-        // Parse left-hand side (selector path)
         let mut selectors = Vec::new();
 
-        // Parse at least one selector
         let first_sel = self.parse_selector()?;
         selectors.push(first_sel);
 
-        // Parse additional selectors if present
         while matches!(self.current.value, Token::TDot) {
             let dot = self.take_current();
             self.advance()?;
 
-            // Parse simple selector after dot
             let simple_sel = self.parse_simple_selector()?;
             selectors.push(Selector {
                 dot: Some(dot),
@@ -114,7 +106,6 @@ impl Parser {
             _ => spans::expr_end(&expr),
         };
 
-        // Expect semicolon with helpful error message
         if matches!(self.current.value, Token::TSemicolon) {
             let semi = self.take_current();
             self.advance()?;
@@ -132,7 +123,6 @@ impl Parser {
                     labels: vec![],
                 })
             } else {
-                // Generic EOF error
                 Err(ParseError {
                     span: expr_end_span,
                     kind: ErrorKind::UnexpectedToken {
@@ -199,14 +189,12 @@ impl Parser {
     pub(super) fn parse_selector_path(&mut self) -> Result<Vec<Selector>> {
         let mut selectors = Vec::new();
 
-        // First selector (no dot)
         let first_sel = self.parse_simple_selector()?;
         selectors.push(Selector {
             dot: None,
             selector: first_sel,
         });
 
-        // Additional selectors with dots
         while matches!(self.current.value, Token::TDot) {
             let dot = self.take_current();
             self.advance()?;

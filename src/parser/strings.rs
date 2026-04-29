@@ -30,15 +30,11 @@ impl Parser {
         let _opening_quote = self.take_current();
         // DON'T call advance() - parse raw characters directly
 
-        // Now parse string content directly from lexer.input
         let mut parts = Vec::new();
 
         loop {
             match self.lexer.peek() {
-                Some('"') => {
-                    // End of string
-                    break;
-                }
+                Some('"') => break,
                 None => {
                     return Err(ParseError {
                         span: self.lexer.current_pos(),
@@ -50,12 +46,10 @@ impl Parser {
                     });
                 }
                 Some('$') if self.lexer.peek_ahead(1) == Some('{') => {
-                    // Interpolation
                     let interp = self.parse_string_interpolation()?;
                     parts.push(interp);
                 }
                 _ => {
-                    // Text part
                     let text = self.parse_simple_string_part()?;
                     if !text.is_empty() {
                         parts.push(StringPart::TextPart(text));
@@ -64,7 +58,6 @@ impl Parser {
             }
         }
 
-        // Consume closing "
         self.lexer.advance();
 
         let trail_comment = self.parse_trailing_trivia_and_advance()?;
@@ -95,11 +88,10 @@ impl Parser {
                 Some('"') | None => break,
                 Some('$') if self.lexer.peek_ahead(1) == Some('{') => break,
                 Some('\\') => {
-                    // Escape sequence
-                    self.lexer.advance(); // consume \
+                    self.lexer.advance();
                     match self.lexer.peek() {
                         Some('n') => {
-                            text.push_str("\\n"); // Keep escaped form
+                            text.push_str("\\n");
                             self.lexer.advance();
                         }
                         Some('r') => {
@@ -111,7 +103,6 @@ impl Parser {
                             self.lexer.advance();
                         }
                         Some(ch) => {
-                            // Keep as \x
                             text.push('\\');
                             text.push(ch);
                             self.lexer.advance();
@@ -120,13 +111,11 @@ impl Parser {
                     }
                 }
                 Some('$') if self.lexer.peek_ahead(1) == Some('$') => {
-                    // $$ -> single $
-                    text.push_str("$$"); // Keep as $$
+                    text.push_str("$$");
                     self.lexer.advance();
                     self.lexer.advance();
                 }
                 Some('$') => {
-                    // Lone $
                     text.push('$');
                     self.lexer.advance();
                 }
@@ -142,14 +131,12 @@ impl Parser {
 
     /// Parse string interpolation: ${expr}
     pub(super) fn parse_string_interpolation(&mut self) -> Result<StringPart> {
-        // Consume ${
-        self.lexer.advance(); // $
-        self.lexer.advance(); // {
+        self.lexer.advance();
+        self.lexer.advance();
 
         // Re-sync parser
         self.current = self.lexer.lexeme()?;
 
-        // Check for empty interpolation ${}
         if matches!(self.current.value, Token::TBraceClose) {
             return Err(ParseError {
                 span: self.current.span,
@@ -175,8 +162,6 @@ impl Parser {
                     opening_span,
                 } = &err.kind
                 {
-                    // Check if the "opening" position is likely the closing quote of outer string
-                    // by seeing if there's a quote at that position
                     return Err(ParseError {
                         span: *opening_span,
                         kind: ErrorKind::UnexpectedToken {
@@ -190,7 +175,6 @@ impl Parser {
             }
         };
 
-        // Verify we're at }
         if !matches!(self.current.value, Token::TBraceClose) {
             return Err(ParseError {
                 span: self.current.span,
@@ -202,13 +186,8 @@ impl Parser {
             });
         }
 
-        // The } token was already consumed by the lexer when creating TBraceClose
-        // So lexer.pos is already AFTER the }
-        // DON'T call advance() or lexer.advance() - just continue from current lexer.pos
-
-        // Now lexer.pos is right after }, and we can continue parsing string content
-        // DON'T resync current - we'll continue with raw parsing
-
+        // The `}` token was already consumed by the lexer when creating TBraceClose,
+        // so lexer.pos is already past it; do not advance here.
         self.lexer.rewind_trivia();
         Ok(StringPart::Interpolation(Box::new(Whole {
             value: expr,
@@ -224,19 +203,15 @@ impl Parser {
 
         // Take the opening '' token (don't advance - just take it)
         let _opening = self.take_current();
-        // Now lexer.pos is right after the '' token
 
-        // Parse lines (separated by \n)
         let mut lines = Vec::new();
         lines.push(self.parse_indented_string_line()?);
 
-        // Parse additional lines
         while self.lexer.peek() == Some('\n') {
-            self.lexer.advance(); // consume \n
+            self.lexer.advance();
             lines.push(self.parse_indented_string_line()?);
         }
 
-        // Expect closing ''
         if self.lexer.peek() != Some('\'') || self.lexer.peek_ahead(1) != Some('\'') {
             return Err(ParseError {
                 span: self.lexer.current_pos(),
@@ -247,8 +222,8 @@ impl Parser {
                 labels: vec![],
             });
         }
-        self.lexer.advance(); // '
-        self.lexer.advance(); // '
+        self.lexer.advance();
+        self.lexer.advance();
 
         let trail_comment = self.parse_trailing_trivia_and_advance()?;
         let lines = process_indented(lines);
@@ -276,27 +251,20 @@ impl Parser {
                         self.lexer.peek_ahead(2),
                         Some('$') | Some('\'') | Some('\\')
                     ) {
-                        // Escape sequence: parse it
                         let text = self.parse_indented_string_part()?;
                         if !text.is_empty() {
                             parts.push(StringPart::TextPart(text));
                         }
                     } else {
-                        // End of string
                         break;
                     }
                 }
                 Some('$') if self.lexer.peek_ahead(1) == Some('{') => {
-                    // Interpolation
                     let interp = self.parse_string_interpolation()?;
                     parts.push(interp);
                 }
-                Some('\n') | None => {
-                    // End of line
-                    break;
-                }
+                Some('\n') | None => break,
                 _ => {
-                    // Regular text
                     let text = self.parse_indented_string_part()?;
                     if !text.is_empty() {
                         parts.push(StringPart::TextPart(text));
@@ -317,7 +285,6 @@ impl Parser {
             match self.lexer.peek() {
                 None | Some('\n') => break,
                 Some('\'') if self.lexer.peek_ahead(1) == Some('\'') => {
-                    // Check for escape sequences
                     match self.lexer.peek_ahead(2) {
                         Some('$') => {
                             // ''$ -> $
@@ -352,18 +319,15 @@ impl Parser {
                 }
                 Some('$') if self.lexer.peek_ahead(1) == Some('{') => break,
                 Some('$') if self.lexer.peek_ahead(1) == Some('$') => {
-                    // $$ in indented string
                     text.push_str("$$");
                     self.lexer.advance();
                     self.lexer.advance();
                 }
                 Some('$') => {
-                    // Lone $
                     text.push('$');
                     self.lexer.advance();
                 }
                 Some('\'') if self.lexer.peek_ahead(1) != Some('\'') => {
-                    // Single '
                     text.push('\'');
                     self.lexer.advance();
                 }

@@ -14,11 +14,9 @@ use super::Parser;
 impl Parser {
     /// Parse a full parameter (including context parameters)
     pub(super) fn parse_full_parameter(&mut self) -> Result<Parameter> {
-        // Check for set parameter or context parameter
         if matches!(self.current.value, Token::TBraceOpen) {
             self.parse_set_or_context_parameter()
         } else if matches!(self.current.value, Token::Identifier(_)) {
-            // Could be identifier or context parameter (id @ pattern)
             let ident = self.take_and_advance()?;
 
             if matches!(self.current.value, Token::TAt) {
@@ -26,7 +24,6 @@ impl Parser {
                 let at_tok = self.take_and_advance()?;
                 let second = self.parse_full_parameter()?;
 
-                // Validate that pattern name doesn't shadow a formal
                 let first_param = Parameter::ID(ident.clone());
                 self.validate_context_parameter(&first_param, &second)?;
 
@@ -53,23 +50,15 @@ impl Parser {
     /// Parse set parameter or context parameter starting with {
     fn parse_set_or_context_parameter(&mut self) -> Result<Parameter> {
         let open_brace = self.expect_token_match(|t| matches!(t, Token::TBraceOpen))?;
-
-        // Parse parameter attributes
         let attrs = self.parse_param_attrs()?;
-
-        // Check for duplicate formal parameters
         self.check_duplicate_formals(&attrs)?;
-
         let close_brace = self.expect_token_match(|t| matches!(t, Token::TBraceClose))?;
 
         let set_param = Parameter::Set(open_brace, attrs, close_brace);
 
-        // Check for @ (context parameter)
         if matches!(self.current.value, Token::TAt) {
             let at_tok = self.take_and_advance()?;
             let second = self.parse_full_parameter()?;
-
-            // Validate that pattern name doesn't shadow a formal
             self.validate_context_parameter(&set_param, &second)?;
 
             Ok(Parameter::Context(
@@ -89,11 +78,9 @@ impl Parser {
 
         while !matches!(self.current.value, Token::TBraceClose | Token::Sof) {
             if matches!(self.current.value, Token::TEllipsis) {
-                // Ellipsis
                 let dots = self.take_and_advance()?;
                 attrs.push(ParamAttr::ParamEllipsis(dots));
 
-                // Optional comma after ellipsis
                 if matches!(self.current.value, Token::TComma) {
                     self.advance()?;
                 }
@@ -101,7 +88,6 @@ impl Parser {
             } else if matches!(self.current.value, Token::Identifier(_)) {
                 let name = self.take_and_advance()?;
 
-                // Check what follows the identifier
                 if matches!(self.current.value, Token::TAssign | Token::TDot) {
                     // This is a binding (a = ...), not a parameter!
                     return Err(ParseError {
@@ -114,7 +100,6 @@ impl Parser {
                     });
                 }
 
-                // Check for ? default
                 let default = if matches!(self.current.value, Token::TQuestion) {
                     let q = self.take_and_advance()?;
                     let def_expr = self.parse_expression()?;
@@ -123,7 +108,6 @@ impl Parser {
                     None
                 };
 
-                // Check for comma
                 let comma = if matches!(self.current.value, Token::TComma) {
                     Some(self.take_and_advance()?)
                 } else {
@@ -150,7 +134,6 @@ impl Parser {
             if let ParamAttr::ParamAttr(name_leaf, _, _) = attr {
                 if let Token::Identifier(name) = &name_leaf.value {
                     if !seen.insert(name.clone()) {
-                        // Found a duplicate!
                         return Err(ParseError {
                             span: name_leaf.span,
                             kind: ErrorKind::InvalidSyntax {
@@ -203,7 +186,6 @@ impl Parser {
         first: &Parameter,
         second: &Parameter,
     ) -> Result<()> {
-        // Extract the pattern name and formals from the context parameter
         match (first, second) {
             // Case 1: args@{x, y, z} - pattern name is first, set is second
             (Parameter::ID(pattern_leaf), Parameter::Set(_, attrs, _)) => {
@@ -217,9 +199,7 @@ impl Parser {
                     self.check_pattern_shadows_formal(pattern_name, attrs)?;
                 }
             }
-            _ => {
-                // Other combinations are not relevant for this check
-            }
+            _ => {}
         }
 
         Ok(())
@@ -266,18 +246,15 @@ impl Parser {
         for item in items.0 {
             match item {
                 Item::Item(binder) => {
-                    // Convert binder to param attr
                     match binder {
                         Binder::Assignment(mut sels, _eq, expr, comma_or_semi) => {
-                            // Should be single identifier selector
                             if sels.len() == 1 {
                                 if let Some(Selector {
                                     dot: None,
                                     selector: SimpleSelector::ID(name),
                                 }) = sels.pop()
                                 {
-                                    // Check if expr indicates a default (x ? default pattern)
-                                    // For simplicity, we'll treat any assignment as x ? default
+                                    // Treat any assignment as `x ? default`
                                     let default = Some((
                                         Ann::new(Token::TQuestion, name.span), // Fake ? token
                                         expr,
@@ -314,14 +291,11 @@ impl Parser {
                             }
                         }
                         Binder::Inherit(_, _, _, dots) => {
-                            // Might be ellipsis
                             attrs.push(ParamAttr::ParamEllipsis(dots));
                         }
                     }
                 }
-                Item::Comments(_) => {
-                    // Skip comments in conversion
-                }
+                Item::Comments(_) => {}
             }
         }
 

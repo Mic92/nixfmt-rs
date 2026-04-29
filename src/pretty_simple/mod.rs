@@ -53,13 +53,13 @@ pub trait PrettySimple: Debug {
     /// Check if this value is "simple" (can be formatted inline)
     /// Based on pretty-simple's isSimple function
     fn is_simple(&self) -> bool {
-        false // Most things are not simple by default
+        false
     }
 
     /// Check if this type has built-in delimiters (brackets, braces, parens)
     /// Types with delimiters don't need extra parens when used as constructor arguments
     fn has_delimiters(&self) -> bool {
-        false // Most types don't have delimiters
+        false
     }
 
     /// Whether this value should be wrapped in parentheses on a single line when used as an argument.
@@ -82,7 +82,7 @@ pub trait PrettySimple: Debug {
     /// In Haskell, "TextPart \"hello\"" parses to [Other "TextPart ", StringLit "hello"] (2 elements),
     /// so Vec<StringPart> with [TextPart] is NOT structurally simple, even though TextPart is simple for rendering.
     fn is_atomic(&self) -> bool {
-        false // Most things are not atomic by default
+        false
     }
 }
 

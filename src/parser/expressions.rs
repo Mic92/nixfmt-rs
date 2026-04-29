@@ -17,7 +17,6 @@ impl Parser {
         let let_tok = self.expect_token_match(|t| matches!(t, Token::KLet))?;
         let bindings = self.parse_binders()?;
 
-        // Expect 'in' keyword
         let in_tok = if matches!(self.current.value, Token::KIn) {
             let tok = self.take_current();
             self.advance()?;
@@ -43,7 +42,6 @@ impl Parser {
         let if_tok = self.expect_token_match(|t| matches!(t, Token::KIf))?;
         let cond = self.parse_expression()?;
 
-        // Expect 'then' with a helpful error message
         let then_tok = if matches!(self.current.value, Token::KThen) {
             let tok = self.take_current();
             self.advance()?;
@@ -61,7 +59,6 @@ impl Parser {
 
         let then_expr = self.parse_expression()?;
 
-        // Expect 'else' with a helpful error message
         let else_tok = if matches!(self.current.value, Token::KElse) {
             let tok = self.take_current();
             self.advance()?;
@@ -94,7 +91,6 @@ impl Parser {
         let with_tok = self.expect_token_match(|t| matches!(t, Token::KWith))?;
         let expr1 = self.parse_expression()?;
 
-        // Expect semicolon after with expression
         let semi = if matches!(self.current.value, Token::TSemicolon) {
             let tok = self.take_current();
             self.advance()?;
@@ -125,7 +121,6 @@ impl Parser {
         let assert_tok = self.expect_token_match(|t| matches!(t, Token::KAssert))?;
         let cond = self.parse_expression()?;
 
-        // Expect semicolon after assert condition
         let semi = if matches!(self.current.value, Token::TSemicolon) {
             let tok = self.take_current();
             self.advance()?;

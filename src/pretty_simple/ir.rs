@@ -21,8 +21,7 @@ impl PrettySimple for IR {
         // Same as Vec::format but skip the with_depth call
         w.with_color(|w_color| {
             let bracket_color = w_color.current_color();
-            // NOTE: Vec calls w_color.with_depth here, but we DON'T
-            // This keeps IR at depth 0 instead of incrementing to depth 1
+            // Vec::format calls w_color.with_depth here, but we don't (keeps IR at depth 0)
 
             if self.0.len() == 1 && self.0[0].is_simple() {
                 w_color.write_colored("[", bracket_color);

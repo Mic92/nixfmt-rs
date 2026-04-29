@@ -17,7 +17,6 @@ pub(super) fn expr_end(expr: &Expression) -> Span {
         Expression::Application(_, expr) => expr_end(expr),
         Expression::Operation(_, _, right) => expr_end(right),
         Expression::MemberCheck(_, _, selectors) => {
-            // Last selector's span
             if let Some(last) = selectors.last() {
                 simple_selector_end(&last.selector)
             } else {

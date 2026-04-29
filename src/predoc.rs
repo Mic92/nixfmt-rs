@@ -403,9 +403,9 @@ fn unexpand_spacing(doc: &Doc) -> Doc {
         match elem {
             DocE::Spacing(Spacing::Space) => result.push(DocE::Spacing(Spacing::Hardspace)),
             DocE::Spacing(Spacing::Softspace) => result.push(DocE::Spacing(Spacing::Hardspace)),
-            DocE::Spacing(Spacing::Break) => {}          // Remove
-            DocE::Spacing(Spacing::Softbreak) => {}      // Remove
-            DocE::Text(_, _, TextAnn::Trailing, _) => {} // Remove trailing text in compact mode
+            DocE::Spacing(Spacing::Break) => {}
+            DocE::Spacing(Spacing::Softbreak) => {}
+            DocE::Text(_, _, TextAnn::Trailing, _) => {}
             _ => result.push(elem.clone()),
         }
     }
@@ -530,7 +530,6 @@ pub(crate) fn fixup(doc: &Doc) -> Doc {
                 }
             }
 
-            // Handle groups
             DocE::Group(ann, xs) => {
                 let fixed_xs = fixup(&xs);
 
@@ -604,30 +603,23 @@ fn fits(ni: isize, c: isize, doc: &[DocE]) -> Option<String> {
                 }
             }
             DocE::Text(_, _, TextAnn::Comment, t) => {
-                result.push_str(t);
                 // Comments don't count towards width
+                result.push_str(t);
             }
             DocE::Text(_, _, TextAnn::TrailingComment, t) => {
-                // Trailing comments need special handling
-                // Check if there's enough space for the comment plus margin
                 if next_indent < 0 {
                     return None;
                 }
                 result.push_str(t);
             }
             DocE::Text(_, _, TextAnn::Trailing, t) => {
-                // Trailing text is only rendered in expanded mode, skip in compact
                 let w = text_width(t) as isize;
                 result.push_str(t);
                 remaining -= w;
                 next_indent -= w;
             }
-            DocE::Spacing(Spacing::Softbreak) => {
-                // Softbreak becomes nothing in compact mode
-            }
-            DocE::Spacing(Spacing::Break) => {
-                // Break becomes nothing in compact mode
-            }
+            DocE::Spacing(Spacing::Softbreak) => {}
+            DocE::Spacing(Spacing::Break) => {}
             DocE::Spacing(Spacing::Softspace) => {
                 result.push(' ');
                 remaining -= 1;
@@ -655,23 +647,20 @@ fn fits(ni: isize, c: isize, doc: &[DocE]) -> Option<String> {
             DocE::Spacing(Spacing::Hardline) => return None,
             DocE::Spacing(Spacing::Emptyline) => return None,
             DocE::Spacing(Spacing::Newlines(_)) => return None,
-            DocE::Group(_, ys) => {
-                // Flatten group and continue
-                match fits(next_indent, remaining, ys) {
-                    Some(s) => {
-                        let w = text_width(&s) as isize;
-                        result.push_str(&s);
-                        remaining -= w;
-                        next_indent -= w;
-                        if remaining < 0 {
-                            return None;
-                        }
-                    }
-                    None => {
+            DocE::Group(_, ys) => match fits(next_indent, remaining, ys) {
+                Some(s) => {
+                    let w = text_width(&s) as isize;
+                    result.push_str(&s);
+                    remaining -= w;
+                    next_indent -= w;
+                    if remaining < 0 {
                         return None;
                     }
                 }
-            }
+                None => {
+                    return None;
+                }
+            },
         }
     }
 
@@ -799,7 +788,6 @@ fn priority_groups(doc: &[DocE]) -> Vec<(Doc, Doc, Doc)> {
         while i < segs.len() {
             let (is_prio, mut content) = segs[i].clone();
             if !is_prio {
-                // Merge with following non-priority segments
                 while i + 1 < segs.len() && !segs[i + 1].0 {
                     i += 1;
                     content.extend(segs[i].1.clone());
@@ -861,7 +849,6 @@ type LayoutState = (usize, Vec<(usize, usize)>);
 
 /// Main layout algorithm
 fn layout_greedy(target_width: usize, indent_width: usize, doc: &Doc) -> String {
-    // First, fix the inner document
     let inner = fixup(doc);
     // Wrap in a top-level group to mirror nixfmt's structure
     let wrapped = vec![DocE::Group(GroupAnn::RegularG, inner)];
@@ -905,8 +892,7 @@ fn render_elem(
         DocE::Text(nl, off, _ann, t) => render_text(*nl, *off, t, state, iw),
 
         DocE::Spacing(sp) if needs_indent => {
-            // Drop line-break spacing after a line break, but keep hardspaces
-            // This matches nixfmt behavior: when cc == 0, drop all spacings except hardspace
+            // When cc == 0, drop all spacings except hardspace (matches nixfmt)
             match sp {
                 Spacing::Hardspace => {
                     *cc += 1;
@@ -971,7 +957,6 @@ fn render_text(
     while !indents.is_empty() {
         let (_, nl) = indents.last().unwrap();
         if text_nl > *nl {
-            // Push new level
             let new_indent = if *cc == 0 {
                 indents.last().unwrap().0 + iw
             } else {
@@ -980,7 +965,6 @@ fn render_text(
             indents.push((new_indent, text_nl));
             break;
         } else if text_nl < *nl {
-            // Pop level
             indents.pop();
         } else {
             break;
@@ -1088,7 +1072,6 @@ fn render_group(
         for (pre, prio, post) in priority_groups(ys).into_iter().rev() {
             let state_backup = state.clone();
 
-            // Try to fit pre compactly
             let pre_lookahead = [prio.clone(), post.clone(), lookahead.to_vec()].concat();
             if let Some((pre_text, state_after_pre)) =
                 try_render_group(&pre, &pre_lookahead, &state_backup, tw, iw)
@@ -1103,7 +1086,6 @@ fn render_group(
                     .collect();
                 let prio_text = render_doc(&prio, &combined_lookahead, state, tw, iw);
 
-                // Try to fit post compactly
                 if let Some((post_text, state_after_post)) =
                     try_render_group(&post, lookahead, state, tw, iw)
                 {
