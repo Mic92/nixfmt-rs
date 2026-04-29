@@ -23,8 +23,13 @@ for f in "${files[@]}"; do
   case "$MODE" in
   format)
     a=$("$REF" - <"$f" 2>/dev/null) || continue
-    b=$("$OURS" <"$f" 2>/dev/null) || {
-      echo "REJECT $f" >>"$OUT/mismatch-$MODE.txt"
+    b=$(timeout 5 "$OURS" <"$f" 2>/dev/null) || {
+      st=$?
+      if [[ $st -eq 124 ]]; then
+        echo "TIMEOUT $f" >>"$OUT/mismatch-$MODE.txt"
+      else
+        echo "REJECT $f" >>"$OUT/mismatch-$MODE.txt"
+      fi
       continue
     }
     ;;

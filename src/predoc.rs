@@ -864,8 +864,20 @@ fn render_doc(
 ) -> String {
     let mut result = String::new();
     for (i, elem) in doc.iter().enumerate() {
-        let rest: Doc = doc[i + 1..].iter().chain(lookahead).cloned().collect();
-        result.push_str(&render_elem(elem, &rest, state, tw, iw));
+        // Only Group and the soft spacings consult the lookahead; building the
+        // concatenated `rest` for every Text/hard-spacing element is the
+        // dominant cost on large files, so skip it when it cannot be used.
+        let needs_rest = match elem {
+            DocE::Group(_, _) => true,
+            DocE::Spacing(Spacing::Softbreak | Spacing::Softspace) => state.0 != 0,
+            _ => false,
+        };
+        if needs_rest {
+            let rest: Doc = doc[i + 1..].iter().chain(lookahead).cloned().collect();
+            result.push_str(&render_elem(elem, &rest, state, tw, iw));
+        } else {
+            result.push_str(&render_elem(elem, &[], state, tw, iw));
+        }
     }
     result
 }
@@ -1062,9 +1074,8 @@ fn render_group(
 
     // Try priority groups if not transparent
     if ann != GroupAnn::Transparent {
+        let state_backup = state.clone();
         for (pre, prio, post) in priority_groups(ys).into_iter().rev() {
-            let state_backup = state.clone();
-
             let pre_lookahead = [prio.clone(), post.clone(), lookahead.to_vec()].concat();
             if let Some((pre_text, state_after_pre)) =
                 try_render_group(&pre, &pre_lookahead, &state_backup, tw, iw)
