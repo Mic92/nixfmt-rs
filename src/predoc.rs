@@ -448,7 +448,6 @@ fn unexpand_spacing(doc: &Doc) -> Doc {
             DocE::Spacing(Spacing::Softspace) => result.push(DocE::Spacing(Spacing::Hardspace)),
             DocE::Spacing(Spacing::Break) => {}
             DocE::Spacing(Spacing::Softbreak) => {}
-            DocE::Text(_, _, TextAnn::Trailing, _) => {}
             _ => result.push(elem.clone()),
         }
     }
@@ -595,82 +594,81 @@ pub(crate) fn fixup(doc: Doc) -> Doc {
     result
 }
 
-/// Attempt to fit a document in a single line with specific width
-/// ni: next indentation (for trailing comment calculations)
-/// c: allowed width
-/// Returns rendered text if it fits, None otherwise
-fn fits(ni: isize, c: isize, doc: &[DocE]) -> Option<String> {
+/// Mirrors `fits` in Nixfmt/Predoc.hs.
+///
+/// `ni` is the next-line indentation delta used only by the trailing-comment
+/// rule; `c` is the remaining width budget. Groups are flattened in place so
+/// adjacent spacings across a group boundary merge exactly as in the Haskell
+/// `ys ++ xs` recursion, and so comment text inside a group never gets
+/// double-counted against `c`.
+fn fits(mut ni: isize, mut c: isize, doc: &[DocE]) -> Option<String> {
     if c < 0 {
         return None;
     }
-    if doc.is_empty() {
-        return Some(String::new());
-    }
 
-    let mut result = String::new();
-    let mut remaining = c;
-    let mut next_indent = ni;
-    let mut i = 0;
+    let mut out = String::new();
+    let mut stack: Vec<std::slice::Iter<'_, DocE>> = vec![doc.iter()];
+    let mut pending: Option<Spacing> = None;
 
-    while i < doc.len() {
-        let elem = &doc[i];
-        i += 1;
-
-        match elem {
-            DocE::Text(_, _, TextAnn::RegularT, t) => {
-                let w = text_width(t) as isize;
-                result.push_str(t);
-                remaining -= w;
-                next_indent -= w;
-                if remaining < 0 {
-                    return None;
+    loop {
+        let elem = loop {
+            let Some(it) = stack.last_mut() else {
+                break None;
+            };
+            match it.next() {
+                Some(DocE::Group(_, ys)) => stack.push(ys.iter()),
+                Some(e) => break Some(e),
+                None => {
+                    stack.pop();
                 }
             }
-            DocE::Text(_, _, TextAnn::Comment, t) => {
-                // Comments don't count towards width
-                result.push_str(t);
-            }
-            DocE::Text(_, _, TextAnn::TrailingComment, t) => {
-                // Trailing comments never count toward the width budget; they
-                // only affect whether a leading space is needed (Haskell
-                // `fits`: `ni == 0` branch).
-                if next_indent == 0 {
-                    result.push(' ');
-                }
-                result.push_str(t);
-            }
-            DocE::Text(_, _, TextAnn::Trailing, _) => {}
-            DocE::Spacing(Spacing::Softbreak) => {}
-            DocE::Spacing(Spacing::Break) => {}
-            DocE::Spacing(Spacing::Softspace | Spacing::Space | Spacing::Hardspace) => {
-                result.push(' ');
-                remaining -= 1;
-                next_indent -= 1;
-                if remaining < 0 {
-                    return None;
-                }
-            }
-            DocE::Spacing(Spacing::Hardline) => return None,
-            DocE::Spacing(Spacing::Emptyline) => return None,
-            DocE::Spacing(Spacing::Newlines(_)) => return None,
-            DocE::Group(_, ys) => match fits(next_indent, remaining, ys) {
-                Some(s) => {
-                    let w = text_width(&s) as isize;
-                    result.push_str(&s);
-                    remaining -= w;
-                    next_indent -= w;
-                    if remaining < 0 {
+        };
+
+        if let Some(DocE::Spacing(s)) = elem {
+            pending = Some(match pending {
+                Some(p) => merge_spacings(p, *s),
+                None => *s,
+            });
+            continue;
+        }
+
+        if let Some(sp) = pending.take() {
+            match sp {
+                Spacing::Softbreak | Spacing::Break => {}
+                Spacing::Softspace | Spacing::Space | Spacing::Hardspace => {
+                    out.push(' ');
+                    c -= 1;
+                    ni -= 1;
+                    if c < 0 {
                         return None;
                     }
                 }
-                None => {
+                Spacing::Hardline | Spacing::Emptyline | Spacing::Newlines(_) => return None,
+            }
+        }
+
+        match elem {
+            None => return Some(out),
+            Some(DocE::Text(_, _, TextAnn::RegularT, t)) => {
+                let w = text_width(t) as isize;
+                out.push_str(t);
+                c -= w;
+                ni -= w;
+                if c < 0 {
                     return None;
                 }
-            },
+            }
+            Some(DocE::Text(_, _, TextAnn::Comment, t)) => out.push_str(t),
+            Some(DocE::Text(_, _, TextAnn::TrailingComment, t)) => {
+                if ni == 0 {
+                    out.push(' ');
+                }
+                out.push_str(t);
+            }
+            Some(DocE::Text(_, _, TextAnn::Trailing, _)) => {}
+            Some(DocE::Spacing(_) | DocE::Group(_, _)) => unreachable!(),
         }
     }
-
-    Some(result)
 }
 
 /// Find the width of the first line in a document
@@ -678,17 +676,35 @@ fn fits(ni: isize, c: isize, doc: &[DocE]) -> Option<String> {
 fn first_line_width(chain: Look<'_>) -> usize {
     let mut width = 0;
     let mut it = LookIter::new(chain);
-    while let Some(elem) = it.next() {
+    let mut pending: Option<Spacing> = None;
+    loop {
+        let elem = loop {
+            match it.next() {
+                Some(DocE::Group(_, xs)) => it.push_front(xs),
+                e => break e,
+            }
+        };
+        if let Some(DocE::Spacing(s)) = elem {
+            pending = Some(match pending {
+                Some(p) => merge_spacings(p, *s),
+                None => *s,
+            });
+            continue;
+        }
+        if let Some(sp) = pending.take() {
+            if sp == Spacing::Hardspace {
+                width += 1;
+            } else {
+                return width;
+            }
+        }
         match elem {
-            DocE::Text(_, _, TextAnn::Comment | TextAnn::TrailingComment, _) => {}
-            DocE::Text(_, _, _, t) => width += text_width(t),
-            DocE::Spacing(Spacing::Hardspace) => width += 1,
-            DocE::Spacing(_) => return width,
-            // `firstLineWidth (Group _ xs : ys) = firstLineWidth $ xs ++ ys`
-            DocE::Group(_, xs) => it.push_front(xs),
+            None => return width,
+            Some(DocE::Text(_, _, TextAnn::Comment | TextAnn::TrailingComment, _)) => {}
+            Some(DocE::Text(_, _, _, t)) => width += text_width(t),
+            Some(DocE::Spacing(_) | DocE::Group(_, _)) => unreachable!(),
         }
     }
-    width
 }
 
 /// Mirrors `firstLineFits` in Nixfmt/Predoc.hs.
@@ -697,28 +713,44 @@ fn first_line_fits(target_width: usize, max_width: usize, chain: Look<'_>) -> bo
     let target = target_width as isize;
     let mut c = max;
     let mut it = LookIter::new(chain);
-    while let Some(elem) = it.next() {
+    let mut pending: Option<Spacing> = None;
+    loop {
         if c < 0 {
             return false;
         }
+        let elem = it.next();
+        if let Some(DocE::Spacing(s)) = elem {
+            pending = Some(match pending {
+                Some(p) => merge_spacings(p, *s),
+                None => *s,
+            });
+            continue;
+        }
+        if let Some(sp) = pending.take() {
+            if sp == Spacing::Hardspace {
+                c -= 1;
+                if c < 0 {
+                    return false;
+                }
+            } else {
+                return max - c <= target;
+            }
+        }
         match elem {
-            DocE::Text(_, _, TextAnn::RegularT, t) => c -= text_width(t) as isize,
-            DocE::Text(_, _, _, _) => {}
-            DocE::Spacing(Spacing::Hardspace) => c -= 1,
-            DocE::Spacing(_) => return max - c <= target,
-            DocE::Group(_, ys) => {
-                // Remaining lookahead after this group, as a chain.
+            None => return max - c <= target,
+            Some(DocE::Text(_, _, TextAnn::RegularT, t)) => c -= text_width(t) as isize,
+            Some(DocE::Text(..)) => {}
+            Some(DocE::Group(_, ys)) => {
                 let rest: Vec<&[DocE]> = it.stack.iter().rev().map(|(s, i)| &s[*i..]).collect();
                 let rest_width = first_line_width(&rest);
                 match fits(0, c - rest_width as isize, ys) {
                     Some(t) => c -= text_width(&t) as isize,
-                    // `go c (ys ++ xs)`
                     None => it.push_front(ys),
                 }
             }
+            Some(DocE::Spacing(_)) => unreachable!(),
         }
     }
-    c >= 0 && max - c <= target
 }
 
 /// Mirrors `nextIndent` in Nixfmt/Predoc.hs.
