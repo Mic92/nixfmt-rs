@@ -24,7 +24,7 @@ impl Parser {
                 let at_tok = self.take_and_advance()?;
                 let second = self.parse_full_parameter()?;
 
-                let first_param = Parameter::ID(ident.clone());
+                let first_param = Parameter::ID(ident);
                 self.validate_context_parameter(&first_param, &second)?;
 
                 Ok(Parameter::Context(
@@ -128,12 +128,12 @@ impl Parser {
     pub(super) fn check_duplicate_formals(&self, attrs: &[ParamAttr]) -> Result<()> {
         use std::collections::HashSet;
 
-        let mut seen = HashSet::new();
+        let mut seen: HashSet<&str> = HashSet::new();
 
         for attr in attrs {
             if let ParamAttr::ParamAttr(name_leaf, _, _) = attr {
                 if let Token::Identifier(name) = &name_leaf.value {
-                    if !seen.insert(name.clone()) {
+                    if !seen.insert(name.as_str()) {
                         return Err(ParseError {
                             span: name_leaf.span,
                             kind: ErrorKind::InvalidSyntax {

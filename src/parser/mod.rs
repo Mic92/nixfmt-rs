@@ -127,7 +127,7 @@ impl Parser {
                         });
                     }
 
-                    let first_param = Parameter::ID(ident.clone());
+                    let first_param = Parameter::ID(ident);
                     self.validate_context_parameter(&first_param, &second_param)?;
 
                     let colon = self.expect_token_match(|t| matches!(t, Token::TColon))?;
@@ -175,8 +175,7 @@ impl Parser {
                     let at_tok = self.take_and_advance()?;
                     let second_param = self.parse_full_parameter()?;
 
-                    let first_param =
-                        Parameter::Set(open_brace.clone(), Vec::new(), close_brace.clone());
+                    let first_param = Parameter::Set(open_brace, Vec::new(), close_brace);
                     self.validate_context_parameter(&first_param, &second_param)?;
 
                     let colon = self.expect_token_match(|t| matches!(t, Token::TColon))?;
@@ -226,11 +225,7 @@ impl Parser {
                             let at_tok = self.take_and_advance()?;
                             let second_param = self.parse_full_parameter()?;
 
-                            let first_param = Parameter::Set(
-                                open_brace.clone(),
-                                attrs.clone(),
-                                close_brace.clone(),
-                            );
+                            let first_param = Parameter::Set(open_brace, attrs, close_brace);
                             self.validate_context_parameter(&first_param, &second_param)?;
 
                             let colon = self.expect_token_match(|t| matches!(t, Token::TColon))?;
@@ -291,8 +286,7 @@ impl Parser {
                     let at_tok = self.take_and_advance()?;
                     let second_param = self.parse_full_parameter()?;
 
-                    let first_param =
-                        Parameter::Set(open_brace.clone(), attrs.clone(), close_brace.clone());
+                    let first_param = Parameter::Set(open_brace, attrs, close_brace);
                     self.validate_context_parameter(&first_param, &second_param)?;
 
                     let colon = self.expect_token_match(|t| matches!(t, Token::TColon))?;
@@ -707,12 +701,8 @@ impl Parser {
             let saved_state = self.save_state();
 
             let mut or_tok = self.take_current();
-            if matches!(
-                &or_tok.value,
-                Token::Identifier(name) if name == "or"
-            ) {
-                or_tok.value = Token::KOr;
-            }
+            // is_or_token() guarantees this is either KOr or Identifier("or").
+            or_tok.value = Token::KOr;
             self.advance()?;
 
             // Check if the next token can start a term (the default value)

@@ -13,7 +13,7 @@ impl Parser {
     /// Parse simple string literal and return annotated string structure
     pub(super) fn parse_simple_string_literal(&mut self) -> Result<Ann<Vec<Vec<StringPart>>>> {
         let open_quote_pos = self.current.span;
-        let pre_trivia = self.current.pre_trivia.clone();
+        let pre_trivia = std::mem::take(&mut self.current.pre_trivia);
 
         // DON'T advance - just verify we're at a quote
         if !matches!(self.current.value, Token::TDoubleQuote) {
@@ -197,7 +197,7 @@ impl Parser {
     /// Based on Haskell's indentedString parser
     pub(super) fn parse_indented_string(&mut self) -> Result<Term> {
         let open_quote_pos = self.current.span;
-        let pre_trivia = self.current.pre_trivia.clone();
+        let pre_trivia = std::mem::take(&mut self.current.pre_trivia);
 
         // Take the opening '' token (don't advance - just take it)
         let _opening = self.take_current();
@@ -345,7 +345,7 @@ impl Parser {
             span: open.span,
             value: StringPart::Interpolation(Box::new(Whole {
                 value: expr,
-                trailing_trivia: close.pre_trivia.clone(),
+                trailing_trivia: close.pre_trivia,
             })),
             trail_comment: close.trail_comment,
         })
@@ -506,8 +506,8 @@ fn is_empty_line(line: &[StringPart]) -> bool {
 
 /// Remove the first line if it's empty or contains only spaces
 fn remove_empty_first_line(mut lines: Vec<Vec<StringPart>>) -> Vec<Vec<StringPart>> {
-    if let Some(first_line) = lines.first().cloned() {
-        let first = merge_adjacent_text(first_line);
+    if let Some(first_line) = lines.first_mut() {
+        let first = merge_adjacent_text(std::mem::take(first_line));
         if is_empty_line(&first) && lines.len() > 1 {
             lines.remove(0);
         } else {
@@ -522,7 +522,7 @@ fn remove_empty_last_line(mut lines: Vec<Vec<StringPart>>) -> Vec<Vec<StringPart
     match lines.len() {
         0 => lines,
         1 => {
-            let last = merge_adjacent_text(lines[0].clone());
+            let last = merge_adjacent_text(lines.pop().unwrap());
             if is_empty_line(&last) {
                 vec![Vec::new()]
             } else {
@@ -531,7 +531,7 @@ fn remove_empty_last_line(mut lines: Vec<Vec<StringPart>>) -> Vec<Vec<StringPart
         }
         _ => {
             let last_index = lines.len() - 1;
-            let last = merge_adjacent_text(lines[last_index].clone());
+            let last = merge_adjacent_text(std::mem::take(&mut lines[last_index]));
             lines[last_index] = if is_empty_line(&last) {
                 Vec::new()
             } else {

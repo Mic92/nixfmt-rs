@@ -52,7 +52,7 @@ impl Parser {
     /// Paths can contain interpolations and have specific validation rules.
     pub(super) fn parse_path(&mut self) -> Result<Term> {
         let start_pos = self.current.span;
-        let pre_trivia = self.current.pre_trivia.clone();
+        let pre_trivia = std::mem::take(&mut self.current.pre_trivia);
         let mut parts = Vec::new();
 
         // Handle the prefix that was already tokenized
@@ -181,7 +181,7 @@ impl Parser {
     /// Based on nixfmt's uri parser
     pub(super) fn parse_uri(&mut self) -> Result<Term> {
         let start_pos = self.current.span;
-        let pre_trivia = self.current.pre_trivia.clone();
+        let pre_trivia = std::mem::take(&mut self.current.pre_trivia);
 
         let Token::Identifier(scheme) = &self.current.value else {
             return Err(ParseError {
