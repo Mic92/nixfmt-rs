@@ -188,8 +188,10 @@ fn test_lexeme_preserves_trivia() {
     assert!(matches!(&a_tok.value, Token::Identifier(s) if s == "a"));
     assert!(a_tok.pre_trivia.len() >= 1);
     // Should have EmptyLine and LineComment
-    assert!(a_tok
-        .pre_trivia
-        .iter()
-        .any(|t| matches!(t, Trivium::EmptyLine())));
+    assert!(
+        a_tok
+            .pre_trivia
+            .iter()
+            .any(|t| matches!(t, Trivium::EmptyLine()))
+    );
 }

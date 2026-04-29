@@ -113,7 +113,11 @@ pub(crate) fn convert_trivia(
         // Case 1: [ # comment ] followed by single newline and another # at same column
         (
             [ParseTrivium::LineComment { col: col1, .. }],
-            [ParseTrivium::Newlines(1), ParseTrivium::LineComment { col: col2, .. }, ..],
+            [
+                ParseTrivium::Newlines(1),
+                ParseTrivium::LineComment { col: col2, .. },
+                ..,
+            ],
         ) if col1 == col2 => (None, convert_leading(&pts)),
 
         // Case 2: [ # comment ] followed by single newline, and next token is at same column

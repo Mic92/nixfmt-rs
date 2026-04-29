@@ -401,7 +401,9 @@ fn print_future_error(example: &ErrorExample) {
             println!("│   │          ^ expected expression, found '}}'");
             println!("│   │");
             println!("│   = note: string interpolations require an expression inside ${{...}}");
-            println!("│   = help: add an expression: ${{variableName}} or remove the empty interpolation");
+            println!(
+                "│   = help: add an expression: ${{variableName}} or remove the empty interpolation"
+            );
         }
         "incomplete_interpolation_expr" => {
             println!("│ Error[E001]: Incomplete expression in interpolation");
@@ -422,7 +424,9 @@ fn print_future_error(example: &ErrorExample) {
             println!("│   │        ^^^^^^^ interpolation starts here");
             println!("│   │");
             println!("│   = note: string was never closed (missing closing quote)");
-            println!("│   = help: add }} to close interpolation and \\\" to close string: \\\"hello ${{name}}\\\"");
+            println!(
+                "│   = help: add }} to close interpolation and \\\" to close string: \\\"hello ${{name}}\\\""
+            );
         }
         "unclosed_interpolation_in_binding" => {
             println!("│ Error[E002]: Unclosed string literal with interpolation");

@@ -17,9 +17,10 @@ fn test_at_without_colon_error() {
     let result = parse("x @ y");
     assert!(result.is_err());
     let err = result.unwrap_err();
-    assert!(err
-        .to_string()
-        .contains("@ is only valid in lambda parameters"));
+    assert!(
+        err.to_string()
+            .contains("@ is only valid in lambda parameters")
+    );
 }
 
 // ============================================================================
@@ -44,9 +45,10 @@ fn test_single_pipe_error() {
     let result = parse("a | b");
     assert!(result.is_err());
     let err = result.unwrap_err();
-    assert!(err
-        .to_string()
-        .contains("expected one of '||', '|>', found '|'"));
+    assert!(
+        err.to_string()
+            .contains("expected one of '||', '|>', found '|'")
+    );
 }
 
 #[test]
@@ -61,9 +63,10 @@ fn test_ellipsis_without_colon_error() {
     let result = parse("{ ... }");
     assert!(result.is_err());
     let err = result.unwrap_err();
-    assert!(err
-        .to_string()
-        .contains("{ ... } must be followed by ':' or '@'"));
+    assert!(
+        err.to_string()
+            .contains("{ ... } must be followed by ':' or '@'")
+    );
 }
 
 #[test]

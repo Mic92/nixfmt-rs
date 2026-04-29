@@ -13,7 +13,7 @@ mod pretty;
 mod types;
 
 pub use error::ParseError;
-use predoc::{render_with_config, Pretty, RenderConfig};
+use predoc::{Pretty, RenderConfig, render_with_config};
 
 // Internal-only Result type and AST types
 pub(crate) use error::Result;

@@ -1,6 +1,6 @@
 //! Regression tests for all parameter types
 
-use crate::{parse, Expression, Parameter};
+use crate::{Expression, Parameter, parse};
 
 #[test]
 fn test_id_parameter() {

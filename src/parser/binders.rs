@@ -6,7 +6,7 @@
 use crate::error::{ErrorKind, ParseError, Result};
 use crate::types::*;
 
-use super::{spans, Parser};
+use super::{Parser, spans};
 
 impl Parser {
     /// Parse a list of binders (for let expressions and attribute sets)
