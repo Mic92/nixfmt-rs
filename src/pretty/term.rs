@@ -7,7 +7,7 @@ use super::util::{Width, has_trivia, is_lone_ann, items_has_only_comments, split
 
 /// Mirrors `prettyTerm (List ..)` in Nixfmt/Pretty.hs (no surrounding group).
 pub(super) fn push_pretty_term_list(doc: &mut Doc, open: &Leaf, items: &Items<Term>, close: &Leaf) {
-    if items.0.is_empty() && open.trail_comment.is_none() && close.pre_trivia.0.is_empty() {
+    if items.0.is_empty() && open.trail_comment.is_none() && close.pre_trivia.is_empty() {
         open.pretty(doc);
         if open.span.start_line != close.span.start_line {
             doc.push(hardline());
@@ -86,7 +86,7 @@ pub(super) fn push_pretty_set(
     items: &Items<Binder>,
     close: &Ann<Token>,
 ) {
-    if items.0.is_empty() && is_lone_ann(open) && close.pre_trivia.0.is_empty() {
+    if items.0.is_empty() && is_lone_ann(open) && close.pre_trivia.is_empty() {
         if let Some(rec) = krec {
             rec.pretty(doc);
             doc.push(hardspace());
@@ -116,7 +116,7 @@ pub(super) fn push_pretty_set(
     open_without_trail.pretty(doc);
 
     let starts_with_emptyline = match items.0.first() {
-        Some(Item::Comments(trivia)) => trivia.0.iter().any(|t| matches!(t, Trivium::EmptyLine())),
+        Some(Item::Comments(trivia)) => trivia.iter().any(|t| matches!(t, Trivium::EmptyLine())),
         _ => false,
     };
 
@@ -160,8 +160,8 @@ fn push_pretty_items_sep<T: Pretty>(doc: &mut Doc, items: &Items<T>, sep: &DocE)
                 // Special case: language annotation comment followed by string item
                 if i + 1 < items.len() {
                     if let Item::Comments(trivia) = &items[i] {
-                        if trivia.0.len() == 1 {
-                            if let Trivium::LanguageAnnotation(lang) = &trivia.0[0] {
+                        if trivia.len() == 1 {
+                            if let Trivium::LanguageAnnotation(lang) = &trivia[0] {
                                 if let Item::Item(string_item) = &items[i + 1] {
                                     Trivium::LanguageAnnotation(lang.clone()).pretty(doc);
                                     doc.push(hardspace());

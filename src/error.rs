@@ -157,4 +157,7 @@ pub enum LabelStyle {
 }
 
 /// Convenience alias for `Result<T, ParseError>`.
-pub type Result<T> = std::result::Result<T, ParseError>;
+/// Boxed so the error variant stays pointer-sized; parse functions return
+/// large `Ok` payloads and a wide error would otherwise bloat every `Result`
+/// (and the `memmove`s threading them through the recursive descent).
+pub type Result<T> = std::result::Result<T, Box<ParseError>>;

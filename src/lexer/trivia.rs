@@ -35,7 +35,7 @@ fn convert_trailing(pts: &[ParseTrivium]) -> Option<TrailingComment> {
     if joined.is_empty() {
         None
     } else {
-        Some(TrailingComment(joined))
+        Some(TrailingComment(joined.into()))
     }
 }
 
@@ -108,7 +108,7 @@ pub(crate) fn convert_trivia(
             return (
                 None,
                 if *n > 1 {
-                    Trivia(vec![Trivium::EmptyLine()])
+                    Trivia::one(Trivium::EmptyLine())
                 } else {
                     Trivia::new()
                 },

@@ -228,7 +228,7 @@ fn push_absorb_app(doc: &mut Doc, expr: &Expression, indent_function: bool, comm
         }
         // Base case: the function expression itself.
         _ => {
-            if indent_function && comment.0.is_empty() {
+            if indent_function && comment.is_empty() {
                 push_nested(doc, |n| {
                     push_group_ann(n, GroupAnn::RegularG, |g| {
                         g.push(line_prime());
@@ -335,7 +335,7 @@ pub(super) fn push_pretty_app(
     let (f_without_comment, comment) = extract_first_comment_expr(f);
 
     let post_hardline = |doc: &mut Doc| {
-        if has_post && !comment.0.is_empty() {
+        if has_post && !comment.is_empty() {
             doc.push(hardline());
         }
     };

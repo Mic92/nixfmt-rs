@@ -17,14 +17,14 @@ impl Parser {
 
         // DON'T advance - just verify we're at a quote
         if !matches!(self.current.value, Token::TDoubleQuote) {
-            return Err(ParseError {
+            return Err(Box::new(ParseError {
                 span: open_quote_pos,
                 kind: ErrorKind::UnexpectedToken {
                     expected: vec!["'\"'".to_string()],
                     found: format!("'{}'", self.current.value.text()),
                 },
                 labels: vec![],
-            });
+            }));
         }
 
         let _opening_quote = self.take_current();
@@ -36,14 +36,14 @@ impl Parser {
             match self.lexer.peek() {
                 Some('"') => break,
                 None => {
-                    return Err(ParseError {
+                    return Err(Box::new(ParseError {
                         span: self.lexer.current_pos(),
                         kind: ErrorKind::UnclosedDelimiter {
                             delimiter: '"',
                             opening_span: open_quote_pos,
                         },
                         labels: vec![],
-                    });
+                    }));
                 }
                 Some('$') if self.lexer.at("${") => {
                     let interp = self.parse_string_interpolation()?;
@@ -84,6 +84,12 @@ impl Parser {
         let mut text = String::new();
 
         loop {
+            // Bulk-copy the run up to the next byte that needs special
+            // handling. This is the hot path for ordinary string content.
+            let run = self.lexer.scan_until3(b'"', b'\\', b'$');
+            if !run.is_empty() {
+                text.push_str(run);
+            }
             match self.lexer.peek() {
                 Some('"') | None => break,
                 Some('$') if self.lexer.at("${") => break,
@@ -118,10 +124,8 @@ impl Parser {
                     text.push('$');
                     self.lexer.advance();
                 }
-                Some(ch) => {
-                    text.push(ch);
-                    self.lexer.advance();
-                }
+                // Any other byte was consumed by `scan_until3`.
+                Some(_) => unreachable!(),
             }
         }
 
@@ -136,7 +140,7 @@ impl Parser {
         self.current = self.lexer.lexeme()?;
 
         if matches!(self.current.value, Token::TBraceClose) {
-            return Err(ParseError {
+            return Err(Box::new(ParseError {
                 span: self.current.span,
                 kind: ErrorKind::InvalidSyntax {
                     description: "empty interpolation expression".to_string(),
@@ -145,7 +149,7 @@ impl Parser {
                     ),
                 },
                 labels: vec![],
-            });
+            }));
         }
 
         // Parse expression, catching errors to provide better messages for common mistakes
@@ -160,28 +164,28 @@ impl Parser {
                     opening_span,
                 } = &err.kind
                 {
-                    return Err(ParseError {
+                    return Err(Box::new(ParseError {
                         span: *opening_span,
                         kind: ErrorKind::UnexpectedToken {
                             expected: vec!["'}'".to_string()],
                             found: "'\"'".to_string(),
                         },
                         labels: vec![],
-                    });
+                    }));
                 }
                 return Err(err);
             }
         };
 
         if !matches!(self.current.value, Token::TBraceClose) {
-            return Err(ParseError {
+            return Err(Box::new(ParseError {
                 span: self.current.span,
                 kind: ErrorKind::UnexpectedToken {
                     expected: vec!["'}'".to_string()],
                     found: format!("'{}'", self.current.value.text()),
                 },
                 labels: vec![],
-            });
+            }));
         }
 
         // The lexer is positioned past `}` and any following trivia; rewind to
@@ -212,14 +216,14 @@ impl Parser {
         }
 
         if !self.lexer.at("''") {
-            return Err(ParseError {
+            return Err(Box::new(ParseError {
                 span: self.lexer.current_pos(),
                 kind: ErrorKind::UnclosedDelimiter {
                     delimiter: '\'', // represents ''
                     opening_span: open_quote_pos,
                 },
                 labels: vec![],
-            });
+            }));
         }
         self.lexer.advance_by(2);
 
@@ -280,6 +284,11 @@ impl Parser {
         let mut text = String::new();
 
         loop {
+            // `\n`, `'` and `$` are the only bytes that change control flow.
+            let run = self.lexer.scan_until3(b'\n', b'\'', b'$');
+            if !run.is_empty() {
+                text.push_str(run);
+            }
             match self.lexer.peek() {
                 None | Some('\n') => break,
                 Some('\'') if self.lexer.at("''") => {
@@ -324,14 +333,13 @@ impl Parser {
                     text.push('$');
                     self.lexer.advance();
                 }
-                Some('\'') if !self.lexer.at("''") => {
+                Some('\'') => {
+                    // single `'` (the `''` case matched above)
                     text.push('\'');
                     self.lexer.advance();
                 }
-                Some(ch) => {
-                    text.push(ch);
-                    self.lexer.advance();
-                }
+                // Any other byte was consumed by `scan_until3`.
+                Some(_) => unreachable!(),
             }
         }
 
@@ -349,7 +357,6 @@ impl Parser {
         if let Some(tc) = open.trail_comment.take() {
             self.lexer
                 .trivia_buffer
-                .0
                 .insert(0, Trivium::LineComment(format!(" {}", tc.0)));
         }
         self.advance()?;

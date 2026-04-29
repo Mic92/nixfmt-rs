@@ -18,18 +18,16 @@ impl Parser {
         let bindings = self.parse_binders()?;
 
         let in_tok = if matches!(self.current.value, Token::KIn) {
-            let tok = self.take_current();
-            self.advance()?;
-            tok
+            self.take_and_advance()?
         } else {
-            return Err(ParseError {
+            return Err(Box::new(ParseError {
                 span: self.current.span,
                 kind: ErrorKind::UnexpectedToken {
                     expected: vec!["'in'".to_string()],
                     found: format!("'{}'", self.current.value.text()),
                 },
                 labels: vec![],
-            });
+            }));
         };
 
         let body = self.parse_expression()?;
@@ -43,35 +41,31 @@ impl Parser {
         let cond = self.parse_expression()?;
 
         let then_tok = if matches!(self.current.value, Token::KThen) {
-            let tok = self.take_current();
-            self.advance()?;
-            tok
+            self.take_and_advance()?
         } else {
-            return Err(ParseError {
+            return Err(Box::new(ParseError {
                 span: self.current.span,
                 kind: ErrorKind::UnexpectedToken {
                     expected: vec!["'then'".to_string()],
                     found: format!("'{}'", self.current.value.text()),
                 },
                 labels: vec![],
-            });
+            }));
         };
 
         let then_expr = self.parse_expression()?;
 
         let else_tok = if matches!(self.current.value, Token::KElse) {
-            let tok = self.take_current();
-            self.advance()?;
-            tok
+            self.take_and_advance()?
         } else {
-            return Err(ParseError {
+            return Err(Box::new(ParseError {
                 span: self.current.span,
                 kind: ErrorKind::UnexpectedToken {
                     expected: vec!["'else'".to_string()],
                     found: format!("'{}'", self.current.value.text()),
                 },
                 labels: vec![],
-            });
+            }));
         };
 
         let else_expr = self.parse_expression()?;
@@ -92,18 +86,16 @@ impl Parser {
         let expr1 = self.parse_expression()?;
 
         let semi = if matches!(self.current.value, Token::TSemicolon) {
-            let tok = self.take_current();
-            self.advance()?;
-            tok
+            self.take_and_advance()?
         } else {
-            return Err(ParseError {
+            return Err(Box::new(ParseError {
                 span: self.current.span,
                 kind: ErrorKind::MissingToken {
                     token: "';'".to_string(),
                     after: "'with' expression".to_string(),
                 },
                 labels: vec![],
-            });
+            }));
         };
 
         let expr2 = self.parse_expression()?;
@@ -122,18 +114,16 @@ impl Parser {
         let cond = self.parse_expression()?;
 
         let semi = if matches!(self.current.value, Token::TSemicolon) {
-            let tok = self.take_current();
-            self.advance()?;
-            tok
+            self.take_and_advance()?
         } else {
-            return Err(ParseError {
+            return Err(Box::new(ParseError {
                 span: self.current.span,
                 kind: ErrorKind::MissingToken {
                     token: "';'".to_string(),
                     after: "'assert' condition".to_string(),
                 },
                 labels: vec![],
-            });
+            }));
         };
 
         let body = self.parse_expression()?;

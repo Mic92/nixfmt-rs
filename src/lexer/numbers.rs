@@ -42,10 +42,10 @@ impl Lexer {
             if let Some(exp) = self.parse_exponent() {
                 num.push_str(&exp);
             }
-            return Ok(Token::Float(num));
+            return Ok(Token::Float(num.into()));
         }
 
-        Ok(Token::Integer(num))
+        Ok(Token::Integer(num.into()))
     }
 
     /// Parse scientific notation exponent (e.g., `e10`, `E-5`, `e+3`)

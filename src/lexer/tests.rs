@@ -167,7 +167,7 @@ fn test_lexeme_with_comments() {
     assert!(matches!(semi.value, Token::TSemicolon));
     assert!(semi.trail_comment.is_some());
     if let Some(ref tc) = semi.trail_comment {
-        assert_eq!(tc.0, "trailing");
+        assert_eq!(&*tc.0, "trailing");
     }
 
     // Sixth token: }

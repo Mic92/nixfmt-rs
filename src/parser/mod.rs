@@ -117,7 +117,7 @@ impl Parser {
                     let second_param = self.parse_full_parameter()?;
 
                     if !matches!(self.current.value, Token::TColon) {
-                        return Err(ParseError {
+                        return Err(Box::new(ParseError {
                             span: at_tok.span,
                             kind: crate::error::ErrorKind::InvalidSyntax {
                                 description: "@ is only valid in lambda parameters".to_string(),
@@ -126,7 +126,7 @@ impl Parser {
                                 ),
                             },
                             labels: vec![],
-                        });
+                        }));
                     }
 
                     let first_param = Parameter::ID(ident);
@@ -159,9 +159,7 @@ impl Parser {
         match &self.current.value {
             Token::TBraceClose => {
                 // Empty set: {} - could be parameter or literal
-                let close_brace = self.take_current();
-
-                self.advance()?;
+                let close_brace = self.take_and_advance()?;
 
                 if matches!(self.current.value, Token::TColon) {
                     // Empty set parameter `{}: body`; keep trivia on the close brace for proper formatting
@@ -242,22 +240,21 @@ impl Parser {
                                 Box::new(body),
                             ))
                         } else {
-                            Err(ParseError {
+                            Err(Box::new(ParseError {
                                 span: close_brace.span,
                                 kind: crate::error::ErrorKind::InvalidSyntax {
                                     description: "set with parameter-like syntax but no colon".to_string(),
                                     hint: Some("use '{ x = ...; }' for set literals or '{ x }: body' for parameters".to_string()),
                                 },
                                 labels: vec![],
-                            })
+                            }))
                         }
                     }
                     None => {
                         // Failed to parse as parameters (saw `=` or `.`); retry as set literal
                         self.restore_state(saved_state);
 
-                        let open_brace = self.take_current();
-                        self.advance()?;
+                        let open_brace = self.take_and_advance()?;
 
                         let bindings = self.parse_binders()?;
                         let close_brace =
@@ -299,14 +296,14 @@ impl Parser {
                         Box::new(body),
                     ))
                 } else {
-                    Err(ParseError {
+                    Err(Box::new(ParseError {
                         span: close_brace.span,
                         kind: crate::error::ErrorKind::InvalidSyntax {
                             description: "{ ... } must be followed by ':' or '@'".to_string(),
                             hint: Some("use '{ x }: body' for function parameters".to_string()),
                         },
                         labels: vec![],
-                    })
+                    }))
                 }
             }
             _ => {
@@ -323,8 +320,7 @@ impl Parser {
     /// Continue parsing operation from a given left expression
     fn continue_operation_from(&mut self, expr: Expression) -> Result<Expression> {
         let expr = if matches!(self.current.value, Token::TQuestion) {
-            let question = self.take_current();
-            self.advance()?;
+            let question = self.take_and_advance()?;
             let selectors = self.parse_selector_path()?;
             Expression::MemberCheck(Box::new(expr), question, selectors)
         } else if self.is_term_start() {
@@ -360,10 +356,10 @@ impl Parser {
                 let body = self.parse_expression()?;
                 return Ok(Expression::Abstraction(param, colon, Box::new(body)));
             } else {
-                return Err(ParseError::new(
+                return Err(Box::new(ParseError::new(
                     at_tok.span,
                     "@ is only valid in lambda parameters",
-                ));
+                )));
             }
         }
 
@@ -492,14 +488,14 @@ impl Parser {
             // This prevents: 1 < 2 < 3 (both < at precedence 9)
             // But allows: 1 < 2 == 2 > 3 (< and > at precedence 9, == at precedence 8)
             if is_comparison && last_comparison_prec == Some(prec) {
-                return Err(ParseError {
+                return Err(Box::new(ParseError {
                     span: op_token.span,
                     kind: crate::error::ErrorKind::ChainedComparison {
                         first_op: last_comparison_op.unwrap_or_else(|| "?".to_string()),
                         second_op: op_string,
                     },
                     labels: vec![],
-                });
+                }));
             }
 
             let is_right_assoc = self.is_right_associative(&op_token.value);
@@ -512,7 +508,7 @@ impl Parser {
                     // If we failed to parse the right-hand side and current token is }
                     // (closing an interpolation), provide a more helpful error
                     if matches!(self.current.value, Token::TBraceClose | Token::TInterClose) {
-                        return Err(ParseError {
+                        return Err(Box::new(ParseError {
                             span: self.current.span,
                             kind: crate::error::ErrorKind::InvalidSyntax {
                                 description: format!(
@@ -525,7 +521,7 @@ impl Parser {
                                 ),
                             },
                             labels: vec![],
-                        });
+                        }));
                     } else {
                         return Err(e);
                     }
@@ -646,7 +642,7 @@ impl Parser {
             Token::TParenOpen => self.parse_parenthesized(),
             Token::TDoubleQuote => self.parse_simple_string(),
             Token::TDoubleSingleQuote => self.parse_indented_string(),
-            _ => Err(ParseError {
+            _ => Err(Box::new(ParseError {
                 span: self.current.span,
                 kind: crate::error::ErrorKind::UnexpectedToken {
                     expected: vec![
@@ -660,7 +656,7 @@ impl Parser {
                     found: format!("'{}'", self.current.value.text()),
                 },
                 labels: vec![],
-            }),
+            })),
         }?;
 
         self.parse_postfix_selection(base_term)
@@ -726,22 +722,19 @@ impl Parser {
 
     /// Parse identifier as a term (Token)
     fn parse_identifier_term(&mut self) -> Result<Term> {
-        let token_ann = self.take_current();
-        self.advance()?;
+        let token_ann = self.take_and_advance()?;
         Ok(Term::Token(token_ann))
     }
 
     /// Parse integer as a term (Token)
     fn parse_integer_term(&mut self) -> Result<Term> {
-        let token_ann = self.take_current();
-        self.advance()?;
+        let token_ann = self.take_and_advance()?;
         Ok(Term::Token(token_ann))
     }
 
     /// Parse float as a term (Token)
     fn parse_float_term(&mut self) -> Result<Term> {
-        let token_ann = self.take_current();
-        self.advance()?;
+        let token_ann = self.take_and_advance()?;
         Ok(Term::Token(token_ann))
     }
 
@@ -777,11 +770,13 @@ impl Parser {
         std::mem::replace(&mut self.current, dummy)
     }
 
-    /// Take current token and advance to next (common pattern)
+    /// Take current token and advance to next (common pattern).
+    /// Fused so `self.current` is overwritten once with the next lexeme
+    /// instead of once with a dummy and again with the lexeme.
+    #[inline]
     fn take_and_advance(&mut self) -> Result<Ann<Token>> {
-        let token = self.take_current();
-        self.advance()?;
-        Ok(token)
+        let next = self.lexer.lexeme()?;
+        Ok(std::mem::replace(&mut self.current, next))
     }
 
     /// Collect pre_trivia as Comments item if not empty (common pattern)
@@ -822,39 +817,37 @@ impl Parser {
         closing_token: Token,
     ) -> Result<Ann<Token>> {
         if self.current.value == closing_token {
-            let token = self.take_current();
-            self.advance()?;
-            Ok(token)
+            self.take_and_advance()
         } else if matches!(self.current.value, Token::Sof) {
-            Err(ParseError {
+            Err(Box::new(ParseError {
                 span: self.current.span,
                 kind: crate::error::ErrorKind::UnclosedDelimiter {
                     delimiter: opening_char,
                     opening_span,
                 },
                 labels: vec![],
-            })
+            }))
         } else {
             // Special case: comma inside parentheses (common mistake from other languages)
             if opening_char == '(' && matches!(self.current.value, Token::TComma) {
-                return Err(ParseError {
+                return Err(Box::new(ParseError {
                     span: self.current.span,
                     kind: crate::error::ErrorKind::InvalidSyntax {
                         description: "comma not allowed inside parentheses".to_string(),
                         hint: Some("Nix doesn't use commas in parenthesized expressions. For function calls, use spaces: f x y. For multiple values, use a list [x y] or set { a = x; b = y; }".to_string()),
                     },
                     labels: vec![],
-                });
+                }));
             }
 
-            Err(ParseError {
+            Err(Box::new(ParseError {
                 span: self.current.span,
                 kind: crate::error::ErrorKind::UnexpectedToken {
                     expected: vec![format!("'{}'", closing_token.text())],
                     found: format!("'{}'", self.current.value.text()),
                 },
                 labels: vec![],
-            })
+            }))
         }
     }
 
@@ -864,18 +857,16 @@ impl Parser {
         F: Fn(&Token) -> bool,
     {
         if predicate(&self.current.value) {
-            let token = self.take_current();
-            self.advance()?;
-            Ok(token)
+            self.take_and_advance()
         } else {
-            Err(ParseError {
+            Err(Box::new(ParseError {
                 span: self.current.span,
                 kind: crate::error::ErrorKind::UnexpectedToken {
                     expected: vec![], // caller doesn't specify what's expected
                     found: format!("'{}'", self.current.value.text()),
                 },
                 labels: vec![],
-            })
+            }))
         }
     }
 
@@ -884,14 +875,14 @@ impl Parser {
         if matches!(self.current.value, Token::Sof) {
             Ok(())
         } else {
-            Err(ParseError {
+            Err(Box::new(ParseError {
                 span: self.current.span,
                 kind: crate::error::ErrorKind::UnexpectedToken {
                     expected: vec!["end of file".to_string()],
                     found: format!("'{}'", self.current.value.text()),
                 },
                 labels: vec![],
-            })
+            }))
         }
     }
 }

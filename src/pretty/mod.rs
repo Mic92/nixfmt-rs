@@ -68,20 +68,20 @@ impl Pretty for Trivium {
 
 impl Pretty for Trivia {
     fn pretty(&self, doc: &mut Doc) {
-        if self.0.is_empty() {
+        if self.is_empty() {
             return;
         }
 
         // Special case: single language annotation renders inline
-        if self.0.len() == 1 {
-            if let Trivium::LanguageAnnotation(_) = &self.0[0] {
-                self.0[0].pretty(doc);
+        if self.len() == 1 {
+            if let Trivium::LanguageAnnotation(_) = &self[0] {
+                self[0].pretty(doc);
                 return;
             }
         }
 
         doc.push(hardline());
-        for trivium in &self.0 {
+        for trivium in self {
             trivium.pretty(doc);
         }
     }

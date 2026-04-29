@@ -17,24 +17,11 @@ impl Lexer {
         let col = self.column;
         self.advance(); // consume '#'
 
-        self.line_comment_buffer.clear();
-        while let Some(ch) = self.peek() {
-            if matches!(ch, '\n' | '\r') {
-                break;
-            }
-            let advanced = self.advance().unwrap();
-            self.line_comment_buffer.push(advanced);
-        }
+        let rest = &self.source.as_bytes()[self.byte_pos..];
+        let len = memchr::memchr2(b'\n', b'\r', rest).unwrap_or(rest.len());
+        let text = self.advance_bytes_no_newline(len).trim_end().to_owned();
 
-        ParseTrivium::LineComment {
-            text: {
-                let trimmed = self.line_comment_buffer.trim_end();
-                let result = trimmed.to_string();
-                self.line_comment_buffer.clear();
-                result
-            },
-            col,
-        }
+        ParseTrivium::LineComment { text, col }
     }
 
     /// Parse block comment /* ... */
@@ -49,19 +36,24 @@ impl Lexer {
             self.advance();
         }
 
-        self.block_comment_buffer.clear();
-        while !self.is_eof() {
-            if self.at("*/") {
-                self.advance_by(2);
-                break;
+        // Find the closing `*/` by scanning for `*` and checking the next byte.
+        let body_start = self.byte_pos;
+        let mut scan = body_start;
+        let bytes = self.source.as_bytes();
+        let body_end = loop {
+            match memchr::memchr(b'*', &bytes[scan..]) {
+                // Unterminated; consume to EOF (matches previous behaviour).
+                None => break bytes.len(),
+                Some(off) if bytes.get(scan + off + 1) == Some(&b'/') => break scan + off,
+                Some(off) => scan += off + 1,
             }
-            let advanced = self.advance().unwrap();
-            self.block_comment_buffer.push(advanced);
-        }
+        };
+        self.seek_to(body_end);
+        self.advance_by(2); // `*/` (no-op at EOF)
+        let body = &self.source[body_start..body_end];
 
         // Normalize the comment according to Haskell logic
-        let lines = split_lines(&self.block_comment_buffer);
-        self.block_comment_buffer.clear();
+        let lines = split_lines(body);
         let lines = remove_stars(start_col, lines);
         let lines = fix_indent(start_col, lines);
 

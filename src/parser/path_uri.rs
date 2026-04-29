@@ -62,7 +62,7 @@ impl Parser {
         match &self.current.value {
             Token::Identifier(ident) => {
                 // Path starting with identifier (e.g., common/file.nix, foo-bar/baz.nix)
-                parts.push(StringPart::TextPart(ident.clone()));
+                parts.push(StringPart::TextPart(ident.to_string()));
             }
             Token::TDot => {
                 // ./ or ../
@@ -130,9 +130,9 @@ impl Parser {
         if let Some(StringPart::TextPart(text)) = parts.last() {
             if text.ends_with('/') {
                 // Point to the trailing slash, not the start of the path
-                let current_pos = self.lexer.current_pos().start;
+                let current_pos = self.lexer.current_pos().start as usize;
                 let slash_pos = Span::new(current_pos.saturating_sub(1), current_pos);
-                return Err(ParseError {
+                return Err(Box::new(ParseError {
                     span: slash_pos,
                     kind: ErrorKind::InvalidSyntax {
                         description: "path cannot end with a trailing slash".to_string(),
@@ -141,7 +141,7 @@ impl Parser {
                         ),
                     },
                     labels: vec![],
-                });
+                }));
             }
         }
 
@@ -186,27 +186,27 @@ impl Parser {
         let pre_trivia = std::mem::take(&mut self.current.pre_trivia);
 
         let Token::Identifier(scheme) = &self.current.value else {
-            return Err(ParseError {
+            return Err(Box::new(ParseError {
                 span: start_pos,
                 kind: ErrorKind::UnexpectedToken {
                     expected: vec!["identifier".to_string()],
                     found: format!("'{}'", self.current.value.text()),
                 },
                 labels: vec![],
-            });
+            }));
         };
 
         let mut uri_text = scheme.clone();
 
         if self.lexer.peek() != Some(':') {
-            return Err(ParseError {
+            return Err(Box::new(ParseError {
                 span: self.lexer.current_pos(),
                 kind: ErrorKind::MissingToken {
                     token: "':'".to_string(),
                     after: "URI scheme".to_string(),
                 },
                 labels: vec![],
-            });
+            }));
         }
         self.lexer.advance();
         uri_text.push(':');
@@ -222,7 +222,7 @@ impl Parser {
 
         let trail_comment = self.parse_trailing_trivia_and_advance()?;
 
-        let parts = vec![vec![StringPart::TextPart(uri_text)]];
+        let parts = vec![vec![StringPart::TextPart(uri_text.to_string())]];
         let ann = Ann {
             pre_trivia,
             span: start_pos,
@@ -235,8 +235,7 @@ impl Parser {
 
     /// Parse environment path term (e.g., <nixpkgs>)
     pub(super) fn parse_env_path_term(&mut self) -> Result<Term> {
-        let token_ann = self.take_current();
-        self.advance()?;
+        let token_ann = self.take_and_advance()?;
         Ok(Term::Token(token_ann))
     }
 

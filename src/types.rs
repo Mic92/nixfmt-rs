@@ -1,20 +1,30 @@
 //! AST types matching nixfmt Haskell's Types.hs
 
-/// A byte offset range in the source with line information
+/// Identifier / number text. `CompactString` stores up to 24 bytes inline,
+/// which covers virtually every Nix identifier and literal, eliminating the
+/// per-token heap allocation that previously dominated parser drop time.
+pub type TokenText = compact_str::CompactString;
+
+/// A byte offset range in the source with line information.
+///
+/// Stored as `u32` so a `Span` is 16 bytes instead of 32; every AST leaf
+/// carries one, and the parser moves leaves by value constantly, so the
+/// halved width measurably reduces `memmove` traffic. Nix source files are
+/// far below 4 GiB, so the narrower offsets are not a practical limitation.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub struct Span {
-    pub start: usize,      // byte offset
-    pub end: usize,        // byte offset
-    pub start_line: usize, // line number (1-indexed)
-    pub end_line: usize,   // line number (1-indexed)
+    pub start: u32,      // byte offset
+    pub end: u32,        // byte offset
+    pub start_line: u32, // line number (1-indexed)
+    pub end_line: u32,   // line number (1-indexed)
 }
 
 impl Span {
     /// Create a span from byte offsets, with line numbers defaulting to 1.
     pub fn new(start: usize, end: usize) -> Self {
         Self {
-            start,
-            end,
+            start: start as u32,
+            end: end as u32,
             start_line: 1,
             end_line: 1,
         }
@@ -23,18 +33,18 @@ impl Span {
     /// Create a new span with line information
     pub fn with_lines(start: usize, end: usize, start_line: usize, end_line: usize) -> Self {
         Self {
-            start,
-            end,
-            start_line,
-            end_line,
+            start: start as u32,
+            end: end as u32,
+            start_line: start_line as u32,
+            end_line: end_line as u32,
         }
     }
 
     /// Create a zero-length span at the given offset
     pub fn point(offset: usize) -> Self {
         Self {
-            start: offset,
-            end: offset,
+            start: offset as u32,
+            end: offset as u32,
             start_line: 1,
             end_line: 1,
         }
@@ -52,40 +62,94 @@ pub enum Trivium {
     LanguageAnnotation(String),
 }
 
-/// Wrapper around a list of trivia items (comments/whitespace)
-#[derive(Debug, Clone, PartialEq, Eq, Default)]
-pub struct Trivia(pub Vec<Trivium>);
+/// Wrapper around a list of trivia items (comments/whitespace).
+///
+/// Stored as a boxed `Vec` behind an `Option` so the overwhelmingly common
+/// empty case is a single null word: every `Ann<T>` carries one of these, and
+/// the parser moves `Ann` values by value through every production, so the
+/// 24→16 byte saving compounds across the whole AST.
+#[derive(Debug, Clone, Default)]
+#[allow(clippy::box_collection)] // intentional: Option<Box<Vec>> is 8 bytes, Vec is 24
+pub struct Trivia(Option<Box<Vec<Trivium>>>);
 
 impl Trivia {
-    /// Empty trivia list.
+    /// Empty trivia list (no allocation).
+    #[inline]
     pub fn new() -> Self {
-        Self(Vec::new())
+        Self(None)
+    }
+
+    /// Single-element trivia list.
+    pub fn one(t: Trivium) -> Self {
+        Self(Some(Box::new(vec![t])))
+    }
+
+    #[inline]
+    fn vec_mut(&mut self) -> &mut Vec<Trivium> {
+        self.0.get_or_insert_with(|| Box::new(Vec::new()))
+    }
+
+    /// Append a trivium, allocating storage on first use.
+    #[inline]
+    pub fn push(&mut self, t: Trivium) {
+        self.vec_mut().push(t);
+    }
+
+    /// Insert at `idx`, allocating storage on first use.
+    pub fn insert(&mut self, idx: usize, t: Trivium) {
+        self.vec_mut().insert(idx, t);
+    }
+
+    /// Append all items from `iter`, allocating storage only if it yields any.
+    pub fn extend<I: IntoIterator<Item = Trivium>>(&mut self, iter: I) {
+        let mut iter = iter.into_iter();
+        if let Some(first) = iter.next() {
+            let v = self.vec_mut();
+            v.push(first);
+            v.extend(iter);
+        }
+    }
+
+    /// Drop all items, retaining no allocation.
+    #[inline]
+    pub fn clear(&mut self) {
+        self.0 = None;
     }
 }
+
+impl PartialEq for Trivia {
+    fn eq(&self, other: &Self) -> bool {
+        // `None` and `Some(empty)` are observationally identical.
+        self[..] == other[..]
+    }
+}
+impl Eq for Trivia {}
 
 impl std::ops::Deref for Trivia {
-    type Target = Vec<Trivium>;
+    type Target = [Trivium];
 
+    #[inline]
     fn deref(&self) -> &Self::Target {
-        &self.0
-    }
-}
-
-impl std::ops::DerefMut for Trivia {
-    fn deref_mut(&mut self) -> &mut Self::Target {
-        &mut self.0
+        match &self.0 {
+            Some(v) => v,
+            None => &[],
+        }
     }
 }
 
 impl From<Vec<Trivium>> for Trivia {
     fn from(value: Vec<Trivium>) -> Self {
-        Self(value)
+        if value.is_empty() {
+            Self(None)
+        } else {
+            Self(Some(Box::new(value)))
+        }
     }
 }
 
 impl From<Trivia> for Vec<Trivium> {
     fn from(val: Trivia) -> Self {
-        val.0
+        val.0.map(|b| *b).unwrap_or_default()
     }
 }
 
@@ -94,7 +158,7 @@ impl IntoIterator for Trivia {
     type IntoIter = std::vec::IntoIter<Trivium>;
 
     fn into_iter(self) -> Self::IntoIter {
-        self.0.into_iter()
+        Vec::from(self).into_iter()
     }
 }
 
@@ -103,22 +167,13 @@ impl<'a> IntoIterator for &'a Trivia {
     type IntoIter = std::slice::Iter<'a, Trivium>;
 
     fn into_iter(self) -> Self::IntoIter {
-        self.0.iter()
-    }
-}
-
-impl<'a> IntoIterator for &'a mut Trivia {
-    type Item = &'a mut Trivium;
-    type IntoIter = std::slice::IterMut<'a, Trivium>;
-
-    fn into_iter(self) -> Self::IntoIter {
-        self.0.iter_mut()
+        self.iter()
     }
 }
 
 /// Trailing comment on same line
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct TrailingComment(pub String);
+pub struct TrailingComment(pub Box<str>);
 
 /// Annotated wrapper - every AST node has:
 /// - pre_trivia: Comments/whitespace before the token
@@ -278,10 +333,10 @@ pub type File = Whole<Expression>;
 /// Tokens
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Token {
-    Integer(String),
-    Float(String),
-    Identifier(String),
-    EnvPath(String),
+    Integer(TokenText),
+    Float(TokenText),
+    Identifier(TokenText),
+    EnvPath(TokenText),
 
     // Keywords
     KAssert,

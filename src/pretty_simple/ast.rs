@@ -223,12 +223,12 @@ impl PrettySimple for Trivium {
 impl PrettySimple for Trivia {
     fn format<W: Writer>(&self, w: &mut W) {
         w.write_plain("fromList");
-        sub_expr(w, &self.0);
+        sub_expr(w, &self.to_vec());
     }
 
     fn renders_inline_parens(&self) -> bool {
         // `( fromList [ EmptyLine ] )` stays on one line when the inner list is simple.
-        self.0.is_simple()
+        self.to_vec().is_simple()
     }
 }
 
@@ -290,10 +290,10 @@ impl PrettySimple for StringPart {
 impl PrettySimple for Token {
     fn format<W: Writer>(&self, w: &mut W) {
         format_enum!(self, w, {
-            Integer(s) => [s],
-            Float(s) => [s],
-            Identifier(s) => [s],
-            EnvPath(s) => [s],
+            Integer(s) => [&s.as_str()],
+            Float(s) => [&s.as_str()],
+            Identifier(s) => [&s.as_str()],
+            EnvPath(s) => [&s.as_str()],
             _ => {
                 w.write_plain(&format!("{:?}", self));
             }
@@ -334,7 +334,7 @@ impl PrettySimple for TrailingComment {
             let paren_color = w_color.current_color();
             w_color.with_depth(|w| {
                 write_delimited(w, paren_color, "(", ")", |w| {
-                    format_constructor!(w, "TrailingComment", [&self.0]);
+                    format_constructor!(w, "TrailingComment", [&&*self.0]);
                 });
             });
         });

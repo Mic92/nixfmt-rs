@@ -44,8 +44,7 @@ impl Parser {
         let inherit_tok = self.expect_token_match(|t| matches!(t, Token::KInherit))?;
 
         let from = if matches!(self.current.value, Token::TParenOpen) {
-            let open = self.take_current();
-            self.advance()?;
+            let open = self.take_and_advance()?;
             let expr = self.parse_expression()?;
             let close = self.expect_token_match(|t| matches!(t, Token::TParenClose))?;
             Some(Term::Parenthesized(open, Box::new(expr), close))
@@ -67,14 +66,14 @@ impl Parser {
                         if matches!(&w.value, Expression::Term(Term::SimpleString(_)))
                 );
                 if !ok {
-                    return Err(ParseError {
+                    return Err(Box::new(ParseError {
                         span,
                         kind: ErrorKind::UnexpectedToken {
                             expected: vec!["identifier".into(), "string".into()],
                             found: "interpolation".into(),
                         },
                         labels: vec![],
-                    });
+                    }));
                 }
             }
             selectors.push(sel);
@@ -93,8 +92,7 @@ impl Parser {
         selectors.push(first_sel);
 
         while matches!(self.current.value, Token::TDot) {
-            let dot = self.take_current();
-            self.advance()?;
+            let dot = self.take_and_advance()?;
 
             let simple_sel = self.parse_simple_selector()?;
             selectors.push(Selector {
@@ -105,14 +103,14 @@ impl Parser {
 
         // Check for common mistake: attribute path followed by semicolon (forgot = and value)
         if matches!(self.current.value, Token::TSemicolon) {
-            return Err(ParseError {
+            return Err(Box::new(ParseError {
                 span: self.current.span,
                 kind: ErrorKind::UnexpectedToken {
                     expected: vec!["'='".to_string()],
                     found: "';'".to_string(),
                 },
                 labels: vec![],
-            });
+            }));
         }
 
         let eq = self.expect_token_match(|t| matches!(t, Token::TAssign))?;
@@ -128,41 +126,40 @@ impl Parser {
         };
 
         if matches!(self.current.value, Token::TSemicolon) {
-            let semi = self.take_current();
-            self.advance()?;
+            let semi = self.take_and_advance()?;
             Ok(Binder::Assignment(selectors, eq, expr, semi))
         } else if matches!(self.current.value, Token::Sof) {
             // EOF found - check if this is an unclosed nested set
             // If the expression is a set, the closing brace might have belonged to an outer scope
             if let Expression::Term(Term::Set(_, open_brace, _, close_brace)) = &expr {
-                Err(ParseError {
+                Err(Box::new(ParseError {
                     span: close_brace.span,
                     kind: ErrorKind::UnclosedDelimiter {
                         delimiter: '{',
                         opening_span: open_brace.span,
                     },
                     labels: vec![],
-                })
+                }))
             } else {
-                Err(ParseError {
+                Err(Box::new(ParseError {
                     span: expr_end_span,
                     kind: ErrorKind::UnexpectedToken {
                         expected: vec!["';'".to_string()],
                         found: "'end of file'".to_string(),
                     },
                     labels: vec![],
-                })
+                }))
             }
         } else {
             // Missing semicolon - point to the END of the expression
-            Err(ParseError {
+            Err(Box::new(ParseError {
                 span: expr_end_span,
                 kind: ErrorKind::UnexpectedToken {
                     expected: vec!["';'".to_string()],
                     found: format!("'{}'", self.current.value.text()),
                 },
                 labels: vec![],
-            })
+            }))
         }
     }
 
@@ -179,8 +176,7 @@ impl Parser {
     pub(super) fn parse_simple_selector(&mut self) -> Result<SimpleSelector> {
         match &self.current.value {
             Token::Identifier(_) => {
-                let ident = self.take_current();
-                self.advance()?;
+                let ident = self.take_and_advance()?;
                 Ok(SimpleSelector::ID(ident))
             }
             Token::TDoubleQuote => {
@@ -191,7 +187,7 @@ impl Parser {
                 let interpol = self.parse_selector_interpolation()?;
                 Ok(SimpleSelector::Interpol(interpol))
             }
-            _ => Err(ParseError {
+            _ => Err(Box::new(ParseError {
                 span: self.current.span,
                 kind: ErrorKind::UnexpectedToken {
                     expected: vec![
@@ -202,7 +198,7 @@ impl Parser {
                     found: format!("'{}'", self.current.value.text()),
                 },
                 labels: vec![],
-            }),
+            })),
         }
     }
 
@@ -217,8 +213,7 @@ impl Parser {
         });
 
         while matches!(self.current.value, Token::TDot) {
-            let dot = self.take_current();
-            self.advance()?;
+            let dot = self.take_and_advance()?;
 
             let simple_sel = self.parse_simple_selector()?;
             selectors.push(Selector {

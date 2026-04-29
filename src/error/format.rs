@@ -103,8 +103,8 @@ impl<'a> ErrorFormatter<'a> {
 
             // Show pointer only on the error line
             if line_idx == error_line_idx {
-                let error_col = error.span.start.saturating_sub(line_start_offset);
-                let error_len = (error.span.end - error.span.start).max(1);
+                let error_col = (error.span.start as usize).saturating_sub(line_start_offset);
+                let error_len = (error.span.end - error.span.start).max(1) as usize;
 
                 // Calculate visual column (counting chars not bytes)
                 let visual_col = line_text[..error_col.min(line_text.len())].chars().count();

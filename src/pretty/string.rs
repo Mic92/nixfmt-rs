@@ -10,7 +10,7 @@ impl Pretty for StringPart {
         match self {
             StringPart::TextPart(s) => push_text(doc, s),
             StringPart::Interpolation(whole) => {
-                let trailing_empty = whole.trailing_trivia.0.is_empty();
+                let trailing_empty = whole.trailing_trivia.is_empty();
                 let value = &whole.value;
 
                 if trailing_empty {
@@ -96,11 +96,11 @@ impl Pretty for Vec<StringPart> {
         // leading whitespace) and carries no trailing trivia, absorb its body
         // instead of surrounding it with `line'`.
         let lone = match self.as_slice() {
-            [StringPart::Interpolation(whole)] if whole.trailing_trivia.0.is_empty() => {
+            [StringPart::Interpolation(whole)] if whole.trailing_trivia.is_empty() => {
                 Some(("", &whole.value))
             }
             [StringPart::TextPart(pre), StringPart::Interpolation(whole)]
-                if is_spaces(pre) && whole.trailing_trivia.0.is_empty() =>
+                if is_spaces(pre) && whole.trailing_trivia.is_empty() =>
             {
                 Some((pre.as_str(), &whole.value))
             }

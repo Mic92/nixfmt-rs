@@ -112,17 +112,15 @@ fn move_params_comments(attrs: &[ParamAttr]) -> Vec<ParamAttr> {
             ParamAttr::ParamAttr(_, _, Some(comma))
                 if comma.trail_comment.is_none() && !is_last =>
             {
-                let trivia = std::mem::take(&mut comma.pre_trivia);
+                let mut trivia = std::mem::take(&mut comma.pre_trivia);
                 match &mut work[i + 1] {
                     ParamAttr::ParamAttr(name, _, _) => {
-                        let mut merged = trivia.0;
-                        merged.extend(std::mem::take(&mut name.pre_trivia).0);
-                        name.pre_trivia = Trivia(merged);
+                        trivia.extend(std::mem::take(&mut name.pre_trivia));
+                        name.pre_trivia = trivia;
                     }
                     ParamAttr::ParamEllipsis(ell) => {
-                        let mut merged = trivia.0;
-                        merged.extend(std::mem::take(&mut ell.pre_trivia).0);
-                        ell.pre_trivia = Trivia(merged);
+                        trivia.extend(std::mem::take(&mut ell.pre_trivia));
+                        ell.pre_trivia = trivia;
                     }
                 }
             }
@@ -236,7 +234,7 @@ impl Pretty for Parameter {
                     doc.push(sep_after);
                     push_nested(doc, |inner| close.pre_trivia.pretty(inner));
                     Ann {
-                        pre_trivia: Trivia(vec![]),
+                        pre_trivia: Trivia::new(),
                         ..close.clone()
                     }
                     .pretty(doc);

@@ -19,7 +19,7 @@ pub(super) enum Width {
 
 /// Haskell `hasTrivia` (Types.hs): annotation carries leading or trailing trivia.
 pub(super) fn has_trivia<T>(ann: &Ann<T>) -> bool {
-    !ann.pre_trivia.0.is_empty() || ann.trail_comment.is_some()
+    !ann.pre_trivia.is_empty() || ann.trail_comment.is_some()
 }
 
 /// Haskell `LoneAnn` pattern (Types.hs): annotation with no surrounding trivia.
@@ -29,7 +29,7 @@ pub(super) fn is_lone_ann<T>(ann: &Ann<T>) -> bool {
 
 /// Haskell `hasPreTrivia` (Types.hs).
 pub(super) fn has_pre_trivia<T>(ann: &Ann<T>) -> bool {
-    !ann.pre_trivia.0.is_empty()
+    !ann.pre_trivia.is_empty()
 }
 
 /// Haskell `matchFirstToken hasPreTrivia` (Types.hs), specialised to `Term`.

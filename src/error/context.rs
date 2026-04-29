@@ -24,7 +24,8 @@ impl<'a> ErrorContext<'a> {
     }
 
     /// Convert byte offset to (line, column)
-    pub fn position(&self, offset: usize) -> Position {
+    pub fn position(&self, offset: u32) -> Position {
+        let offset = offset as usize;
         let line_idx = line_number(&self.line_starts, offset);
         let line_start = self.line_starts.get(line_idx).copied().unwrap_or(0);
 
