@@ -181,3 +181,20 @@ B–G were IR-generation gaps in `src/pretty.rs`; after rebasing onto the
 `comments-cleanup` chain (which carries the `pretty.rs`/`predoc.rs`
 restructuring from earlier branches) all seven reproducers pass and are
 enabled as active regression tests in `src/regression_tests/format.rs`.
+
+## 2026-04-29 — Parity reached
+
+Re-ran `scripts/diff_sweep.sh` over the same 2000-file slice of
+`~/git/nixpkgs/pkgs/` after landing the fixes above: **0 / 2000**
+files diverge from `nixfmt` v1.2.0.
+
+- `cargo test`: **211 passed**, 0 failed, 0 ignored. Covers unit tests,
+  the `src/regression_tests/{parser,ir,format}.rs` reproducers, the
+  vendored upstream fixture corpus under `tests/fixtures/nixfmt/`, and
+  the corpus-wide property tests (idempotence + AST preservation).
+- Release-build throughput: `pkgs/top-level/all-packages.nix` formats
+  in **≈70 ms** end-to-end.
+
+This file is now a historical bug log; the planning/TODO documents that
+fed it have been folded into `README.md` and `docs/ARCHITECTURE.md` and
+removed from the tree.
