@@ -20,16 +20,9 @@ impl<'a> ErrorFormatter<'a> {
     pub fn format(&self, error: &ParseError) -> String {
         let mut output = String::new();
 
-        // Calculate line number width first (needed for alignment)
         let line_num_width = self.calculate_line_num_width(error);
-
-        // Error header
         self.format_header(error, line_num_width, &mut output);
-
-        // Source snippet with pointer
         self.format_snippet(error, line_num_width, &mut output);
-
-        // Notes and hints
         self.format_notes(error, line_num_width, &mut output);
 
         output
@@ -49,15 +42,13 @@ impl<'a> ErrorFormatter<'a> {
 
         write!(out, "Error").unwrap();
 
-        // Show error code if available
         if let Some(code) = error.code() {
             write!(out, "[{}]", code).unwrap();
         }
 
-        // Main message
         writeln!(out, ": {}", error.message()).unwrap();
 
-        // File location - align the ┌─ with the │ from line numbers
+        // Align the ┌─ with the │ from line numbers.
         write!(out, "{:>width$} ", "", width = line_num_width).unwrap();
         if let Some(filename) = self.context.filename {
             writeln!(out, "┌─ {}:{}:{}", filename, pos.line, pos.column).unwrap();
@@ -70,28 +61,20 @@ impl<'a> ErrorFormatter<'a> {
         let pos = self.context.position(error.span.start);
         let error_line_idx = pos.line - 1; // Convert to 0-based
 
-        // Get context lines (1 before, error line, 1 after)
+        // Context window: 1 line before, error line, 1 after.
         let start_line = error_line_idx.saturating_sub(1);
         let end_line =
             (error_line_idx + 1).min(self.context.source.lines().count().saturating_sub(1));
 
-        // Add empty separator line
         writeln!(out, "{:>width$} │", "", width = line_num_width).unwrap();
 
-        // Show context lines
         for line_idx in start_line..=end_line {
             let line_num = line_idx + 1;
 
-            // Get line bounds - need to use line_starts directly
             let line_start_offset = self.context.line_start(line_idx);
-
-            // Convert line_idx to byte offset to use line_at
             let (actual_line_num, line_text) = self.context.line_at(line_start_offset);
-
-            // Sanity check
             assert_eq!(line_num, actual_line_num);
 
-            // Show the line
             writeln!(
                 out,
                 "{:>width$} │ {}",
@@ -101,22 +84,20 @@ impl<'a> ErrorFormatter<'a> {
             )
             .unwrap();
 
-            // Show pointer only on the error line
             if line_idx == error_line_idx {
                 let error_col = (error.span.start as usize).saturating_sub(line_start_offset);
                 let error_len = (error.span.end - error.span.start).max(1) as usize;
 
-                // Calculate visual column (counting chars not bytes)
+                // Visual column in chars, not bytes.
                 let visual_col = line_text[..error_col.min(line_text.len())].chars().count();
 
                 write!(out, "{:>width$} │ ", "", width = line_num_width).unwrap();
 
-                // Spaces before pointer
                 for _ in 0..visual_col {
                     out.push(' ');
                 }
 
-                // Pointer (calculate visual length in chars not bytes)
+                // Visual length in chars, not bytes.
                 let remaining_text = &line_text[error_col.min(line_text.len())..];
                 let visual_len = remaining_text.chars().take(error_len).count().max(1);
 
@@ -130,12 +111,10 @@ impl<'a> ErrorFormatter<'a> {
     }
 
     fn format_notes(&self, error: &ParseError, line_num_width: usize, out: &mut String) {
-        // Show hints, suggestions, examples - align with the line numbers
         let indent = " ".repeat(line_num_width + 1);
 
         match &error.kind {
             ErrorKind::UnexpectedToken { expected, found } => {
-                // Special handling for missing semicolons
                 if expected.len() == 1 && expected[0] == "';'" {
                     writeln!(out, "{}= note: missing semicolon after definition", indent).unwrap();
                     writeln!(
@@ -144,9 +123,7 @@ impl<'a> ErrorFormatter<'a> {
                         indent
                     )
                     .unwrap();
-                }
-                // Special handling for missing } in interpolation
-                else if expected.len() == 1 && expected[0] == "'}'" {
+                } else if expected.len() == 1 && expected[0] == "'}'" {
                     writeln!(
                         out,
                         "{}= note: string interpolations must be closed with '}}'",
@@ -154,9 +131,7 @@ impl<'a> ErrorFormatter<'a> {
                     )
                     .unwrap();
                     writeln!(out, "{}= help: add '}}' to close the interpolation", indent).unwrap();
-                }
-                // Special handling for if-then-else
-                else if expected.len() == 1 && expected[0] == "'then'" {
+                } else if expected.len() == 1 && expected[0] == "'then'" {
                     writeln!(
                         out,
                         "{}= note: if expressions require: if <condition> then <expr> else <expr>",
@@ -177,9 +152,7 @@ impl<'a> ErrorFormatter<'a> {
                         indent
                     )
                     .unwrap();
-                }
-                // Special handling for let-in
-                else if expected.len() == 1 && expected[0] == "'in'" {
+                } else if expected.len() == 1 && expected[0] == "'in'" {
                     writeln!(
                         out,
                         "{}= note: 'in' is required to complete the let expression",
@@ -193,7 +166,6 @@ impl<'a> ErrorFormatter<'a> {
                     )
                     .unwrap();
                 } else if !expected.is_empty() {
-                    // Show what was expected
                     let expected_str = if expected.len() == 1 {
                         expected[0].clone()
                     } else {
@@ -251,7 +223,6 @@ impl<'a> ErrorFormatter<'a> {
             _ => {}
         }
 
-        // Show secondary labels
         for label in &error.labels {
             let pos = self.context.position(label.span.start);
             let prefix = match label.style {

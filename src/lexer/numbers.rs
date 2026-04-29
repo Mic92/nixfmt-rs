@@ -19,7 +19,6 @@ impl Lexer {
         let mut num = self.consume_digits();
         let mut is_float = false;
 
-        // Check for decimal point
         if self.peek() == Some('.') {
             let next = self.peek_ahead(1);
             let has_leading_zero = num.starts_with('0');

@@ -48,7 +48,6 @@ pub(super) fn pretty_with(
     semicolon: &Leaf,
     expr1: &Expression,
 ) {
-    // group (with <> hardspace <> nest (group expr0) <> ";") <> line <> expr1
     push_group(doc, |g| {
         with.pretty(g);
         g.push(hardspace());
@@ -66,7 +65,6 @@ pub(super) fn pretty_with(
 pub(super) fn pretty_if(doc: &mut Doc, sep: DocE, expr: &Expression) {
     match expr {
         Expression::If(if_kw, cond, then_kw, expr0, else_kw, expr1) => {
-            // group (if <> line <> nest cond <> line <> then)
             push_group(doc, |g| {
                 if_kw.pretty(g);
                 g.push(line());
@@ -74,19 +72,16 @@ pub(super) fn pretty_if(doc: &mut Doc, sep: DocE, expr: &Expression) {
                 g.push(line());
                 then_kw.pretty(g);
             });
-            // surroundWith sep (nest $ group expr0)
             push_surrounded(doc, &vec![sep], |d| {
                 push_nested(d, |n| {
                     push_group(n, |g| expr0.pretty(g));
                 });
             });
-            // else (with trailing comment moved up) <> hardspace <> recurse with hardline
             move_trailing_comment_up(else_kw).pretty(doc);
             doc.push(hardspace());
             pretty_if(doc, hardline(), expr1);
         }
         x => {
-            // line <> nest (group x)
             doc.push(line());
             push_nested(doc, |n| {
                 push_group(n, |g| x.pretty(g));

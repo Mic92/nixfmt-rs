@@ -76,11 +76,7 @@ impl Parser {
             Token::KIf => self.parse_if(),
             Token::KWith => self.parse_with(),
             Token::KAssert => self.parse_assert(),
-            _ => {
-                // Try parsing as abstraction first (if it looks like parameters)
-                // Otherwise parse as operation
-                self.parse_abstraction_or_operation()
-            }
+            _ => self.parse_abstraction_or_operation(),
         }
     }
 
@@ -89,18 +85,15 @@ impl Parser {
         match &self.current.value {
             Token::TBraceOpen => self.parse_set_parameter_or_literal(),
             Token::Identifier(_) => {
-                // Check if this is a URI (identifier followed by : and URI chars)
-                // Must check BEFORE lambda parameter check (which also looks for :)
+                // URI check must precede the lambda-parameter check: both look for `:`.
                 if self.looks_like_uri() {
                     return self.parse_operation_or_lambda();
                 }
 
-                // Might be a path (identifier followed by `/`, but not `//`)
                 if self.lexer.peek() == Some('/') && !self.lexer.at("//") {
                     return self.parse_operation_or_lambda();
                 }
 
-                // Could be identifier parameter OR identifier term; check for `:` or `@`
                 let ident = self.take_and_advance()?;
 
                 if matches!(self.current.value, Token::TColon) {
@@ -140,7 +133,6 @@ impl Parser {
                         Box::new(body),
                     ))
                 } else {
-                    // It's just an identifier term - check for selection
                     let base_term = Term::Token(ident);
                     let term = self.parse_postfix_selection(base_term)?;
                     let term_expr = Expression::Term(term);
@@ -501,7 +493,6 @@ impl Parser {
             let is_right_assoc = self.is_right_associative(&op_token.value);
             self.advance()?;
 
-            // Try to parse the right-hand side, providing better error for incomplete expressions
             let mut right = match self.parse_application() {
                 Ok(expr) => expr,
                 Err(e) => {
@@ -563,7 +554,6 @@ impl Parser {
                 Expression::Operation(Box::new(left), op_token, Box::new(right))
             };
 
-            // Track the precedence and operator of comparison operators to prevent chaining at the same level
             if is_comparison {
                 last_comparison_prec = Some(prec);
                 last_comparison_op = Some(op_string);
@@ -622,12 +612,10 @@ impl Parser {
 
     /// Parse a term (atom), including postfix selection
     fn parse_term(&mut self) -> Result<Term> {
-        // Check for URIs first (they look like identifiers followed by ":")
         if self.looks_like_uri() {
             return self.parse_uri();
         }
 
-        // Check for paths (they can start with identifiers)
         if self.looks_like_path() {
             return self.parse_path();
         }
@@ -746,7 +734,6 @@ impl Parser {
     ) -> Result<Option<crate::types::TrailingComment>> {
         let (trail_comment, next_leading) = self.lexer.parse_and_convert_trivia();
 
-        // Store the leading trivia for the next token
         self.lexer.trivia_buffer = next_leading;
         self.current = self.lexer.lexeme()?;
 

@@ -29,15 +29,12 @@ use std::process::Command;
 /// test_ast_format("let x = 1; in x");
 /// ```
 pub fn test_ast_format(input: &str) {
-    // Parse with our parser
     let ast = crate::parse(input).expect("Failed to parse input");
 
-    // Format with our trait-based formatter
     let mut writer = ColoredWriter::new(input);
     ast.format(&mut writer);
     let our_output = writer.finish();
 
-    // Get nixfmt's output (--ast outputs to stderr!)
     let nixfmt_output = Command::new("nixfmt")
         .arg("--ast")
         .arg("-")
@@ -52,11 +49,10 @@ pub fn test_ast_format(input: &str) {
         })
         .expect("Failed to run nixfmt");
 
-    // nixfmt --ast writes to stderr!
+    // nixfmt --ast writes to stderr, not stdout.
     let expected =
         String::from_utf8(nixfmt_output.stderr).expect("nixfmt output is not valid UTF-8");
 
-    // Compare
     if our_output != expected {
         eprintln!("TEST FAILED: AST");
         eprintln!("INPUT:\n{}", input);
@@ -66,7 +62,6 @@ pub fn test_ast_format(input: &str) {
         eprintln!("{}", our_output);
         eprintln!("\n=== DIFF ===");
 
-        // Show colored diff
         diff::print_colored_diff(&expected, &our_output);
 
         panic!("AST output mismatch");
@@ -95,18 +90,13 @@ pub fn test_ast_format(input: &str) {
 /// test_ir_format("{ a, b }: x");
 /// ```
 pub fn test_ir_format(input: &str) {
-    // Parse with our parser
     let ast = crate::parse(input).expect("Failed to parse input");
-
-    // Convert to IR
     let ir = crate::ast_to_ir(&ast);
 
-    // Format with our trait-based formatter
     let mut writer = ColoredWriter::new(input);
     ir.format(&mut writer);
     let our_output = writer.finish();
 
-    // Get nixfmt's output (--ir outputs to stderr!)
     let nixfmt_output = Command::new("nixfmt")
         .arg("--ir")
         .arg("-")
@@ -121,11 +111,10 @@ pub fn test_ir_format(input: &str) {
         })
         .expect("Failed to run nixfmt");
 
-    // nixfmt --ir writes to stderr!
+    // nixfmt --ir writes to stderr, not stdout.
     let expected =
         String::from_utf8(nixfmt_output.stderr).expect("nixfmt output is not valid UTF-8");
 
-    // Compare
     if our_output != expected {
         eprintln!("TEST FAILED: IR");
         eprintln!("INPUT:\n{}", input);
@@ -135,7 +124,6 @@ pub fn test_ir_format(input: &str) {
         eprintln!("{}", our_output);
         eprintln!("\n=== DIFF ===");
 
-        // Show colored diff
         diff::print_colored_diff(&expected, &our_output);
 
         panic!("IR output mismatch");

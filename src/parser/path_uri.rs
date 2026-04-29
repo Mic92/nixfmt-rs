@@ -57,7 +57,6 @@ impl Parser {
         let pre_trivia = std::mem::take(&mut self.current.pre_trivia);
         let mut parts = Vec::new();
 
-        // Handle the prefix that was already tokenized
         // NOTE: Don't call self.advance() here - we need to read raw chars from lexer
         match &self.current.value {
             Token::Identifier(ident) => {
@@ -103,7 +102,6 @@ impl Parser {
                     parts.push(interp);
                 }
                 Some(ch) if ch.is_alphanumeric() || matches!(ch, '.' | '_' | '-' | '+') => {
-                    // Path text (not / here, that's handled specially)
                     let text = self.parse_path_part()?;
                     if !text.is_empty() {
                         if let Some(StringPart::TextPart(last_text)) = parts.last_mut() {
@@ -125,8 +123,7 @@ impl Parser {
             }
         }
 
-        // Validate: paths cannot end with a trailing slash
-        // This matches nixfmt's requirement that pathTraversal must have content after the slash
+        // nixfmt's `pathTraversal` requires content after every `/`.
         if let Some(StringPart::TextPart(text)) = parts.last() {
             if text.ends_with('/') {
                 // Point to the trailing slash, not the start of the path
@@ -169,7 +166,6 @@ impl Parser {
             } else if ch == '$' && self.lexer.at("${") {
                 break;
             } else if ch == '/' {
-                // Don't consume / here - it's handled in the main loop
                 break;
             } else {
                 break;

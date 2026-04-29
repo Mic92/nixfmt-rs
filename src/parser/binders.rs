@@ -116,7 +116,6 @@ impl Parser {
         let eq = self.expect_token_match(|t| matches!(t, Token::TAssign))?;
         let expr = self.parse_expression()?;
 
-        // Get the end of the expression for error reporting
         // Special case: if the expression is an Application, the user likely forgot
         // a semicolon and the parser treated the next line as a function argument.
         // Point to the end of the LEFT side (the function) instead of the RIGHT side.

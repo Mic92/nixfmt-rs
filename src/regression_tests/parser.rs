@@ -11,7 +11,6 @@ fn regression_string_interpolation_selectors() {
 
 #[test]
 fn regression_or_as_identifier() {
-    // Ensure `or` is treated as an identifier when used by itself
     test_ast_format("or");
 }
 
@@ -21,8 +20,7 @@ fn regression_or_operator_deprecated_syntax() {
     // In `[ (x: x) or ]`, the `or` is actually the binary `or` operator,
     // not a standalone identifier. Nix parses this as [(x: x) or <lookup-or>].
     // This is deprecated/ambiguous syntax that Nix accepts with warnings.
-    // Currently we INCORRECTLY parse this as 2 list items instead of 1.
-    // TODO: Fix parser to treat `or` as binary operator in this context
+    // TODO: we currently parse this as 2 list items instead of 1.
     assert!(
         crate::parse("let or = 1; in [ (x: x) or ]").is_ok(),
         "we currently accept this but parse it incorrectly"
@@ -94,7 +92,6 @@ fn regression_let_string_interpolated_key() {
 
 #[test]
 fn regression_comparison_chain_should_fail() {
-    // Chained comparisons should be rejected (nixfmt errors on `a == b == c`)
     assert!(
         crate::parse("a == b == c").is_err(),
         "expected chained comparisons to be rejected"
@@ -103,7 +100,6 @@ fn regression_comparison_chain_should_fail() {
 
 #[test]
 fn regression_import_path_application() {
-    // `import ./foo.nix self` should parse and match nixfmt
     test_ast_format("import ./foo.nix self");
 }
 
@@ -119,7 +115,7 @@ fn regression_trailing_comment() {
 
 #[test]
 fn test_sourceline_multiline_list() {
-    // Regression test: closing bracket should be on line 3, not line 2
+    // Closing bracket should be on line 3, not line 2.
     test_ast_format("[\n  \"foo\"\n]");
 }
 
@@ -150,36 +146,29 @@ fn regression_comment_before_and_with_selectors() {
 
 #[test]
 fn regression_emptyline_pretrivia_inline() {
-    // EmptyLine in preTrivia should be formatted inline in AST output
-    // Our output: { preTrivia =\n    [ EmptyLine ]\n, ...
-    // nixfmt:     { preTrivia = [ EmptyLine ], ...
     test_ast_format("\n\nlet x = 1; in x");
 }
 
 #[test]
 fn regression_not_member_check() {
-    // FIXED: ? operator now has higher precedence than ! operator
-    // Correct AST: Inversion(MemberCheck(a)...)
+    // `?` binds tighter than `!`: Inversion(MemberCheck(a)...).
     test_ast_format("!a ? b");
 }
 
 #[test]
 fn regression_implies_precedence() {
-    // FIXED: -> operator has lower precedence than ||
-    // Should parse as: (a || b) -> c, not a || (b -> c)
+    // `->` binds looser than `||`: (a || b) -> c.
     test_ast_format("a || b -> c");
 }
 
 #[test]
 fn regression_mixed_add_sub_associativity() {
-    // Our AST: (1 + (2 - 3)), nixfmt AST: ((1 + 2) - 3)
-    // Right-associative handling for + diverges when - appears
+    // Right-associative `+` restructuring must not apply across `-`: ((1 + 2) - 3).
     test_ast_format("1 + 2 - 3");
 }
 
 #[test]
 fn regression_chained_string_concatenation() {
-    // Chained + operators should create nested Operation nodes
     // From nixpkgs/nixos/modules/config/resolvconf.nix lines 18-37
     test_ast_format(
         r#"''
@@ -209,7 +198,6 @@ fn regression_empty_container_with_comment() {
 
 #[test]
 fn regression_path_trailing_slash_current() {
-    // nixfmt rejects `./` but we accept it
     assert!(
         crate::parse("./").is_err(),
         "expected path with trailing slash to be rejected"
@@ -218,22 +206,17 @@ fn regression_path_trailing_slash_current() {
 
 #[test]
 fn regression_ansi_escape_codes_in_strings() {
-    // Our parser strips ANSI escape codes (literal ESC characters) from strings
-    // but nixfmt preserves them. The literal ESC character is 0x1b.
-    // We create a test string with a real escape character followed by "[1;31m"
+    // Literal ESC (0x1b) must be preserved in the AST, not stripped.
     let test_input = "\"\x1b[1;31mtest\x1b[0m\"";
     test_ast_format(test_input);
 
-    // Test that escape sequences are formatted without leading zeros
-    // nixfmt outputs \x9 for tab, not \x09
-    // From nixpkgs/lib/generators.nix
+    // nixfmt outputs \x9 for tab, not \x09 (nixpkgs/lib/generators.nix).
     let tab_test = "\"\t\"";
     test_ast_format(tab_test);
 }
 
 #[test]
 fn regression_dot_selector_on_newline() {
-    // Parser should accept dot selector on a newline after closing brace
     // From nixpkgs/nixos/release.nix line 262-267
     test_ast_format(
         r#"{
@@ -252,10 +235,8 @@ fn regression_context_parameter_variants() {
 
 #[test]
 fn regression_inline_comments_after_strings_and_paths() {
-    // Inline comments after simple strings, indented strings, and paths
-    // should be captured as trailing comments, not cause parse errors.
-    // Bug: The lexer would encounter '#' after manually parsing these constructs
-    // and fail with "unexpected character: '#'"
+    // The lexer used to hit '#' raw after manually parsing these constructs
+    // and fail with "unexpected character: '#'".
     // From nixpkgs/nixos/tests/public-inbox.nix line 97
     test_ast_format(
         r#"[
@@ -271,7 +252,6 @@ fn regression_inline_comments_after_strings_and_paths() {
 
 #[test]
 fn regression_old_style_let() {
-    // Minimal reproducer: let { body = 1; }
     test_ast_format("let { body = 1; }");
 }
 
@@ -287,23 +267,20 @@ fn regression_unicode_escape_in_string() {
 
 #[test]
 fn regression_identifier_slash_path() {
-    // Function application with path argument: mkDefault /tmp
-    // Should parse as Application(mkDefault, /tmp), not Path("mkDefault/tmp")
+    // Application(mkDefault, /tmp), not Path("mkDefault/tmp").
     // From nixpkgs/nixos/modules/services/monitoring/prometheus/exporters.nix line 353
     test_ast_format("mkDefault /tmp");
 }
 
 #[test]
 fn regression_unquoted_url() {
-    // Unquoted URLs should be parsed as strings, not as division/update operators
-    // Bug: "http://example.com" was tokenized as "http:" followed by TUpdate ("//" operator)
+    // "http://example.com" was tokenized as "http:" followed by TUpdate ("//").
     // From nix/tests/functional/lang/parse-okay-regression-20041027.nix line 6
     test_ast_format("{ url = http://example.com/path; }");
 }
 
 #[test]
 fn regression_decorated_multiline_comment() {
-    // Decorated multiline comments should strip leading "* " from each line
     // From nix/tests/functional/lang/eval-okay-comments.nix lines 42-45
     test_ast_format(
         r#"/*
@@ -316,7 +293,6 @@ fn regression_decorated_multiline_comment() {
 
 #[test]
 fn regression_trailing_empty_line_before_close() {
-    // Empty line after last item but before closing brace should be preserved in AST
     // From nix/tests/functional/lang/parse-fail-dup-attrs-2.nix
     test_ast_format("let {\n  x = 1;\n  \n}\n");
     test_ast_format("{\n  foo = 1;\n\n}\n");
@@ -324,11 +300,8 @@ fn regression_trailing_empty_line_before_close() {
 
 #[test]
 fn regression_crlf_line_endings() {
-    // Test various line ending formats: LF, CRLF, and bare CR
-    // Lexer should treat all as newlines for cross-platform compatibility
-    // From nix/tests/functional/lang/parse-okay-crlf.nix
-    // Note: The test file has a bare CR after a comment, which nixfmt (Haskell) fails to parse,
-    // but we handle correctly for cross-platform robustness
+    // From nix/tests/functional/lang/parse-okay-crlf.nix. Bare CR after a comment
+    // is rejected by Haskell nixfmt but accepted here for cross-platform input.
     let input = "rec {\n  x =\n  # Comment\r  y;\n}\n";
     let result = crate::parse(input);
     assert!(
@@ -353,18 +326,15 @@ fn regression_or_operator_with_application() {
 
 #[test]
 fn regression_chained_comparison_operators() {
-    // Comparison operators can be "chained" when they're actually operands to equality/inequality
-    // `2 > 1 == 1 < 2` should parse as `(2 > 1) == (1 < 2)` - comparing two boolean results
+    // `2 > 1 == 1 < 2` parses as `(2 > 1) == (1 < 2)`; the chain ban is per-precedence.
     // From nix/tests/functional/lang/eval-okay-arithmetic.nix line 50
     test_ast_format("2 > 1 == 1 < 2");
 }
 
 #[test]
 fn regression_utf8_identifier() {
-    // UPDATED: This was incorrectly expecting UTF-8 identifiers to be accepted.
-    // Nix identifiers must be ASCII-only: [a-zA-Z_][a-zA-Z0-9_'-]*
+    // Nix identifiers are ASCII-only: [a-zA-Z_][a-zA-Z0-9_'-]*
     // From nix/tests/functional/lang/parse-fail-utf8.nix
-    // nix-instantiate correctly rejects this with "unexpected invalid token"
     assert!(
         crate::parse("123 é 4").is_err(),
         "expected non-ASCII character to be rejected"
@@ -373,8 +343,7 @@ fn regression_utf8_identifier() {
 
 #[test]
 fn regression_multiline_string_unicode_line_numbers() {
-    // Line numbers for tokens after multiline strings containing special Unicode chars
-    // Bug: Our parser reports different line numbers than nixfmt for TSemicolon and TBraceClose
+    // Line numbers after multi-byte chars in `''..''` once diverged from nixfmt.
     // From nix/tests/functional/nar-access.nix lines 6-20
     test_ast_format(
         r#"{
@@ -388,7 +357,6 @@ fn regression_multiline_string_unicode_line_numbers() {
 
 #[test]
 fn regression_duplicate_function_formals() {
-    // Parser should reject duplicate formal parameters
     // From nix/tests/functional/lang/parse-fail-dup-formals.nix
     assert!(
         crate::parse("{x, y, x}: x").is_err(),
@@ -398,7 +366,6 @@ fn regression_duplicate_function_formals() {
 
 #[test]
 fn regression_pattern_shadows_formal() {
-    // Parser should reject when pattern name shadows a formal parameter
     // From nix/tests/functional/lang/parse-fail-patterns-1.nix
     assert!(
         crate::parse("args@{args, x, y, z}: x").is_err(),
@@ -571,13 +538,9 @@ fn regression_unexpected_character_error() {
 
 #[test]
 fn regression_non_utf8_input() {
-    // Parser should handle non-UTF-8 input gracefully with an error, not panic
-    // From nix/tests/functional/lang/eval-fail-toJSON-non-utf-8.nix
-    // Note: This test verifies error handling at the parsing API level.
-    // The actual non-UTF-8 handling happens when reading files in main.rs
-
-    // Test with valid UTF-8 that contains a Unicode replacement character
-    // This simulates what would be shown after reading non-UTF-8 bytes
+    // From nix/tests/functional/lang/eval-fail-toJSON-non-utf-8.nix.
+    // Actual non-UTF-8 handling lives in main.rs; here exercise the parser on the
+    // replacement char produced by lossy decoding.
     let result = crate::parse("builtins.toJSON \"_invalid UTF-8: �_\"");
     assert!(
         result.is_ok(),

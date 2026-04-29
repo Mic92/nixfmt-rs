@@ -105,10 +105,8 @@ impl Lexer {
     /// Parse a lexeme (token with trivia annotations)
     /// This is the main entry point for the parser
     pub(crate) fn lexeme(&mut self) -> crate::error::Result<crate::types::Ann<Token>> {
-        // Take accumulated leading trivia from buffer
         let mut leading_trivia = std::mem::take(&mut self.trivia_buffer);
 
-        // Skip horizontal space first
         let _ = self.skip_hspace();
 
         // Re-sync: when entering expression mode mid-source (after `${` in a
@@ -118,31 +116,25 @@ impl Lexer {
         if matches!(self.peek_byte(), Some(b'\n' | b'\r' | b'#' | b'/')) {
             self.parse_trivia();
             leading_trivia.extend(trivia::convert_leading(&self.trivia_scratch));
-
-            // Skip hspace after trivia
             let _ = self.skip_hspace();
         }
 
-        // Record start position BEFORE parsing the token (in byte offsets and line numbers)
         let token_start = self.byte_pos;
         let start_line = self.line;
 
-        // Parse the token (note: next_token() also skips hspace, but that's ok since we already did)
+        // next_token() also skips hspace; redundant here but harmless.
         let token = self.next_token()?;
 
-        // Record position AFTER parsing token to create span (in byte offsets and line numbers)
         let token_end = self.byte_pos;
         let end_line = self.line;
         let token_span =
             crate::types::Span::with_lines(token_start, token_end, start_line, end_line);
 
-        // For string/path delimiters, don't parse trivia immediately
-        // The parser needs to access raw source content
+        // String/path delimiters: defer trivia so the parser sees raw source content.
         let skip_trivia = matches!(token, Token::TDoubleQuote | Token::TDoubleSingleQuote);
 
         let trailing_comment;
         if skip_trivia {
-            // Don't parse trivia yet - parser will handle string content
             trailing_comment = None;
             self.trivia_buffer = Trivia::new();
         } else if let Some(newlines) = self.fast_ws_trivia() {
@@ -160,7 +152,6 @@ impl Lexer {
             self.trivia_buffer = next;
         }
 
-        // Return annotated token
         Ok(crate::types::Ann {
             pre_trivia: leading_trivia,
             span: token_span,
@@ -171,7 +162,6 @@ impl Lexer {
 
     /// Parse a whole file (expression + final trivia)
     pub(crate) fn start_parse(&mut self) -> crate::error::Result<()> {
-        // Parse initial trivia and convert to leading
         self.parse_trivia();
         self.trivia_buffer = trivia::convert_leading(&self.trivia_scratch);
         Ok(())
@@ -204,14 +194,12 @@ impl Lexer {
         // error arm which decodes the full codepoint for the message.
         let ch = b as char;
 
-        // Check for identifiers/keywords (ASCII alphabetic or underscore)
-        // Nix only allows ASCII letters: [a-zA-Z_][a-zA-Z0-9_'-]*
-        // This must come before the match to handle checking for valid identifier starts
+        // Nix identifiers are ASCII-only: [a-zA-Z_][a-zA-Z0-9_'-]*. Must be
+        // checked before the punctuation match below.
         if ch.is_ascii_alphabetic() || ch == '_' {
             return self.parse_ident_or_keyword();
         }
 
-        // Single character tokens and operators
         match ch {
             '{' => {
                 self.advance();
@@ -286,7 +274,6 @@ impl Lexer {
             '/' => Ok(self.try_two_char('/', Token::TUpdate, Token::TDiv)),
             '!' => Ok(self.try_two_char('=', Token::TUnequal, Token::TNot)),
             '<' => {
-                // Check for angle bracket path <nixpkgs>
                 if self.peek_ahead(1).is_some_and(|c| c.is_alphanumeric()) {
                     self.parse_env_path()
                 } else {
@@ -378,7 +365,6 @@ impl Lexer {
             }
             '0'..='9' => self.parse_number(),
             '~' => {
-                // Tilde - used in paths ~/
                 self.advance();
                 Ok(Token::TTilde)
             }
@@ -712,7 +698,6 @@ impl Lexer {
                 _ => break,
             }
         }
-        // Commit cursor and trivia bookkeeping.
         self.trivia_start = Some(self.mark());
         if newlines > 0 {
             self.line = line;
@@ -754,13 +739,11 @@ impl Lexer {
                     self.trivia_scratch.push(c);
                 }
                 Some('/') if self.at("/*") => {
-                    // Try language annotation first, fall back to block comment
                     let saved_state = self.save_state();
 
                     if let Some(lang_annot) = self.try_parse_language_annotation() {
                         self.trivia_scratch.push(lang_annot);
                     } else {
-                        // Restore position and parse as block comment
                         self.restore_state(saved_state);
                         let c = self.parse_block_comment();
                         self.trivia_scratch.push(c);
@@ -802,7 +785,6 @@ impl Lexer {
     /// Rewind the last trivia consumed (horizontal spaces, newlines, and comments)
     /// Also clears the trivia buffer since rewound trivia should not be attached to next token
     pub(crate) fn rewind_trivia(&mut self) {
-        // Rewind to the position before parse_trivia() was called
         if let Some(mark) = self.trivia_start {
             self.reset(mark);
         }

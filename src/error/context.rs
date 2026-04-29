@@ -49,7 +49,6 @@ impl<'a> ErrorContext<'a> {
             .copied()
             .unwrap_or(self.source.len());
 
-        // Trim trailing newline if present
         let line_end = if line_end > line_start
             && self
                 .source

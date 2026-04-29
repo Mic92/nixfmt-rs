@@ -47,17 +47,13 @@ pub(super) fn convert_leading(pts: &[ParseTrivium]) -> Trivia {
     let (mut result, pending_newlines) =
         pts.iter()
             .fold((Vec::new(), 0), |(mut acc, newline_count), pt| match pt {
-                ParseTrivium::Newlines(count) => {
-                    // Accumulate consecutive newlines
-                    (acc, newline_count + count)
-                }
+                ParseTrivium::Newlines(count) => (acc, newline_count + count),
                 other => {
                     // Flush pending newlines first (single newlines are discarded)
                     if newline_count > 1 {
                         acc.push(Trivium::EmptyLine());
                     }
 
-                    // Then convert and add the current non-newline trivium
                     match other {
                         ParseTrivium::LineComment { text, .. } => {
                             acc.push(Trivium::LineComment(text.clone()));
@@ -79,7 +75,6 @@ pub(super) fn convert_leading(pts: &[ParseTrivium]) -> Trivia {
                 }
             });
 
-    // Flush any trailing newlines
     if pending_newlines > 1 {
         result.push(Trivium::EmptyLine());
     }
@@ -117,7 +112,6 @@ pub(crate) fn convert_trivia(
         _ => {}
     }
 
-    // Split into trailing and leading parts
     let split_pos = pts
         .iter()
         .position(|pt| !is_trailing(pt))
@@ -144,7 +138,6 @@ pub(crate) fn convert_trivia(
             (None, convert_leading(pts))
         }
 
-        // Default: split normally
         _ => (convert_trailing(trailing_pts), convert_leading(leading_pts)),
     }
 }

@@ -148,12 +148,10 @@ pub(crate) fn escape_string(s: &str) -> std::borrow::Cow<'_, str> {
         // as these may legitimately appear in source files and should be preserved
     }
 
-    // Fast path: check if we need to escape anything
     if !s.chars().any(is_non_printable) {
         return std::borrow::Cow::Borrowed(s);
     }
 
-    // Slow path: build escaped string
     let mut result = String::with_capacity(s.len() + 10);
     for ch in s.chars() {
         if is_non_printable(ch) {
@@ -175,7 +173,6 @@ pub(crate) fn escape_string(s: &str) -> std::borrow::Cow<'_, str> {
 ///                  else nest indentAmount $ line' <> doc  -- newline before complex
 pub(crate) fn sub_expr<T: PrettySimple, W: Writer>(w: &mut W, arg: &T) {
     if arg.is_simple() {
-        // Simple (with or without delimiters): space before
         w.write_plain(" ");
         arg.format(w);
     } else if arg.renders_inline_parens() {
@@ -191,11 +188,9 @@ pub(crate) fn sub_expr<T: PrettySimple, W: Writer>(w: &mut W, arg: &T) {
             });
         });
     } else if arg.has_delimiters() {
-        // Complex with delimiters: newline before
         w.newline();
         arg.format(w);
     } else {
-        // Complex without delimiters: newline, indent, wrap in parens
         w.newline();
         w.with_color(|w_colored| {
             let paren_color = w_colored.current_color();
@@ -219,11 +214,9 @@ pub(crate) fn sub_expr<T: PrettySimple, W: Writer>(w: &mut W, arg: &T) {
 /// - Everything else: space before
 pub(crate) fn format_delimited_value<T: PrettySimple, W: Writer>(w: &mut W, value: &T) {
     if value.has_delimiters() && !value.is_empty() && !value.is_simple() {
-        // Non-empty, complex delimited values get a newline
         w.newline();
         value.format(w);
     } else {
-        // Everything else (including simple delimited values): space before
         w.write_plain(" ");
         value.format(w);
     }
@@ -271,7 +264,6 @@ macro_rules! format_constructor {
 #[macro_export]
 macro_rules! format_record {
     ($w:expr, [ $(($name:expr, $value:expr)),+ $(,)? ]) => {{
-        // Capture current color, then newline and increment depth
         $w.newline();
         $w.with_color(|w_color| {
             let brace_color = w_color.current_color();

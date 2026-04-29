@@ -472,7 +472,6 @@ impl<T: PrettySimple> PrettySimple for Option<T> {
     }
 
     fn is_simple(&self) -> bool {
-        // Nothing is simple (no args), Just is complex
         self.is_none()
     }
 }
