@@ -29,7 +29,7 @@ walkdir = "2"
 mimalloc = { version = "0.1", default-features = false }
 
 [dev-dependencies]
-criterion = "0.5"
+criterion = "0.8"
 tempfile = "3"
 
 [[bench]]
