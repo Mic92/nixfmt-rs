@@ -174,3 +174,44 @@ fn format_app_set_absorb_in_binding() {
     // wrapper.nix style: `x = mk { ... } ''..'';`
     test_format("{\n  x = mk {\n    a = 1;\n  } ''\n    echo a\n  '';\n}");
 }
+
+/// A lone interpolation on an indented-string line whose body is a function
+/// application must keep `${` on the string line and absorb the call body
+/// (no `line'` between `${` and the application).
+/// Haskell: `Nixfmt.Pretty.instance Pretty [StringPart]` Application arm.
+#[test]
+fn format_interp_lone_application_absorbed() {
+    // 7zip-zstd: non-simple application (parenthesised arg / >2 args).
+    test_format("''\n  ${lib.optionalString (!isWindows) ''\n    one\n    two\n  ''}\n''");
+    test_format("''\n  ${lib.optionalString a b ''\n    one\n    two\n  ''}\n''");
+    // emacs wrapper: simple application; IR must place `${` inside the group
+    // and nest the call body one level deeper.
+    test_ir_format("''\n  ${lib.optionalString cond ''\n    one\n    two\n  ''}\n''");
+    // With leading whitespace and a wide body that overflows the budget.
+    test_format(concat!(
+        "''\n  x\n    ${lib.optionalString cond ''\n",
+        "      linkPath one two three four five six seven eight nine ten eleven twelve thirteen fourteen\n",
+        "    ''}\n''",
+    ));
+    // vscodeWithConfiguration: application whose middle arg is a parenthesised
+    // abstraction that itself wraps; `${` must still hug the call head.
+    test_format(concat!(
+        "''\n  ${lib.concatMapStringsSep \"n\" (\n",
+        "    e: \"ln -sfn ${e}/share/vscode/extensions/aaaa/bbb/ccc/dddd\"\n",
+        "  ) nixExtsDrvs}\n''",
+    ));
+}
+
+/// A short single-line interpolation that is not the only thing on the
+/// string line must stay inline (forced compact up to 30 columns) even when
+/// the surrounding line already overflows.
+/// Haskell: `Nixfmt.Pretty.instance Pretty StringPart` (`unexpandSpacing' (Just 30)`).
+#[test]
+fn format_interp_inline_short_forced_compact() {
+    // ms-vscode.cpptools: `${lib.makeBinPath [ gdb ]}` after a long line.
+    test_format(concat!(
+        "''\n  wrap a/very/long/share/vscode/extensions/ms-vscode.cpptools/debug/bin/OpenDebugAD7 ",
+        "--prefix PATH : ${lib.makeBinPath [ gdb ]}\n''",
+    ));
+    test_ir_format("''\n  prefix ${lib.makeBinPath [ gdb ]} suffix\n''");
+}
