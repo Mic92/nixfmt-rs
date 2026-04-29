@@ -460,14 +460,14 @@ fn simplify_group(ann: GroupAnn, doc: Doc) -> Doc {
     if doc.is_empty() {
         return Vec::new();
     }
-    if doc.len() == 1 {
-        if let DocE::Group(inner_ann, body) = &doc[0] {
-            if ann == *inner_ann {
-                return body.clone();
-            }
+    if doc.len() == 1 && matches!(&doc[0], DocE::Group(inner_ann, _) if ann == *inner_ann) {
+        match doc.into_iter().next() {
+            Some(DocE::Group(_, body)) => body,
+            _ => unreachable!(),
         }
+    } else {
+        doc
     }
-    doc
 }
 
 /// Cheap pre-check so render_group can skip the clone-heavy `priority_groups`
@@ -515,9 +515,13 @@ pub(crate) fn fixup(doc: Doc) -> Doc {
 
             // Merge consecutive texts with same annotation
             DocE::Text(level, off, ann, a) if !doc.is_empty() => {
-                if let DocE::Text(_, _, ann2, b) = &doc[0] {
+                if let DocE::Text(level2, off2, ann2, b) = &mut doc[0] {
                     if ann == *ann2 {
-                        doc[0] = DocE::Text(level, off, ann, format!("{}{}", a, b));
+                        let mut merged = a;
+                        merged.push_str(b);
+                        *level2 = level;
+                        *off2 = off;
+                        *b = merged;
                     } else {
                         result.push(DocE::Text(level, off, ann, a));
                     }
@@ -586,12 +590,12 @@ pub(crate) fn fixup(doc: Doc) -> Doc {
 /// adjacent spacings across a group boundary merge exactly as in the Haskell
 /// `ys ++ xs` recursion, and so comment text inside a group never gets
 /// double-counted against `c`.
-fn fits(mut ni: isize, mut c: isize, doc: &[DocE]) -> Option<String> {
+fn fits(mut ni: isize, mut c: isize, doc: &[DocE], out: &mut String) -> Option<usize> {
+    let mark = out.len();
     if c < 0 {
         return None;
     }
 
-    let mut out = String::new();
     let mut stack: Vec<std::slice::Iter<'_, DocE>> = vec![doc.iter()];
     let mut pending: Option<Spacing> = None;
 
@@ -625,21 +629,26 @@ fn fits(mut ni: isize, mut c: isize, doc: &[DocE]) -> Option<String> {
                     c -= 1;
                     ni -= 1;
                     if c < 0 {
+                        out.truncate(mark);
                         return None;
                     }
                 }
-                Spacing::Hardline | Spacing::Emptyline | Spacing::Newlines(_) => return None,
+                Spacing::Hardline | Spacing::Emptyline | Spacing::Newlines(_) => {
+                    out.truncate(mark);
+                    return None;
+                }
             }
         }
 
         match elem {
-            None => return Some(out),
+            None => return Some(out.len() - mark),
             Some(DocE::Text(_, _, TextAnn::RegularT, t)) => {
                 let w = text_width(t) as isize;
                 out.push_str(t);
                 c -= w;
                 ni -= w;
                 if c < 0 {
+                    out.truncate(mark);
                     return None;
                 }
             }
@@ -649,6 +658,74 @@ fn fits(mut ni: isize, mut c: isize, doc: &[DocE]) -> Option<String> {
                     out.push(' ');
                 }
                 out.push_str(t);
+            }
+            Some(DocE::Text(_, _, TextAnn::Trailing, _)) => {}
+            Some(DocE::Spacing(_) | DocE::Group(_, _)) => unreachable!(),
+        }
+    }
+}
+
+/// Like `fits`, but only computes the rendered width instead of allocating the
+/// rendered string. Used by `first_line_fits` where only the width matters.
+fn fits_width(mut c: isize, doc: &[DocE]) -> Option<usize> {
+    if c < 0 {
+        return None;
+    }
+    let mut w = 0usize;
+    let mut ni: isize = 0;
+    let mut stack: Vec<std::slice::Iter<'_, DocE>> = vec![doc.iter()];
+    let mut pending: Option<Spacing> = None;
+    loop {
+        let elem = loop {
+            let Some(it) = stack.last_mut() else {
+                break None;
+            };
+            match it.next() {
+                Some(DocE::Group(_, ys)) => stack.push(ys.iter()),
+                Some(e) => break Some(e),
+                None => {
+                    stack.pop();
+                }
+            }
+        };
+        if let Some(DocE::Spacing(s)) = elem {
+            pending = Some(match pending {
+                Some(p) => merge_spacings(p, *s),
+                None => *s,
+            });
+            continue;
+        }
+        if let Some(sp) = pending.take() {
+            match sp {
+                Spacing::Softbreak | Spacing::Break => {}
+                Spacing::Softspace | Spacing::Space | Spacing::Hardspace => {
+                    w += 1;
+                    c -= 1;
+                    ni -= 1;
+                    if c < 0 {
+                        return None;
+                    }
+                }
+                Spacing::Hardline | Spacing::Emptyline | Spacing::Newlines(_) => return None,
+            }
+        }
+        match elem {
+            None => return Some(w),
+            Some(DocE::Text(_, _, TextAnn::RegularT, t)) => {
+                let tw = text_width(t);
+                w += tw;
+                c -= tw as isize;
+                ni -= tw as isize;
+                if c < 0 {
+                    return None;
+                }
+            }
+            Some(DocE::Text(_, _, TextAnn::Comment, t)) => w += text_width(t),
+            Some(DocE::Text(_, _, TextAnn::TrailingComment, t)) => {
+                if ni == 0 {
+                    w += 1;
+                }
+                w += text_width(t);
             }
             Some(DocE::Text(_, _, TextAnn::Trailing, _)) => {}
             Some(DocE::Spacing(_) | DocE::Group(_, _)) => unreachable!(),
@@ -699,6 +776,7 @@ fn first_line_fits(target_width: usize, max_width: usize, chain: Look<'_>) -> bo
     let mut c = max;
     let mut it = LookIter::new(chain);
     let mut pending: Option<Spacing> = None;
+    let mut rest: Vec<&[DocE]> = Vec::new();
     loop {
         if c < 0 {
             return false;
@@ -726,10 +804,11 @@ fn first_line_fits(target_width: usize, max_width: usize, chain: Look<'_>) -> bo
             Some(DocE::Text(_, _, TextAnn::RegularT, t)) => c -= text_width(t) as isize,
             Some(DocE::Text(..)) => {}
             Some(DocE::Group(_, ys)) => {
-                let rest: Vec<&[DocE]> = it.stack.iter().rev().map(|(s, i)| &s[*i..]).collect();
+                rest.clear();
+                rest.extend(it.stack.iter().rev().map(|(s, i)| &s[*i..]));
                 let rest_width = first_line_width(&rest);
-                match fits(0, c - rest_width as isize, ys) {
-                    Some(t) => c -= text_width(&t) as isize,
+                match fits_width(c - rest_width as isize, ys) {
+                    Some(w) => c -= w as isize,
                     None => it.push_front(ys),
                 }
             }
@@ -853,7 +932,14 @@ fn layout_greedy(target_width: usize, indent_width: usize, doc: Doc) -> String {
         indent_width,
     );
 
-    format!("{}\n", result.trim())
+    let end = result.trim_end().len();
+    result.truncate(end);
+    let start = result.len() - result.trim_start().len();
+    if start > 0 {
+        result.drain(..start);
+    }
+    result.push('\n');
+    result
 }
 
 /// Render a document with state tracking
@@ -959,6 +1045,37 @@ fn render_elem(
     }
 }
 
+/// Compute the current-indent column `render_text` would use for `text_nl` at
+/// the start of a line, without mutating the indent stack.
+fn indent_for(text_nl: usize, indents: &[(usize, usize)], iw: usize) -> usize {
+    let mut top = indents.len();
+    while top > 0 && text_nl < indents[top - 1].1 {
+        top -= 1;
+    }
+    match indents[..top].last() {
+        Some(&(ci, nl)) if text_nl > nl => ci + iw,
+        Some(&(ci, _)) => ci,
+        None => 0,
+    }
+}
+
+/// Apply the indent-stack mutation `render_text` would perform for `text_nl`
+/// at the start of a line (cc == 0).
+fn apply_indent(text_nl: usize, state: &mut LayoutState, iw: usize) {
+    let indents = &mut state.1;
+    while let Some(&(_, nl)) = indents.last() {
+        if text_nl > nl {
+            let ci = indents.last().unwrap().0 + iw;
+            indents.push((ci, text_nl));
+            return;
+        } else if text_nl < nl {
+            indents.pop();
+        } else {
+            return;
+        }
+    }
+}
+
 /// Render text with proper indentation
 fn render_text(
     out: &mut String,
@@ -1001,30 +1118,31 @@ fn render_text(
     out.push_str(text);
 }
 
-/// Try to render a group compactly
-/// Returns (rendered_text, updated_state) if successful
+/// Try to render a group compactly. On success, appends to `out` and updates
+/// `state` in place; on failure leaves both untouched.
 fn try_render_group(
+    out: &mut String,
     grp: &[DocE],
     lookahead: Look<'_>,
-    state: &LayoutState,
+    state: &mut LayoutState,
     tw: usize,
     iw: usize,
-) -> Option<(String, LayoutState)> {
+) -> bool {
     // Mirrors `goGroup` in Nixfmt/Predoc.hs.
     if grp.is_empty() {
-        return Some((String::new(), state.clone()));
+        return true;
     }
 
-    let (cc, indents) = state;
+    let (cc, indents) = (state.0, &state.1);
 
-    if *cc == 0 {
+    if cc == 0 {
         // At start of line - drop leading whitespace
         let grp = match grp.first() {
             Some(DocE::Spacing(_)) => &grp[1..],
             Some(DocE::Group(ann, inner)) if matches!(inner.first(), Some(DocE::Spacing(_))) => {
                 let mut new_grp = vec![DocE::Group(*ann, inner[1..].to_vec())];
                 new_grp.extend_from_slice(&grp[1..]);
-                return try_render_group(&new_grp, lookahead, state, tw, iw);
+                return try_render_group(out, &new_grp, lookahead, state, tw, iw);
             }
             _ => grp,
         };
@@ -1043,12 +1161,22 @@ fn try_render_group(
         };
 
         let budget = tw as isize - first_line_width(lookahead) as isize;
-        fits(will_increase as isize, budget, grp).map(|t| {
-            let mut new_state = state.clone();
-            let mut rendered = String::with_capacity(t.len() + 8);
-            render_text(&mut rendered, nl, off, &t, &mut new_state, iw);
-            (rendered, new_state)
-        })
+        let mark = out.len();
+        let total_indent = indent_for(nl, &state.1, iw) + off;
+        for _ in 0..total_indent {
+            out.push(' ');
+        }
+        match fits(will_increase as isize, budget, grp, out) {
+            Some(w) => {
+                apply_indent(nl, state, iw);
+                state.0 += w;
+                true
+            }
+            None => {
+                out.truncate(mark);
+                false
+            }
+        }
     } else {
         let line_nl = indents.last().map(|(_, l)| *l).unwrap_or(0);
         let will_increase = if next_indent(lookahead).0 > line_nl {
@@ -1057,12 +1185,14 @@ fn try_render_group(
             0
         };
 
-        let budget = tw as isize - *cc as isize - first_line_width(lookahead) as isize;
-        fits(will_increase - *cc as isize, budget, grp).map(|t| {
-            let mut new_state = state.clone();
-            new_state.0 += text_width(&t);
-            (t, new_state)
-        })
+        let budget = tw as isize - cc as isize - first_line_width(lookahead) as isize;
+        match fits(will_increase - cc as isize, budget, grp, out) {
+            Some(w) => {
+                state.0 += w;
+                true
+            }
+            None => false,
+        }
     }
 }
 
@@ -1077,9 +1207,7 @@ fn render_group(
     iw: usize,
 ) {
     // Try to fit group compactly
-    if let Some((compact, new_state)) = try_render_group(ys, lookahead, state, tw, iw) {
-        *state = new_state;
-        out.push_str(&compact);
+    if try_render_group(out, ys, lookahead, state, tw, iw) {
         return;
     }
 
@@ -1092,12 +1220,7 @@ fn render_group(
             pre_lookahead.push(&prio);
             pre_lookahead.push(&post);
             pre_lookahead.extend_from_slice(lookahead);
-            if let Some((pre_text, state_after_pre)) =
-                try_render_group(&pre, &pre_lookahead, &state_backup, tw, iw)
-            {
-                *state = state_after_pre;
-                out.push_str(&pre_text);
-
+            if try_render_group(out, &pre, &pre_lookahead, state, tw, iw) {
                 // Render prio expanded
                 let unexpanded_post = unexpand_spacing(&post);
                 let mut prio_lookahead: Vec<&[DocE]> = Vec::with_capacity(1 + lookahead.len());
@@ -1105,11 +1228,7 @@ fn render_group(
                 prio_lookahead.extend_from_slice(lookahead);
                 render_doc(out, &prio, &prio_lookahead, state, tw, iw);
 
-                if let Some((post_text, state_after_post)) =
-                    try_render_group(&post, lookahead, state, tw, iw)
-                {
-                    *state = state_after_post;
-                    out.push_str(&post_text);
+                if try_render_group(out, &post, lookahead, state, tw, iw) {
                     return;
                 }
             }
@@ -1117,7 +1236,8 @@ fn render_group(
             // trying the next priority group or falling back to full expansion.
             // Haskell threads this via `StateT St Maybe`, which simply drops
             // the state on `Nothing`.
-            *state = state_backup.clone();
+            state.0 = state_backup.0;
+            state.1.clone_from(&state_backup.1);
             out.truncate(out_len);
         }
     }
