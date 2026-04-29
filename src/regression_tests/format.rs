@@ -252,3 +252,12 @@ fn format_assignment_non_simple_selector_breaks_rhs() {
         "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\";\n}",
     ));
 }
+
+/// Comments after the top-level expression must be preserved.
+/// Haskell: `Nixfmt.Parser.file` attaches trailing trivia to `Whole`.
+#[test]
+fn format_trailing_file_trivia_preserved() {
+    test_format("{ a = 1; }\n# trailing\n");
+    test_format("1\n/* block */\n");
+    test_ir_format("{ a = 1; }\n# trailing\n");
+}
