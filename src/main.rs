@@ -1,4 +1,4 @@
-//! nixfmt-rs2 CLI
+//! nixfmt-rs CLI
 //!
 //! Mirrors the flag surface and exit-code semantics of the Haskell `nixfmt`
 //! binary so the two can be used interchangeably by editors / CI.
@@ -15,8 +15,8 @@ use walkdir::WalkDir;
 const VERSION: &str = env!("CARGO_PKG_VERSION");
 
 const HELP: &str = "\
-nixfmt_rs [OPTIONS] [FILES]
-  Format Nix source code
+nixfmt-rs [OPTIONS] [FILES]
+  Format Nix source code (Rust implementation of nixfmt)
 
 Common flags:
   -w --width=INT        Maximum width in characters [default: 100]
@@ -82,7 +82,7 @@ fn parse_args() -> Result<Opts, String> {
                 exit(0);
             }
             "-V" | "--version" => {
-                println!("nixfmt_rs {VERSION}");
+                println!("nixfmt-rs {VERSION}");
                 exit(0);
             }
             "--numeric-version" => {

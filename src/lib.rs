@@ -1,4 +1,4 @@
-//! nixfmt-rs2: Rust implementation of nixfmt with exact Haskell compatibility
+//! nixfmt-rs: Rust implementation of nixfmt with exact Haskell compatibility
 
 #![warn(clippy::pedantic, clippy::nursery, missing_docs)]
 // --- pedantic/nursery allows -----------------------------------------------

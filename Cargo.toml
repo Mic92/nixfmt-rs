@@ -11,10 +11,10 @@ edition = "2021"
 authors = ["nixfmt-rs contributors"]
 description = "Rust implementation of nixfmt with exact Haskell compatibility"
 license = "MIT OR Apache-2.0"
-repository = "https://github.com/joerg/nixfmt-rs2"
+repository = "https://github.com/joerg/nixfmt-rs"
 
 [[bin]]
-name = "nixfmt_rs"
+name = "nixfmt"
 path = "src/main.rs"
 
 [lib]

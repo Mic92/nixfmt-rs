@@ -9,7 +9,7 @@ use std::path::PathBuf;
 use std::process::{Command, Output, Stdio};
 
 fn bin() -> PathBuf {
-    PathBuf::from(env!("CARGO_BIN_EXE_nixfmt_rs"))
+    PathBuf::from(env!("CARGO_BIN_EXE_nixfmt"))
 }
 
 fn run(program: &str, args: &[&str], stdin: Option<&str>) -> Output {
