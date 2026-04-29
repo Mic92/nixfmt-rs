@@ -294,6 +294,12 @@ impl Pretty for Term {
                 // Separator strength depends on how likely a break before the
                 // `.` chain is desirable.
                 match &**term {
+                    // `1.a` would re-lex as float `1.` applied to `a`; keep a
+                    // space. Diverges from Haskell nixfmt, which has this bug.
+                    Term::Token(Ann {
+                        value: Token::Integer(_),
+                        ..
+                    }) if !selectors.is_empty() => doc.push(hardspace()),
                     Term::Token(_) => {}
                     Term::Parenthesized(_, _, _) => doc.push(softline_prime()),
                     _ => doc.push(line_prime()),
