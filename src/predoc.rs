@@ -453,37 +453,6 @@ fn unexpand_spacing(chain: &[&[DocE]]) -> Doc {
     result
 }
 
-/// Split list into (prefix, trailing_suffix) where trailing_suffix
-/// contains all elements at the end that satisfy `pred`.
-fn span_end<T, F>(pred: F, mut list: Vec<T>) -> (Vec<T>, Vec<T>)
-where
-    F: Fn(&T) -> bool,
-{
-    let split_point = list
-        .iter()
-        .rposition(|item| !pred(item))
-        .map(|i| i + 1)
-        .unwrap_or(0);
-
-    let post = list.split_off(split_point);
-    (list, post)
-}
-
-/// Simplify groups with only one item
-fn simplify_group(ann: GroupAnn, doc: Doc) -> Doc {
-    if doc.is_empty() {
-        return Vec::new();
-    }
-    if doc.len() == 1 && matches!(&doc[0], DocE::Group(inner_ann, _) if ann == *inner_ann) {
-        match doc.into_iter().next() {
-            Some(DocE::Group(_, body)) => body,
-            _ => unreachable!(),
-        }
-    } else {
-        doc
-    }
-}
-
 /// Cheap pre-check so render_group can skip the clone-heavy `priority_groups`
 /// machinery for groups that contain no Priority children.
 fn has_priority_groups(doc: &[DocE]) -> bool {
@@ -498,103 +467,137 @@ fn has_priority_groups(doc: &[DocE]) -> bool {
 /// - Moving hard spacings and comments out of groups
 /// - Merging consecutive spacings
 /// - Removing empty groups
-pub(crate) fn fixup(doc: Doc) -> Doc {
-    use std::collections::VecDeque;
+pub(crate) fn fixup(mut doc: Doc) -> Doc {
+    fixup_mut(&mut doc);
+    doc
+}
 
-    if doc.is_empty() {
-        return Vec::new();
-    }
+/// Cheap placeholder used to vacate a slot during the read/write compaction.
+const HOLE: DocE = DocE::Spacing(Spacing::Softbreak);
 
-    let mut doc: VecDeque<DocE> = doc.into();
-    let mut result: Doc = Vec::with_capacity(doc.len());
-
-    while let Some(elem) = doc.pop_front() {
+/// In-place `fixup`. Walks `doc` with a read index `r` and write index `w`
+/// (`w <= r`), recursing into group bodies via `&mut` so the existing `Vec`
+/// allocations are reused. Mirrors Haskell `fixup` clause-by-clause; see the
+/// per-arm comments for the corresponding rule.
+fn fixup_mut(doc: &mut Vec<DocE>) {
+    let mut r = 0usize;
+    let mut w = 0usize;
+    while r < doc.len() {
+        let elem = std::mem::replace(&mut doc[r], HOLE);
+        r += 1;
         match elem {
-            // Move/Merge hard spaces into groups so they can merge with a
-            // leading soft spacing inside the group (Haskell `fixup` rule for
-            // `Spacing Hardspace : Group ann xs`).
-            DocE::Spacing(Spacing::Hardspace) if matches!(doc.front(), Some(DocE::Group(_, _))) => {
-                if let Some(DocE::Group(_, xs)) = doc.front_mut() {
+            // `Spacing Hardspace : Group ann xs : ys` — push the hardspace
+            // into the group so it can merge with a leading soft spacing.
+            DocE::Spacing(Spacing::Hardspace) if matches!(doc.get(r), Some(DocE::Group(_, _))) => {
+                if let Some(DocE::Group(_, xs)) = doc.get_mut(r) {
                     xs.insert(0, DocE::Spacing(Spacing::Hardspace));
                 }
             }
-            // Merge consecutive spacings
-            DocE::Spacing(a) if !doc.is_empty() => {
-                if let DocE::Spacing(b) = &doc[0] {
-                    doc[0] = DocE::Spacing(merge_spacings(a, *b));
+
+            // `Spacing a : Spacing b : ys` — fold into the next slot.
+            DocE::Spacing(a) => {
+                if let Some(DocE::Spacing(b)) = doc.get(r) {
+                    doc[r] = DocE::Spacing(merge_spacings(a, *b));
                 } else {
-                    result.push(DocE::Spacing(a));
+                    doc[w] = DocE::Spacing(a);
+                    w += 1;
                 }
             }
 
-            // Merge consecutive texts with same annotation
-            DocE::Text(level, off, ann, a) if !doc.is_empty() => {
-                if let DocE::Text(level2, off2, ann2, b) = &mut doc[0] {
+            // `Text ann a : Text ann b : ys` — concatenate into the next slot.
+            DocE::Text(l, o, ann, txt) => {
+                if let Some(DocE::Text(l2, o2, ann2, b)) = doc.get_mut(r) {
                     if ann == *ann2 {
-                        let mut merged = a;
+                        let mut merged = txt;
                         merged.push_str(b);
-                        *level2 = level;
-                        *off2 = off;
+                        *l2 = l;
+                        *o2 = o;
                         *b = merged;
-                    } else {
-                        result.push(DocE::Text(level, off, ann, a));
+                        continue;
                     }
-                } else {
-                    result.push(DocE::Text(level, off, ann, a));
                 }
+                doc[w] = DocE::Text(l, o, ann, txt);
+                w += 1;
             }
 
-            DocE::Group(ann, xs) => {
-                let fixed_xs = fixup(xs);
+            DocE::Group(ann, mut body) => {
+                fixup_mut(&mut body);
 
-                // Split out LEADING hard spacings and comments (not all of them!)
-                let mut pre = Vec::new();
-                let mut rest = fixed_xs;
-                while let Some(first) = rest.first() {
-                    if is_hard_spacing(first) || is_comment(first) {
-                        pre.push(rest.remove(0));
-                    } else {
-                        break;
+                // Leading hard spacings and comments lift out of the group.
+                let pre_end = body
+                    .iter()
+                    .position(|e| !is_hard_spacing(e) && !is_comment(e))
+                    .unwrap_or(body.len());
+                // Trailing hard spacings lift out as well.
+                let post_start = body
+                    .iter()
+                    .rposition(|e| !is_hard_spacing(e))
+                    .map(|p| p + 1)
+                    .unwrap_or(0)
+                    .max(pre_end);
+
+                if pre_end == 0 && post_start == body.len() && !body.is_empty() {
+                    // Fast path: nothing to lift. `simplifyGroup` then keep.
+                    if body.len() == 1 && matches!(&body[0], DocE::Group(a2, _) if ann == *a2) {
+                        if let Some(DocE::Group(_, inner)) = body.pop() {
+                            body = inner;
+                        }
                     }
+                    doc[w] = DocE::Group(ann, body);
+                    w += 1;
+                    continue;
                 }
 
-                // Haskell `fixup (a@(Spacing _) : Group ann xs : ys)` keeps the
-                // preceding spacing together with the lifted `pre` so they can
-                // merge (e.g. `Space <> Hardline` -> `Hardline`). Mirror that by
-                // pulling a just-emitted spacing back off `result`.
-                if matches!(result.last(), Some(DocE::Spacing(_))) {
-                    pre.insert(0, result.pop().unwrap());
-                }
+                // Slow path: split [pre | core | post] out of the recursed body.
+                let post = body.split_off(post_start);
+                let mut core = body.split_off(pre_end);
+                let mut pre = body;
 
-                if rest.is_empty() {
-                    // Dissolve empty group: `fixup $ (a : pre) ++ post ++ ys`
-                    for e in pre.into_iter().rev() {
-                        doc.push_front(e);
+                if core.is_empty() {
+                    // Dissolve: `fixup $ (a : pre) ++ post ++ ys`. Put the
+                    // lifted pieces back on the read side; pull a just-written
+                    // spacing back too so it can merge with them.
+                    pre.extend(post);
+                    if w > 0 && matches!(doc[w - 1], DocE::Spacing(_)) {
+                        w -= 1;
+                        pre.insert(0, std::mem::replace(&mut doc[w], HOLE));
                     }
+                    doc.splice(w..r, pre);
+                    r = w;
                 } else {
-                    let (rest, post) = span_end(is_hard_spacing, rest);
-                    let body = simplify_group(ann, rest);
-
-                    if body.is_empty() {
-                        for e in pre.into_iter().chain(post).rev() {
-                            doc.push_front(e);
-                        }
-                    } else {
-                        // `fixup (a : pre) ++ [Group ann body] ++ fixup (post ++ ys)`
-                        result.extend(fixup(pre));
-                        result.push(DocE::Group(ann, body));
-                        for e in post.into_iter().rev() {
-                            doc.push_front(e);
+                    // `simplifyGroup`
+                    if core.len() == 1 && matches!(&core[0], DocE::Group(a2, _) if ann == *a2) {
+                        if let Some(DocE::Group(_, inner)) = core.pop() {
+                            core = inner;
                         }
                     }
+                    // `fixup (a : pre)`: the lifted prefix is already fixed
+                    // internally, so the only remaining rewrite is a possible
+                    // spacing merge across the boundary with `doc[w-1]`.
+                    if w > 0 && matches!(doc[w - 1], DocE::Spacing(_)) {
+                        if let (DocE::Spacing(a), Some(DocE::Spacing(b))) =
+                            (&doc[w - 1], pre.first())
+                        {
+                            doc[w - 1] = DocE::Spacing(merge_spacings(*a, *b));
+                            pre.remove(0);
+                        }
+                    }
+                    let pre_len = pre.len();
+                    // Finalise `pre ++ [Group ann core]` into the write side
+                    // and leave `post` on the read side for `fixup (post ++ ys)`.
+                    doc.splice(
+                        w..r,
+                        pre.into_iter()
+                            .chain(std::iter::once(DocE::Group(ann, core)))
+                            .chain(post),
+                    );
+                    w += pre_len + 1;
+                    r = w;
                 }
             }
-
-            _ => result.push(elem),
         }
     }
-
-    result
+    doc.truncate(w);
 }
 
 /// Mirrors `fits` in Nixfmt/Predoc.hs.
