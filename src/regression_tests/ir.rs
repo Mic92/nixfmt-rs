@@ -7,7 +7,9 @@ use crate::tests_common::test_ir_format;
 /// Regression test: let expression should wrap letPart and inPart in groups
 #[test]
 fn test_let_expression_groups() {
-    test_ir_format("{ pinnedJson ? ./pinned.json, }: let pinned = (builtins.fromJSON (builtins.readFile pinnedJson)).pins; in pinned");
+    test_ir_format(
+        "{ pinnedJson ? ./pinned.json, }: let pinned = (builtins.fromJSON (builtins.readFile pinnedJson)).pins; in pinned",
+    );
 }
 
 /// Regression test: function arguments should use Priority groups
@@ -42,4 +44,10 @@ fn test_import_absorbability() {
 #[test]
 fn test_middle_arg_grouping() {
     test_ir_format("lib.pipe pkgs.lixPackageSets [ ]");
+}
+
+/// Regression test: With expression in assignment RHS should be grouped with the leading space
+#[test]
+fn test_with_grouping() {
+    test_ir_format("{ x = with p; y; }");
 }

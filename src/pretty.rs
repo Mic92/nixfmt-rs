@@ -167,6 +167,15 @@ fn push_absorb_rhs(doc: &mut Doc, expr: &Expression) {
                 });
             }
         }
+        // With: keep the leading `line` inside the group so it can collapse with the body
+        Expression::With(_, _, _, _) => {
+            push_nested(doc, |d| {
+                push_group(d, |inner| {
+                    inner.push(line());
+                    expr.pretty(inner);
+                });
+            });
+        }
         // Everything else: new line
         _ => {
             push_nested(doc, |d| {
@@ -258,6 +267,19 @@ fn push_absorb_paren(doc: &mut Doc, open: &Ann<Token>, expr: &Expression, close:
     // Add Break spacing before closing paren (matches nixfmt absorbParen)
     doc.push(line_prime());
     close_clean.pretty(doc);
+}
+
+/// Render an inner (non-last) argument of a function application.
+/// Mirrors Haskell `absorbApp`: Selections use a regular group so they don't
+/// priority-expand, everything else gets a priority group around `absorbInner`
+/// (which is just `pretty` for the non-list case).
+fn push_inner_arg(doc: &mut Doc, arg: &Expression) {
+    let ann = if matches!(arg, Expression::Term(Term::Selection(_, _, _))) {
+        GroupAnn::RegularG
+    } else {
+        GroupAnn::Priority
+    };
+    push_group_ann(doc, ann, |g| arg.pretty(g));
 }
 
 /// Render the last argument of a function application (absorbLast in nixfmt)
@@ -375,7 +397,7 @@ fn pretty_complex_application_impl(
                             for arg in middle {
                                 outer.push(line());
                                 push_nested(outer, |nested| {
-                                    push_last_arg(nested, arg);
+                                    push_inner_arg(nested, arg);
                                 });
                             }
                         });
@@ -1311,20 +1333,18 @@ impl Pretty for Expression {
                 });
             }
             Expression::With(with_kw, env, semicolon, expr) => {
-                push_group(doc, |doc| {
-                    push_group(doc, |inner| {
-                        with_kw.pretty(inner);
-                        inner.push(hardspace());
-                        push_group(inner, |grouped_env| {
-                            push_nested(grouped_env, |nested| {
-                                env.pretty(nested);
-                            });
+                push_group(doc, |inner| {
+                    with_kw.pretty(inner);
+                    inner.push(hardspace());
+                    push_group(inner, |grouped_env| {
+                        push_nested(grouped_env, |nested| {
+                            env.pretty(nested);
                         });
-                        semicolon.pretty(inner);
                     });
-                    doc.push(line());
-                    expr.pretty(doc);
+                    semicolon.pretty(inner);
                 });
+                doc.push(line());
+                expr.pretty(doc);
             }
             Expression::Abstraction(Parameter::ID(param), colon, body) => {
                 push_group(doc, |group_doc| {
