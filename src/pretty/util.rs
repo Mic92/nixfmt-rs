@@ -1,5 +1,14 @@
 use crate::types::*;
 
+/// Whether a set/absorbed term should prefer its expanded (multi-line)
+/// layout. Replaces the unlabelled `Bool` argument of Haskell `prettySet`
+/// and `absorbExpr`.
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub(super) enum Width {
+    Regular,
+    Wide,
+}
+
 // ---------------------------------------------------------------------------
 // Classification predicates
 //

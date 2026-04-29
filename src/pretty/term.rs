@@ -3,7 +3,7 @@ use crate::types::*;
 
 use super::absorb::{is_absorbable_expr, is_absorbable_term, push_absorb_expr};
 use super::app::push_pretty_app;
-use super::util::{has_trivia, is_lone_ann, items_has_only_comments, split_paren_trivia};
+use super::util::{Width, has_trivia, is_lone_ann, items_has_only_comments, split_paren_trivia};
 
 /// Mirrors `prettyTerm (List ..)` in Nixfmt/Pretty.hs (no surrounding group).
 pub(super) fn push_pretty_term_list(doc: &mut Doc, open: &Leaf, items: &Items<Term>, close: &Leaf) {
@@ -23,7 +23,9 @@ pub(super) fn push_pretty_term_list(doc: &mut Doc, open: &Leaf, items: &Items<Te
 /// Mirrors `prettyTermWide` in Nixfmt/Pretty.hs.
 pub(super) fn push_pretty_term_wide(doc: &mut Doc, term: &Term) {
     match term {
-        Term::Set(krec, open, items, close) => push_pretty_set(doc, true, krec, open, items, close),
+        Term::Set(krec, open, items, close) => {
+            push_pretty_set(doc, Width::Wide, krec, open, items, close)
+        }
         // `prettyTermWide` delegates to `prettyTerm`, which unlike `instance
         // Pretty Term` does *not* wrap lists in an extra group.
         Term::List(open, items, close) => push_pretty_term_list(doc, open, items, close),
@@ -69,7 +71,7 @@ pub(super) fn push_render_list(
 /// Based on Haskell prettySet (Pretty.hs:185-205)
 pub(super) fn push_pretty_set(
     doc: &mut Doc,
-    wide: bool,
+    wide: Width,
     krec: &Option<Ann<Token>>,
     open: &Ann<Token>,
     items: &Items<Binder>,
@@ -113,7 +115,8 @@ pub(super) fn push_pretty_set(
 
     // Hardline separator forces multi-line layout when the input was already
     // multi-line or starts with an empty line (Pretty.hs:200-205).
-    let sep = if !items.0.is_empty() && (wide || starts_with_emptyline || braces_on_different_lines)
+    let sep = if !items.0.is_empty()
+        && (wide == Width::Wide || starts_with_emptyline || braces_on_different_lines)
     {
         vec![hardline()]
     } else {
@@ -176,7 +179,7 @@ fn push_parenthesized_inner(doc: &mut Doc, expr: &Expression) {
     match expr {
         _ if is_absorbable_expr(expr) => {
             push_group(doc, |inner| {
-                push_absorb_expr(inner, false, expr);
+                push_absorb_expr(inner, Width::Regular, expr);
             });
         }
         Expression::Application(_, _) => {

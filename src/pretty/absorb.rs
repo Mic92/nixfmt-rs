@@ -5,7 +5,7 @@ use super::app::push_pretty_app;
 use super::op::push_pretty_operation;
 use super::term::push_pretty_term_wide;
 use super::util::{
-    has_trivia, is_lone_ann, items_has_only_comments, split_paren_trivia,
+    Width, has_trivia, is_lone_ann, items_has_only_comments, split_paren_trivia,
     term_first_token_has_pre_trivia,
 };
 
@@ -63,15 +63,12 @@ pub(super) fn is_absorbable_expr(expr: &Expression) -> bool {
 ///
 /// Unlike absorbable terms which can be force-absorbed, some expressions may
 /// turn out not to be absorbable; in that case they fall through to `pretty`.
-pub(super) fn push_absorb_expr(doc: &mut Doc, force_wide: bool, expr: &Expression) {
+pub(super) fn push_absorb_expr(doc: &mut Doc, width: Width, expr: &Expression) {
     match expr {
-        Expression::Term(t) if is_absorbable_term(t) => {
-            if force_wide {
-                push_pretty_term_wide(doc, t);
-            } else {
-                t.pretty(doc);
-            }
-        }
+        Expression::Term(t) if is_absorbable_term(t) => match width {
+            Width::Wide => push_pretty_term_wide(doc, t),
+            Width::Regular => t.pretty(doc),
+        },
         // With expression with absorbable body: treat as absorbable term via
         // `prettyWith True`.
         Expression::With(with_kw, env, semicolon, body) if matches!(&**body, Expression::Term(t) if is_absorbable_term(t)) =>
@@ -110,7 +107,7 @@ pub(super) fn push_absorb_rhs(doc: &mut Doc, expr: &Expression) {
         {
             push_nested(doc, |d| {
                 d.push(hardspace());
-                push_group(d, |inner| push_absorb_expr(inner, false, expr));
+                push_group(d, |inner| push_absorb_expr(inner, Width::Regular, expr));
             });
         }
 
@@ -118,7 +115,7 @@ pub(super) fn push_absorb_rhs(doc: &mut Doc, expr: &Expression) {
         _ if is_absorbable_expr(expr) => {
             push_nested(doc, |d| {
                 d.push(hardspace());
-                push_group(d, |inner| push_absorb_expr(inner, true, expr));
+                push_group(d, |inner| push_absorb_expr(inner, Width::Wide, expr));
             });
         }
 

@@ -20,7 +20,7 @@ use op::push_pretty_operation;
 use stmt::{insert_into_app, pretty_if, pretty_with, push_absorb_abs};
 use string::{push_pretty_indented_string, push_pretty_simple_string};
 use term::{push_pretty_items, push_pretty_parenthesized, push_pretty_set, push_pretty_term_list};
-use util::move_trailing_comment_up;
+use util::{Width, move_trailing_comment_up};
 
 impl Pretty for TrailingComment {
     fn pretty(&self, doc: &mut Doc) {
@@ -276,7 +276,7 @@ impl Pretty for Term {
                 push_group(doc, |g| push_pretty_term_list(g, open, items, close));
             }
             Term::Set(krec, open, binders, close) => {
-                push_pretty_set(doc, false, krec, open, binders, close);
+                push_pretty_set(doc, Width::Regular, krec, open, binders, close);
             }
             Term::Selection(term, selectors, default) => {
                 term.pretty(doc);
@@ -421,7 +421,7 @@ impl Pretty for Expression {
                 });
             }
             Expression::With(with_kw, env, semicolon, expr) => {
-                pretty_with(doc, false, with_kw, env, semicolon, expr);
+                pretty_with(doc, with_kw, env, semicolon, expr);
             }
             Expression::Abstraction(Parameter::ID(param), colon, body) => {
                 push_group(doc, |group_doc| {
