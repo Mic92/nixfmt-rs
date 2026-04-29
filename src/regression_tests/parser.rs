@@ -41,6 +41,14 @@ fn regression_or_operator_deprecated_syntax() {
 }
 
 #[test]
+fn regression_language_annotation_blank_line() {
+    // nixfmt a061bd5: a `/* lang */` block comment is only a language
+    // annotation when at most one newline separates it from the string.
+    test_ast_format("/* python */\n\n\"x\"");
+    test_ast_format("/* python */\n\"x\"");
+}
+
+#[test]
 fn regression_chained_prefix_operators() {
     // nixfmt 1f3fa2e / https://github.com/NixOS/nixfmt/issues/351
     test_ast_format("(--1)");

@@ -106,11 +106,21 @@ impl Lexer {
 
         let _ = self.skip_hspace();
 
-        // Optionally consume one newline
-        if matches!(self.peek(), Some('\n') | Some('\r')) {
-            self.parse_newlines();
-            let _ = self.skip_hspace();
+        // Optionally consume exactly one newline; a blank line between the
+        // comment and the string disqualifies it as a language annotation.
+        match self.peek() {
+            Some('\n') => {
+                self.advance();
+            }
+            Some('\r') => {
+                self.advance();
+                if self.peek() == Some('\n') {
+                    self.advance();
+                }
+            }
+            _ => {}
         }
+        let _ = self.skip_hspace();
 
         let result = matches!(
             (self.peek(), self.peek_ahead(1)),
