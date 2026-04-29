@@ -77,3 +77,10 @@ fn test_empty_container_with_comment_idempotent() {
     test_ir_format("{ x = { /* foo */ }; }");
     test_ir_format("{ x = [\n# foo\n]; }");
 }
+
+/// Regression test: comments after the last attr in a parameter set must be
+/// nested like comments between attrs (nixfmt 0f6eb2b).
+#[test]
+fn test_param_set_trailing_comment_nesting() {
+    test_ir_format("{ a,\n# c\n}: x");
+}

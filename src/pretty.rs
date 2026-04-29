@@ -1530,7 +1530,12 @@ impl Pretty for Parameter {
                         push_sep_by(inner, &sep_doc, attr_docs);
                     });
                     doc.push(sep_after);
-                    close.pretty(doc);
+                    push_nested(doc, |inner| close.pre_trivia.pretty(inner));
+                    Ann {
+                        pre_trivia: Trivia(vec![]),
+                        ..close.clone()
+                    }
+                    .pretty(doc);
                 });
             }
             Parameter::Context(left, at, right) => {
