@@ -855,10 +855,7 @@ type LayoutState = (usize, Vec<(usize, usize)>);
 
 /// Main layout algorithm
 fn layout_greedy(target_width: usize, indent_width: usize, doc: Doc) -> String {
-    // Wrap in a top-level group so fixup can hoist leading/trailing trivia out
-    // of it the same way it does for any other group; Haskell only runs fixup
-    // once, on the unwrapped doc, but the extra wrapper costs one group node.
-    let doc = fixup(vec![DocE::Group(GroupAnn::RegularG, doc)]);
+    let doc = vec![DocE::Group(GroupAnn::RegularG, fixup(doc))];
 
     let mut state: LayoutState = (0, vec![(0, 0)]);
     let mut result = String::new();
@@ -890,6 +887,7 @@ fn render_doc(
         let needs_rest = match elem {
             DocE::Group(_, _) => true,
             DocE::Spacing(Spacing::Softbreak | Spacing::Softspace) => state.0 != 0,
+            DocE::Text(_, _, TextAnn::TrailingComment, _) => state.0 == 2,
             _ => false,
         };
         if needs_rest {
@@ -916,15 +914,24 @@ fn render_elem(
     let needs_indent = *cc == 0;
 
     match elem {
+        // `goOne` special case: shift a trailing comment by one column so the
+        // re-parser associates it with the same opener token (idempotency).
+        DocE::Text(_, _, TextAnn::TrailingComment, t)
+            if *cc == 2 && {
+                let line_nl = state.1.last().map(|(_, l)| *l).unwrap_or(0);
+                next_indent(lookahead).0 > line_nl
+            } =>
+        {
+            let (cc, _) = state;
+            *cc += 1 + text_width(t);
+            out.push(' ');
+            out.push_str(t);
+        }
+
         DocE::Text(nl, off, _ann, t) => render_text(out, *nl, *off, t, state, iw),
 
-        DocE::Spacing(sp) if needs_indent => {
-            // When cc == 0, drop all spacings except hardspace (matches nixfmt)
-            if *sp == Spacing::Hardspace {
-                *cc += 1;
-                out.push(' ');
-            }
-        }
+        // At start of line drop any spacing; the next Text emits indentation.
+        DocE::Spacing(_) if needs_indent => {}
 
         DocE::Spacing(sp) => match sp {
             Spacing::Break | Spacing::Space | Spacing::Hardline => {
@@ -1018,6 +1025,11 @@ fn try_render_group(
     tw: usize,
     iw: usize,
 ) -> Option<(String, LayoutState)> {
+    // Mirrors `goGroup` in Nixfmt/Predoc.hs.
+    if grp.is_empty() {
+        return Some((String::new(), state.clone()));
+    }
+
     let (cc, indents) = state;
 
     if *cc == 0 {
@@ -1033,9 +1045,9 @@ fn try_render_group(
         };
 
         let (nl, off) = next_indent(&[grp]);
-        // Haskell `goGroup` (cc == 0): the available width is `tw - firstLineWidth rest`;
-        // the pending indentation is *not* subtracted here. This intentionally lets the
-        // first compact line after a break overshoot by the indent, matching the
+        // Haskell `goGroup` (cc == 0): the budget is `tw - firstLineWidth rest`;
+        // the pending indentation is *not* subtracted here, so a compact group
+        // at the start of a line may overshoot by its indent. This matches the
         // reference layout engine exactly.
         let last_line_nl = indents.last().map(|(_, l)| *l).unwrap_or(0);
         let line_nl = last_line_nl + if nl > last_line_nl { iw } else { 0 };
@@ -1045,8 +1057,8 @@ fn try_render_group(
             0
         };
 
-        let target_width = tw.saturating_sub(first_line_width(lookahead));
-        fits(will_increase as isize, target_width as isize, grp).map(|t| {
+        let budget = tw as isize - first_line_width(lookahead) as isize;
+        fits(will_increase as isize, budget, grp).map(|t| {
             let mut new_state = state.clone();
             let mut rendered = String::with_capacity(t.len() + 8);
             render_text(&mut rendered, nl, off, &t, &mut new_state, iw);
@@ -1060,11 +1072,8 @@ fn try_render_group(
             0
         };
 
-        let target_width = tw
-            .saturating_sub(*cc)
-            .saturating_sub(first_line_width(lookahead));
-        let new_cc = *cc;
-        fits(will_increase - new_cc as isize, target_width as isize, grp).map(|t| {
+        let budget = tw as isize - *cc as isize - first_line_width(lookahead) as isize;
+        fits(will_increase - *cc as isize, budget, grp).map(|t| {
             let mut new_state = state.clone();
             new_state.0 += text_width(&t);
             (t, new_state)
