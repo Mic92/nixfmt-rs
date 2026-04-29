@@ -352,9 +352,11 @@ pub(crate) fn render_with_config(doc: Doc, config: &RenderConfig) -> String {
     layout_greedy(config.width, config.indent_width, doc)
 }
 
-/// Calculate text width (for i18n support, this would need patching)
+/// Display width of `s`. Haskell `textWidth = Text.length`, i.e. one column
+/// per Unicode scalar; we match that so multi-byte UTF-8 (e.g. `«»`) doesn't
+/// over-count and force spurious line breaks.
 fn text_width(s: &str) -> usize {
-    s.len()
+    s.chars().count()
 }
 
 /// Check if element is hard spacing (always rendered as-is)
@@ -604,6 +606,7 @@ pub(crate) fn fixup(doc: Doc) -> Doc {
 /// double-counted against `c`.
 fn fits(mut ni: isize, mut c: isize, chain: &[&[DocE]], out: &mut String) -> Option<usize> {
     let mark = out.len();
+    let mut width = 0usize;
     if c < 0 {
         return None;
     }
@@ -643,6 +646,7 @@ fn fits(mut ni: isize, mut c: isize, chain: &[&[DocE]], out: &mut String) -> Opt
                 Spacing::Softbreak | Spacing::Break => {}
                 Spacing::Softspace | Spacing::Space | Spacing::Hardspace => {
                     out.push(' ');
+                    width += 1;
                     c -= 1;
                     ni -= 1;
                     if c < 0 {
@@ -658,23 +662,29 @@ fn fits(mut ni: isize, mut c: isize, chain: &[&[DocE]], out: &mut String) -> Opt
         }
 
         match elem {
-            None => return Some(out.len() - mark),
+            None => return Some(width),
             Some(DocE::Text(_, _, TextAnn::RegularT, t)) => {
-                let w = text_width(t) as isize;
+                let w = text_width(t);
                 out.push_str(t);
-                c -= w;
-                ni -= w;
+                width += w;
+                c -= w as isize;
+                ni -= w as isize;
                 if c < 0 {
                     out.truncate(mark);
                     return None;
                 }
             }
-            Some(DocE::Text(_, _, TextAnn::Comment, t)) => out.push_str(t),
+            Some(DocE::Text(_, _, TextAnn::Comment, t)) => {
+                out.push_str(t);
+                width += text_width(t);
+            }
             Some(DocE::Text(_, _, TextAnn::TrailingComment, t)) => {
                 if ni == 0 {
                     out.push(' ');
+                    width += 1;
                 }
                 out.push_str(t);
+                width += text_width(t);
             }
             Some(DocE::Text(_, _, TextAnn::Trailing, _)) => {}
             Some(DocE::Spacing(_) | DocE::Group(_, _)) => unreachable!(),

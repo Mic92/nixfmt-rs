@@ -3,7 +3,7 @@ use crate::types::*;
 
 use super::app::push_pretty_app;
 use super::op::push_pretty_operation;
-use super::term::push_pretty_term_wide;
+use super::term::{push_pretty_term, push_pretty_term_wide};
 use super::util::{
     Width, has_trivia, is_lone_ann, items_has_only_comments, split_paren_trivia,
     term_first_token_has_pre_trivia,
@@ -67,7 +67,7 @@ pub(super) fn push_absorb_expr(doc: &mut Doc, width: Width, expr: &Expression) {
     match expr {
         Expression::Term(t) if is_absorbable_term(t) => match width {
             Width::Wide => push_pretty_term_wide(doc, t),
-            Width::Regular => t.pretty(doc),
+            Width::Regular => push_pretty_term(doc, t),
         },
         // With expression with absorbable body: treat as absorbable term via
         // `prettyWith True`.

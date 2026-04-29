@@ -19,7 +19,10 @@ use app::push_pretty_app;
 use op::push_pretty_operation;
 use stmt::{insert_into_app, pretty_if, pretty_with, push_absorb_abs};
 use string::{push_pretty_indented_string, push_pretty_simple_string};
-use term::{push_pretty_items, push_pretty_parenthesized, push_pretty_set, push_pretty_term_list};
+use term::{
+    push_pretty_items, push_pretty_parenthesized, push_pretty_set, push_pretty_term_list,
+    push_pretty_term_wide,
+};
 use util::{Width, is_simple_selector, move_trailing_comment_up};
 
 impl Pretty for TrailingComment {
@@ -470,6 +473,14 @@ impl Pretty for Expression {
                 param.pretty(doc);
                 colon.pretty(doc);
                 doc.push(line());
+                // Haskell `Abstraction` (set-param) clause: absorbable body
+                // gets `group (prettyTermWide t)`.
+                if let Expression::Term(t) = &**body {
+                    if is_absorbable_term(t) {
+                        push_group(doc, |g| push_pretty_term_wide(g, t));
+                        return;
+                    }
+                }
                 body.pretty(doc);
             }
         }

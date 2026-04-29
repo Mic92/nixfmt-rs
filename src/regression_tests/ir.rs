@@ -171,3 +171,19 @@ fn test_if_else_if_chain() {
 fn test_string_selector_pretty() {
     test_ir_format(r#"x."hello""#);
 }
+
+/// `absorbLast`/`absorbExpr False` must call `prettyTerm`, which (unlike
+/// `instance Pretty Term`) does *not* wrap a `List` in an extra group.
+/// Haskell: `Nixfmt.Pretty.absorbLast` / `absorbExpr`.
+#[test]
+fn test_absorb_uses_pretty_term_for_list() {
+    test_ir_format("f [ a ]");
+    test_ir_format("(x: [ a ])");
+}
+
+/// Set-pattern abstraction with an absorbable body wraps the body in
+/// `group (prettyTermWide t)`. Haskell: `Nixfmt.Pretty` `Abstraction` clause.
+#[test]
+fn test_set_param_abstraction_absorbs_body() {
+    test_ir_format("{ lib }: { a = 1; }");
+}

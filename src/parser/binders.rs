@@ -55,7 +55,28 @@ impl Parser {
 
         let mut selectors = Vec::new();
         while self.is_simple_selector_start() {
+            let span = self.current.span;
             let sel = self.parse_simple_selector()?;
+            // Haskell `simpleSelector interpolationRestricted`: an `inherit`
+            // name written as `${…}` is only accepted when the body is a
+            // plain string literal (`Term (SimpleString _)`).
+            if let SimpleSelector::Interpol(ann) = &sel {
+                let ok = matches!(
+                    &ann.value,
+                    StringPart::Interpolation(w)
+                        if matches!(&w.value, Expression::Term(Term::SimpleString(_)))
+                );
+                if !ok {
+                    return Err(ParseError {
+                        span,
+                        kind: ErrorKind::UnexpectedToken {
+                            expected: vec!["identifier".into(), "string".into()],
+                            found: "interpolation".into(),
+                        },
+                        labels: vec![],
+                    });
+                }
+            }
             selectors.push(sel);
         }
 

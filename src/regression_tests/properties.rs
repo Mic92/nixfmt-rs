@@ -487,3 +487,35 @@ fn formats_to_golden_on_fixture_corpus() {
     // exercised the corpus.
     assert!(checked > 0, "no diff fixtures were checked");
 }
+
+/// Every fixture under `invalid/` must be *rejected* by our parser. These are
+/// inputs the reference `nixfmt` refuses; accepting any of them is a parser
+/// bug (we'd silently produce garbage on bad syntax).
+#[test]
+fn rejects_invalid_fixture_corpus() {
+    let mut files = Vec::new();
+    collect_fixture_nix_files(&fixture_root().join("invalid"), &mut files);
+    files.sort();
+    assert!(!files.is_empty(), "invalid/ fixture corpus missing");
+
+    let mut accepted = Vec::new();
+    for f in &files {
+        let src = std::fs::read_to_string(f).expect("read fixture");
+        if crate::parse(&src).is_ok() {
+            accepted.push(f.clone());
+        }
+    }
+    if !accepted.is_empty() {
+        for f in &accepted {
+            eprintln!("[invalid] wrongly ACCEPTED: {}", f.display());
+        }
+        panic!(
+            "{} invalid fixture(s) were accepted (should be parse errors)",
+            accepted.len()
+        );
+    }
+    eprintln!(
+        "[invalid] all {} fixture(s) correctly rejected",
+        files.len()
+    );
+}

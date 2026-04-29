@@ -2,7 +2,7 @@ use crate::predoc::*;
 use crate::types::*;
 
 use super::absorb::{is_absorbable_term, push_absorb_paren};
-use super::term::{push_pretty_term_wide, push_render_list};
+use super::term::{push_pretty_term, push_pretty_term_wide, push_render_list};
 use super::util::{has_trivia, is_simple_expression, is_simple_term, move_trailing_comment_up};
 
 /// `absorbInner` from Pretty.hs: short lists of simple terms get a soft `line`
@@ -246,8 +246,11 @@ fn push_absorb_app(doc: &mut Doc, expr: &Expression, indent_function: bool, comm
 fn push_absorb_last(doc: &mut Doc, arg: &Expression) {
     match arg {
         Expression::Term(t) if is_absorbable_term(t) => {
+            // Haskell: `group' Priority $ nest $ prettyTerm t`. `prettyTerm`
+            // (unlike `instance Pretty Term`) does *not* wrap a `List` in an
+            // extra group.
             push_group_ann(doc, GroupAnn::Priority, |g| {
-                push_nested(g, |n| t.pretty(n));
+                push_nested(g, |n| push_pretty_term(n, t));
             });
         }
         // Parenthesised single-ID-parameter abstraction with absorbable body.

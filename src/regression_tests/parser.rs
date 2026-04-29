@@ -584,3 +584,12 @@ fn regression_non_utf8_input() {
         "Parser should handle Unicode replacement character"
     );
 }
+
+/// `inherit` names written as `${…}` are only valid when the body is a plain
+/// string literal. Haskell: `Nixfmt.Parser.interpolationRestricted`.
+/// Rejection cases are covered by `rejects_invalid_fixture_corpus`.
+#[test]
+fn regression_inherit_interpolation_restricted() {
+    assert!(crate::parse(r#"{ inherit ${"ok"}; }"#).is_ok());
+    assert!(crate::parse(r#"{ inherit ${bar}; }"#).is_err());
+}

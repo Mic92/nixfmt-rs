@@ -283,3 +283,23 @@ fn format_interp_leading_trivia_preserved() {
     test_format("{ ${ # c\nx } = 1; }");
     test_format("a.${ # c\nx }");
 }
+
+/// Layout width must count Unicode scalars, not UTF-8 bytes, so multi-byte
+/// glyphs like `«»` don't push a line over the 100-column budget.
+/// Haskell: `Nixfmt.Predoc.textWidth` = `Text.length`.
+/// Reproduces: nixpkgs `pkgs/stdenv/generic/check-meta.nix`.
+#[test]
+fn format_text_width_counts_chars_not_bytes() {
+    test_format(
+        "{\n  getName =\n    attrs: attrs.name or \"${attrs.pname or \"\u{ab}name-missing\u{bb}\"}-${attrs.version or \"\u{ab}version-missing\u{bb}\"}\";\n}\n",
+    );
+}
+
+/// An empty set whose `{` carries pre-trivia (so the LoneAnn fast path is
+/// skipped) must still honour the source line break between `{` and `}`.
+/// Haskell: `Nixfmt.Pretty.prettySet` second clause, `sep` condition.
+/// Reproduces: nixpkgs `nixos/modules/system/service/systemd/user.nix`.
+#[test]
+fn format_empty_set_with_pretrivia_keeps_linebreak() {
+    test_format("# c\n{\n}\n");
+}
