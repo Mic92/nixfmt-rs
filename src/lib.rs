@@ -72,22 +72,10 @@ pub fn format_error(source: &str, filename: Option<&str>, error: &ParseError) ->
 
 // Include test modules
 #[cfg(test)]
-mod parameter_tests;
-
-#[cfg(test)]
-mod operator_associativity_test;
-
-#[cfg(test)]
-mod string_path_tests;
-
-#[cfg(test)]
 mod ast_format_tests;
 
 #[cfg(test)]
 mod ir_format_tests;
-
-#[cfg(test)]
-mod coverage_test;
 
 #[cfg(test)]
 mod regression_tests;

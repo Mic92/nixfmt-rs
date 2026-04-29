@@ -411,6 +411,159 @@ fn regression_indented_string_to_simple() {
     test_ast_format(r"''back\slash''");
 }
 
+// ============================================================================
+// Migrated from legacy hand-written unit tests (parser/tests.rs,
+// string_path_tests.rs, parameter_tests.rs, operator_associativity_test.rs,
+// coverage_test.rs). Kept only inputs not already covered above or in
+// ast_format_tests.rs.
+// ============================================================================
+
+#[test]
+fn regression_empty_simple_string() {
+    test_ast_format(r#""""#);
+}
+
+#[test]
+fn regression_string_multiple_interpolations() {
+    test_ast_format(r#""${a} and ${b}""#);
+}
+
+#[test]
+fn regression_string_dollar_dollar() {
+    test_ast_format(r#""$$test""#);
+}
+
+#[test]
+fn regression_empty_indented_string() {
+    test_ast_format("''''");
+}
+
+#[test]
+fn regression_indented_string_escape_sequences() {
+    test_ast_format(r"''test ''$ and ''' and ''\ ''");
+}
+
+#[test]
+fn regression_path_relative_dotdot() {
+    test_ast_format("../foo");
+}
+
+#[test]
+fn regression_path_with_interpolation() {
+    test_ast_format("./foo/${bar}/baz");
+}
+
+#[test]
+fn regression_subtraction_not_application() {
+    // `f -5` must parse as subtraction, not `f(-5)`
+    test_ast_format("f -5");
+}
+
+#[test]
+fn regression_application_with_parenthesized_negation() {
+    test_ast_format("f (-5)");
+}
+
+#[test]
+fn regression_inherit_multiple_names() {
+    test_ast_format("{ inherit pkgs lib stdenv; }");
+}
+
+#[test]
+fn regression_concat_right_associative() {
+    test_ast_format("[1] ++ [2] ++ [3]");
+}
+
+#[test]
+fn regression_update_right_associative() {
+    test_ast_format("{a=1;} // {b=2;} // {c=3;}");
+}
+
+#[test]
+fn regression_plus_right_associative() {
+    test_ast_format("1 + 2 + 3");
+}
+
+#[test]
+fn regression_minus_left_associative() {
+    test_ast_format("1 - 2 - 3");
+}
+
+#[test]
+fn regression_empty_set_parameter() {
+    test_ast_format("{}: 42");
+}
+
+#[test]
+fn regression_pipe_forward_operator() {
+    test_ast_format("a |> b");
+}
+
+#[test]
+fn regression_pipe_backward_operator() {
+    test_ast_format("a <| b");
+}
+
+#[test]
+fn regression_member_check_on_operation() {
+    test_ast_format("(x + y) ? foo");
+}
+
+#[test]
+fn regression_crlf_between_tokens() {
+    test_ast_format("x\r\n+\r\ny");
+}
+
+#[test]
+fn regression_at_without_colon_error() {
+    let err = crate::parse("x @ y").unwrap_err();
+    assert!(
+        err.to_string()
+            .contains("@ is only valid in lambda parameters")
+    );
+}
+
+#[test]
+fn regression_single_ampersand_error() {
+    let err = crate::parse("a & b").unwrap_err();
+    assert!(err.to_string().contains("expected '&&', found '&'"));
+}
+
+#[test]
+fn regression_single_pipe_error() {
+    let err = crate::parse("a | b").unwrap_err();
+    assert!(
+        err.to_string()
+            .contains("expected one of '||', '|>', found '|'")
+    );
+}
+
+#[test]
+fn regression_ellipsis_without_colon_error() {
+    let err = crate::parse("{ ... }").unwrap_err();
+    assert!(
+        err.to_string()
+            .contains("{ ... } must be followed by ':' or '@'")
+    );
+}
+
+#[test]
+fn regression_set_parameter_without_colon_error() {
+    assert!(crate::parse("{ x, y }").is_err());
+}
+
+#[test]
+fn regression_single_dollar_error() {
+    let err = crate::parse("$x").unwrap_err().to_string();
+    assert!(err.contains("unexpected '$'") || err.contains("expected '${'"));
+}
+
+#[test]
+fn regression_unexpected_character_error() {
+    let err = crate::parse("x ^ y").unwrap_err().to_string();
+    assert!(err.contains("unexpected character") || err.contains("'^'"));
+}
+
 #[test]
 fn regression_non_utf8_input() {
     // Parser should handle non-UTF-8 input gracefully with an error, not panic
