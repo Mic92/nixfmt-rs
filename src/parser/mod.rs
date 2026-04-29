@@ -693,13 +693,10 @@ impl Parser {
             });
         }
 
-        // Check for 'or' default
-        // The 'or' operator is syntactically allowed on any term,
-        // but semantically only makes sense with selectors (e.g., `foo.bar or default`).
-        // When there are no selectors, nixfmt parses and then discards the 'or' clause.
-        // This makes sense: `fold or []` means "lookup fold, use [] if not found",
-        // but simple variable lookups either succeed or error - there's no "not found" case.
-        let or_default = if self.is_or_token() {
+        // `or` is only the selection-default operator after at least one
+        // selector; otherwise it is the (deprecated) identifier `or` and
+        // must be left for the application parser.
+        let or_default = if !selectors.is_empty() && self.is_or_token() {
             let saved_state = self.save_state();
 
             let mut or_tok = self.take_current();
@@ -720,12 +717,10 @@ impl Parser {
             None
         };
 
-        // Return Selection only if we have selectors
-        // If there are no selectors, discard any 'or' default (matching nixfmt behavior)
-        if !selectors.is_empty() {
-            Ok(Term::Selection(Box::new(base_term), selectors, or_default))
-        } else {
+        if selectors.is_empty() && or_default.is_none() {
             Ok(base_term)
+        } else {
+            Ok(Term::Selection(Box::new(base_term), selectors, or_default))
         }
     }
 

@@ -340,10 +340,15 @@ fn regression_crlf_line_endings() {
 
 #[test]
 fn regression_or_operator_with_application() {
-    // The `or` operator in Nix is binary and has lower precedence than function application
-    // `fold or []` should parse as "fold or []" (using the or operator), not as "fold(or)([])"
-    // From nix/tests/functional/lang/eval-okay-attrs5.nix line 20
-    test_ast_format("(fold or [] [true false false])");
+    // `or` after a non-selection term is the (deprecated) identifier `or`,
+    // not the selection-default operator. Upstream Haskell nixfmt silently
+    // drops the `or <term>` clause here; we deliberately do not.
+    // From nix/tests/functional/lang/eval-okay-attrs5.nix line 20.
+    let out = crate::format("(fold or [] [true false false])").unwrap();
+    assert!(
+        out.contains("or") && out.contains("[ ]"),
+        "`or [ ]` must not be dropped, got: {out}"
+    );
 }
 
 #[test]
