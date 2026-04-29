@@ -350,3 +350,29 @@ fn test_paren_inner_arg_unexpanded() {
     // is flattened into the surrounding hardspace-separated token stream
     test_ir_format("f (a b) c");
 }
+
+#[test]
+fn test_param_trailing_comment_after_comma() {
+    test_ir_format("{ a ? false, # c\n b }: a");
+}
+
+#[test]
+fn test_param_trailing_comment_last_attr() {
+    test_ir_format("{ a, # c\n b ? 1, # d\n}: a");
+}
+
+#[test]
+fn test_param_trailing_comment_before_comma() {
+    test_ir_format("{ a # c\n, b }: a");
+}
+
+#[test]
+fn test_param_trailing_comment_on_default_before_comma() {
+    test_ir_format("{ a ? 1 # c\n, b }: a");
+}
+
+#[test]
+fn test_param_comma_pretrivia_moves_to_next() {
+    test_ir_format("{ a\n# comment\n, b }: a");
+    test_ir_format("{ a\n# comment\n, ... }: a");
+}

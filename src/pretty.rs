@@ -1714,6 +1714,112 @@ impl Pretty for ParamAttr {
     }
 }
 
+/// Mirrors `mapLastToken'` in Nixfmt/Types.hs, specialised to taking the
+/// trailing comment off the last leaf of an expression.
+fn take_last_trail_comment_expr(expr: &mut Expression) -> Option<TrailingComment> {
+    fn sel(s: &mut Selector) -> Option<TrailingComment> {
+        match &mut s.selector {
+            SimpleSelector::ID(l) => l.trail_comment.take(),
+            SimpleSelector::Interpol(l) => l.trail_comment.take(),
+            SimpleSelector::String(l) => l.trail_comment.take(),
+        }
+    }
+    fn term(t: &mut Term) -> Option<TrailingComment> {
+        match t {
+            Term::Token(l) => l.trail_comment.take(),
+            Term::SimpleString(l) => l.trail_comment.take(),
+            Term::IndentedString(l) => l.trail_comment.take(),
+            Term::Path(l) => l.trail_comment.take(),
+            Term::List(_, _, close) => close.trail_comment.take(),
+            Term::Set(_, _, _, close) => close.trail_comment.take(),
+            Term::Selection(_, _, Some((_, def))) => term(def),
+            Term::Selection(inner, sels, None) => match sels.last_mut() {
+                Some(last) => sel(last),
+                None => term(inner),
+            },
+            Term::Parenthesized(_, _, close) => close.trail_comment.take(),
+        }
+    }
+    match expr {
+        Expression::Term(t) => term(t),
+        Expression::With(_, _, _, body)
+        | Expression::Let(_, _, _, body)
+        | Expression::Assert(_, _, _, body)
+        | Expression::If(_, _, _, _, _, body)
+        | Expression::Abstraction(_, _, body)
+        | Expression::Application(_, body)
+        | Expression::Operation(_, _, body)
+        | Expression::Negation(_, body)
+        | Expression::Inversion(_, body) => take_last_trail_comment_expr(body),
+        Expression::MemberCheck(_, qmark, sels) => match sels.last_mut() {
+            Some(last) => sel(last),
+            None => qmark.trail_comment.take(),
+        },
+    }
+}
+
+/// Mirrors `moveParamAttrComment` in Nixfmt/Pretty.hs.
+fn move_param_attr_comment(attr: ParamAttr) -> ParamAttr {
+    match attr {
+        ParamAttr::ParamAttr(mut name, default, Some(mut comma))
+            if default.is_none() && name.trail_comment.is_some() && is_lone_ann(&comma) =>
+        {
+            comma.trail_comment = name.trail_comment.take();
+            ParamAttr::ParamAttr(name, default, Some(comma))
+        }
+        ParamAttr::ParamAttr(name, mut default, Some(mut comma))
+            if default.is_some() && is_lone_ann(&comma) =>
+        {
+            if let Some((_, def)) = default.as_mut() {
+                comma.trail_comment = take_last_trail_comment_expr(def);
+            }
+            ParamAttr::ParamAttr(name, default, Some(comma))
+        }
+        other => other,
+    }
+}
+
+/// Mirrors `moveParamsComments` in Nixfmt/Pretty.hs.
+fn move_params_comments(attrs: &[ParamAttr]) -> Vec<ParamAttr> {
+    let mut work: Vec<ParamAttr> = attrs.to_vec();
+    let mut out = Vec::with_capacity(work.len());
+    let mut i = 0;
+    while i < work.len() {
+        let is_last = i + 1 == work.len();
+        match &mut work[i] {
+            ParamAttr::ParamAttr(_, _, Some(comma))
+                if comma.trail_comment.is_none() && !is_last =>
+            {
+                let trivia = std::mem::take(&mut comma.pre_trivia);
+                match &mut work[i + 1] {
+                    ParamAttr::ParamAttr(name, _, _) => {
+                        let mut merged = trivia.0;
+                        merged.extend(std::mem::take(&mut name.pre_trivia).0);
+                        name.pre_trivia = Trivia(merged);
+                    }
+                    ParamAttr::ParamEllipsis(ell) => {
+                        let mut merged = trivia.0;
+                        merged.extend(std::mem::take(&mut ell.pre_trivia).0);
+                        ell.pre_trivia = Trivia(merged);
+                    }
+                }
+            }
+            ParamAttr::ParamAttr(name, _, comma @ None) if is_last => {
+                *comma = Some(Ann {
+                    pre_trivia: Trivia::new(),
+                    value: Token::TComma,
+                    span: name.span,
+                    trail_comment: None,
+                });
+            }
+            _ => {}
+        }
+        out.push(work[i].clone());
+        i += 1;
+    }
+    out
+}
+
 fn param_attr_without_default(attr: &ParamAttr) -> bool {
     matches!(attr, ParamAttr::ParamAttr(_, default, _) if default.is_none())
 }
@@ -1743,7 +1849,13 @@ fn parameter_separator(open: &Leaf, attrs: &[ParamAttr], close: &Leaf) -> DocE {
     }
 }
 
+/// Mirrors `handleTrailingComma` in Nixfmt/Pretty.hs.
 fn render_param_attrs(attrs: &[ParamAttr]) -> Vec<Doc> {
+    let attrs: Vec<ParamAttr> = move_params_comments(attrs)
+        .into_iter()
+        .map(move_param_attr_comment)
+        .collect();
+
     attrs
         .iter()
         .enumerate()
@@ -1752,10 +1864,13 @@ fn render_param_attrs(attrs: &[ParamAttr]) -> Vec<Doc> {
             let is_last = idx + 1 == attrs.len();
 
             if is_last {
-                if let ParamAttr::ParamAttr(name, default, _) = attr {
-                    ParamAttr::ParamAttr(name.clone(), default.clone(), None).pretty(&mut rendered);
-                    push_trailing(&mut rendered, ",");
-                    return rendered;
+                if let ParamAttr::ParamAttr(name, default, Some(comma)) = attr {
+                    if is_lone_ann(comma) {
+                        ParamAttr::ParamAttr(name.clone(), default.clone(), None)
+                            .pretty(&mut rendered);
+                        push_trailing(&mut rendered, ",");
+                        return rendered;
+                    }
                 }
             }
 

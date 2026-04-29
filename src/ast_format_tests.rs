@@ -1,6 +1,6 @@
 //! AST formatting tests - compare our output with nixfmt --ast
 
-use crate::tests_common::test_ast_format;
+use crate::tests_common::{test_ast_format, test_format};
 
 // ============================================================================
 // Basic Literals - Tests Token formatting
@@ -454,4 +454,30 @@ badFiles=$(find ${filteredHead})
 fn test_parameter_patterns() {
     test_ast_format("{a ? 1, b, ...}: a + b");
     test_ast_format("args@{foo ? \"x\", bar, baz, ...}: foo");
+}
+
+#[test]
+fn test_param_trailing_comment_after_comma() {
+    test_format("{ a ? false, # c\n b }: a");
+}
+
+#[test]
+fn test_param_trailing_comment_last_attr() {
+    test_format("{ a, # c\n b ? 1, # d\n}: a");
+}
+
+#[test]
+fn test_param_trailing_comment_before_comma() {
+    test_format("{ a # c\n, b }: a");
+}
+
+#[test]
+fn test_param_trailing_comment_on_default_before_comma() {
+    test_format("{ a ? 1 # c\n, b }: a");
+}
+
+#[test]
+fn test_param_comma_pretrivia_moves_to_next() {
+    test_format("{ a\n# comment\n, b }: a");
+    test_format("{ a\n# comment\n, ... }: a");
 }
