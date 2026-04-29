@@ -3,20 +3,9 @@
 use crate::tests_common::test_ast_format;
 
 #[test]
-fn regression_string_selector() {
-    // Minimal reproducer: x."y"
+fn regression_string_interpolation_selectors() {
     test_ast_format(r#"x."y""#);
-}
-
-#[test]
-fn regression_string_selector_interpolation_literal() {
-    // Minimal reproducer: x.${"y"}
     test_ast_format(r#"x.${"y"}"#);
-}
-
-#[test]
-fn regression_string_selector_interpolation_expr() {
-    // Minimal reproducer: x.${foo}
     test_ast_format(r#"x.${foo}"#);
 }
 
@@ -41,11 +30,13 @@ fn regression_or_operator_deprecated_syntax() {
 }
 
 #[test]
-fn regression_language_annotation_blank_line() {
+fn regression_language_annotation() {
     // nixfmt a061bd5: a `/* lang */` block comment is only a language
     // annotation when at most one newline separates it from the string.
     test_ast_format("/* python */\n\n\"x\"");
     test_ast_format("/* python */\n\"x\"");
+    // LanguageAnnotation must be wrapped in brackets in --ast output.
+    test_ast_format("/* python */ '' ''");
 }
 
 #[test]
@@ -58,20 +49,19 @@ fn regression_chained_prefix_operators() {
 }
 
 #[test]
-fn regression_float_no_leading_digit() {
-    // Ensure parser accepts `.5` like nixfmt
+fn regression_float_literals() {
+    // Float lexer edge cases (also covered by fixtures/nixfmt/correct/numbers.nix
+    // for idempotency, pinned here for --ast parity).
     test_ast_format(".5");
+    test_ast_format("5.");
+    test_ast_format("1.0e2");
+    test_ast_format(".5e2");
+    test_ast_format("00.5");
 }
 
 #[test]
-fn regression_attrset_string_key() {
-    // Minimal reproducer: {"a" = 1;}
+fn regression_attrset_string_interpolated_key() {
     test_ast_format(r#"{"a" = 1;}"#);
-}
-
-#[test]
-fn regression_attrset_interpolated_key() {
-    // Minimal reproducer: {${"a"} = 1;}
     test_ast_format(r#"{${"a"} = 1;}"#);
 }
 
@@ -97,20 +87,8 @@ fn regression_import_relative_path() {
 }
 
 #[test]
-fn regression_context_pattern() {
-    // Minimal reproducer: {...}@args: args
-    test_ast_format("{...}@args: args");
-}
-
-#[test]
-fn regression_let_string_key() {
-    // Minimal reproducer: let "foo" = 1; in foo
+fn regression_let_string_interpolated_key() {
     test_ast_format(r#"let "foo" = 1; in foo"#);
-}
-
-#[test]
-fn regression_let_interpolated_key() {
-    // Minimal reproducer: let ${"foo"} = 1; in foo
     test_ast_format(r#"let ${"foo"} = 1; in foo"#);
 }
 
@@ -127,31 +105,6 @@ fn regression_comparison_chain_should_fail() {
 fn regression_import_path_application() {
     // `import ./foo.nix self` should parse and match nixfmt
     test_ast_format("import ./foo.nix self");
-}
-
-#[test]
-fn regression_float_trailing_dot() {
-    test_ast_format("5.");
-}
-
-#[test]
-fn regression_float_with_exponent() {
-    test_ast_format("1.0e2");
-}
-
-#[test]
-fn regression_float_leading_dot_exponent() {
-    test_ast_format(".5e2");
-}
-
-#[test]
-fn regression_float_double_zero_prefix() {
-    test_ast_format("00.5");
-}
-
-#[test]
-fn regression_attrset_trailing_empty_line() {
-    test_ast_format("{\n  foo = 1;\n\n}\n");
 }
 
 #[test]
@@ -246,9 +199,12 @@ fn regression_chained_string_concatenation() {
 }
 
 #[test]
-fn regression_empty_set_with_comment() {
-    // Comments inside empty sets should be separate Comments items, not in preTrivia
+fn regression_empty_container_with_comment() {
+    // Comments inside otherwise-empty sets / lists / let-bindings should be
+    // separate Comments items, not folded into preTrivia of the close token.
     test_ast_format("{\n  # comment\n}");
+    test_ast_format("[\n  # comment\n]");
+    test_ast_format("let\n  # comment\nin x");
 }
 
 #[test]
@@ -288,10 +244,10 @@ fn regression_dot_selector_on_newline() {
 }
 
 #[test]
-fn regression_empty_set_context_parameter() {
-    // Context parameter with empty set: { }@args: body
+fn regression_context_parameter_variants() {
     // From nixpkgs/lib/generators.nix line 729
     test_ast_format("{ }@args: args");
+    test_ast_format("{...}@args: args");
 }
 
 #[test]
@@ -324,10 +280,6 @@ fn regression_unicode_escape_in_string() {
     // Zero-width space (U+200B) should be displayed as \x200b in AST output
     // From nixpkgs/pkgs/by-name/li/libcaca/package.nix line 68
     test_ast_format("\"famous \u{200B}AAlib library\"");
-}
-
-#[test]
-fn regression_soft_hyphen_escape() {
     // Soft hyphen (U+00AD) is a Format character (Cf category) and should be escaped as \xad
     // From nixpkgs/pkgs/tools/graphics/diagrams-builder/default.nix line 10
     test_ast_format("\"\u{00AD}~~~\"");
@@ -363,10 +315,11 @@ fn regression_decorated_multiline_comment() {
 }
 
 #[test]
-fn regression_trailing_empty_line_in_let() {
+fn regression_trailing_empty_line_before_close() {
     // Empty line after last item but before closing brace should be preserved in AST
     // From nix/tests/functional/lang/parse-fail-dup-attrs-2.nix
     test_ast_format("let {\n  x = 1;\n  \n}\n");
+    test_ast_format("{\n  foo = 1;\n\n}\n");
 }
 
 #[test]
@@ -449,41 +402,13 @@ fn regression_pattern_shadows_formal() {
 }
 
 #[test]
-fn regression_language_annotation_ast_format() {
-    // Regression test for LanguageAnnotation AST formatting
-    // Ensure LanguageAnnotation is wrapped in brackets in the AST output
-    // Input: /* python */ '' ''
-    // Expected AST excerpt: { preTrivia = [ LanguageAnnotation "python" ], ... }
-    test_ast_format("/* python */ '' ''");
-}
-
-#[test]
 fn regression_indented_string_to_simple() {
     // nixfmt 1.2.0: single-line indented strings without `"` or `\` become SimpleString,
     // with `''$` -> `\$` and `'''` -> `''` escape conversion.
     test_ast_format("''hello ${x} '''quoted''' ''$var''");
-}
-
-#[test]
-fn regression_indented_string_kept_with_quote() {
+    // Kept as IndentedString when content contains `"` or `\`.
     test_ast_format(r#"''has"quote''"#);
-}
-
-#[test]
-fn regression_indented_string_kept_with_backslash() {
     test_ast_format(r"''back\slash''");
-}
-
-#[test]
-fn regression_empty_list_with_comment() {
-    // Comments inside empty lists should be separate Comments items, not in preTrivia
-    test_ast_format("[\n  # comment\n]");
-}
-
-#[test]
-fn regression_empty_let_with_comment() {
-    // Comments inside empty let bindings should be separate Comments items
-    test_ast_format("let\n  # comment\nin x");
 }
 
 #[test]
