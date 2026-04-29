@@ -39,6 +39,16 @@ fn format_trailing_comment_ignored_for_width() {
     ));
 }
 
+/// A trailing comment after a one-char token must be shifted one column so
+/// the lexer still classifies it as trailing on reparse (idempotency).
+/// Haskell: `Nixfmt.Predoc.goOne` `TrailingComment` guard.
+#[test]
+fn format_trailing_comment_shift_for_idempotency() {
+    test_format("{ a # b\n= 1; }");
+    test_format("[ # c\n1\n]");
+    test_format("{ b # a\n? # a\nnull\n,}: b");
+}
+
 /// `f (x: { ... })` should absorb the parenthesised abstraction onto the
 /// function line. Haskell: `Nixfmt.Pretty.absorbLast` / `isAbsorbableExpr`.
 #[test]
