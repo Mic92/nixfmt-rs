@@ -8,16 +8,11 @@ use super::context::ErrorContext;
 /// Rich error formatter with source snippets
 pub struct ErrorFormatter<'a> {
     context: &'a ErrorContext<'a>,
-    #[allow(dead_code)]
-    use_color: bool,
 }
 
 impl<'a> ErrorFormatter<'a> {
     pub fn new(context: &'a ErrorContext<'a>) -> Self {
-        Self {
-            context,
-            use_color: false, // TODO: detect terminal support
-        }
+        Self { context }
     }
 
     /// Format a single error
@@ -209,11 +204,6 @@ impl<'a> ErrorFormatter<'a> {
                         indent, expected_str, found
                     )
                     .unwrap();
-                }
-            }
-            ErrorKind::UnknownIdentifier { suggestions, .. } => {
-                if !suggestions.is_empty() {
-                    writeln!(out, "{}= help: did you mean '{}'?", indent, suggestions[0]).unwrap();
                 }
             }
             ErrorKind::InvalidSyntax {

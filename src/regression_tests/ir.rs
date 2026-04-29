@@ -188,3 +188,10 @@ fn test_if_in_set() {
 fn test_if_else_if_chain() {
     test_ir_format("if c then a else if d then e else f");
 }
+
+/// Regression: string selectors (`x."y"`) must render their actual content,
+/// not a `"..."` placeholder.
+#[test]
+fn test_string_selector_pretty() {
+    test_ir_format(r#"x."hello""#);
+}

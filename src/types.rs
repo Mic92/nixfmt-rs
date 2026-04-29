@@ -38,16 +38,6 @@ impl Span {
             end_line: 1,
         }
     }
-
-    /// Extend this span to include another position
-    pub fn extend_to(self, end: usize) -> Self {
-        Self {
-            start: self.start,
-            end,
-            start_line: self.start_line,
-            end_line: self.end_line,
-        }
-    }
 }
 
 /// Trivia - comments and whitespace
@@ -401,30 +391,6 @@ impl Token {
 }
 
 impl Token {
-    /// Check if this token is an operator that can be used in infix position
-    pub fn is_infix_op(&self) -> bool {
-        matches!(
-            self,
-            Token::TConcat
-                | Token::TMul
-                | Token::TDiv
-                | Token::TPlus
-                | Token::TMinus
-                | Token::TUpdate
-                | Token::TLess
-                | Token::TGreater
-                | Token::TLessEqual
-                | Token::TGreaterEqual
-                | Token::TEqual
-                | Token::TUnequal
-                | Token::TAnd
-                | Token::TOr
-                | Token::TImplies
-                | Token::TPipeForward
-                | Token::TPipeBackward
-        )
-    }
-
     /// Check if this is an update, concat, or plus operator (for special formatting)
     pub fn is_update_concat_plus(&self) -> bool {
         matches!(self, Token::TUpdate | Token::TConcat | Token::TPlus)

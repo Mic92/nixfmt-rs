@@ -289,10 +289,6 @@ impl PrettySimple for StringPart {
             StringPart::Interpolation(_) => false, // Complex argument
         }
     }
-
-    fn has_delimiters(&self) -> bool {
-        false
-    }
 }
 
 /// PrettySimple for Token - constructor applications for data-carrying tokens
@@ -351,10 +347,6 @@ impl PrettySimple for TrailingComment {
                 });
             });
         });
-    }
-
-    fn is_simple(&self) -> bool {
-        false // Constructor with argument = 2 elements in row, thus complex
     }
 
     fn has_delimiters(&self) -> bool {
@@ -508,10 +500,6 @@ impl<A: PrettySimple, B: PrettySimple> PrettySimple for (A, B) {
                 w_inner.write_colored(")", paren_color);
             });
         });
-    }
-
-    fn is_simple(&self) -> bool {
-        false
     }
 
     fn has_delimiters(&self) -> bool {

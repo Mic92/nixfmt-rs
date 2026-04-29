@@ -47,9 +47,6 @@ impl ParseError {
             ErrorKind::MissingToken { token, after } => {
                 format!("missing {} after {}", token, after)
             }
-            ErrorKind::UnknownIdentifier { name, .. } => {
-                format!("unknown identifier '{}'", name)
-            }
             ErrorKind::InvalidSyntax { description, .. } => description.clone(),
             ErrorKind::ChainedComparison {
                 first_op,
@@ -70,21 +67,10 @@ impl ParseError {
             ErrorKind::UnexpectedToken { .. } => Some("E001"),
             ErrorKind::UnclosedDelimiter { .. } => Some("E002"),
             ErrorKind::MissingToken { .. } => Some("E003"),
-            ErrorKind::UnknownIdentifier { .. } => Some("E004"),
             ErrorKind::InvalidSyntax { .. } => Some("E005"),
             ErrorKind::ChainedComparison { .. } => Some("E006"),
             ErrorKind::Message(_) => None,
         }
-    }
-
-    /// Add a secondary label to this error
-    pub fn with_label(mut self, span: Span, message: String, style: LabelStyle) -> Self {
-        self.labels.push(Label {
-            span,
-            message,
-            style,
-        });
-        self
     }
 }
 
@@ -120,12 +106,6 @@ pub enum ErrorKind {
     MissingToken {
         token: String, // "';'"
         after: String, // "attribute definition"
-    },
-
-    /// Unknown identifier with suggestions
-    UnknownIdentifier {
-        name: String,
-        suggestions: Vec<String>, // Levenshtein distance matches
     },
 
     /// Invalid syntax pattern

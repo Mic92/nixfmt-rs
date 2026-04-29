@@ -105,8 +105,6 @@ impl<T: Pretty, U: Pretty> Pretty for (T, U) {
     }
 }
 
-// Helper functions for building documents
-
 /// Push a text element
 pub(crate) fn push_text(doc: &mut Doc, s: impl Into<String>) {
     let s = s.into();
@@ -186,8 +184,6 @@ fn nest_doc(doc: Doc) -> Doc {
         })
         .collect()
 }
-
-// Spacing constructors
 
 /// Line break or nothing (soft)
 pub(crate) fn softline_prime() -> DocE {
@@ -312,8 +308,6 @@ impl Default for RenderConfig {
 pub(crate) fn render_with_config(doc: &Doc, config: &RenderConfig) -> String {
     layout_greedy(config.width, config.indent_width, doc)
 }
-
-// Helper functions
 
 /// Calculate text width (for i18n support, this would need patching)
 fn text_width(s: &str) -> usize {

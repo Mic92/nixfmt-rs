@@ -73,10 +73,6 @@ impl PrettySimple for Spacing {
         !matches!(self, Spacing::Newlines(_))
     }
 
-    fn has_delimiters(&self) -> bool {
-        false
-    }
-
     fn renders_inline_parens(&self) -> bool {
         matches!(self, Spacing::Newlines(_))
     }

@@ -1,7 +1,5 @@
 //! Error context for formatting errors with source snippets
 
-use crate::types::Span;
-
 /// Context needed to format errors with source snippets
 pub struct ErrorContext<'a> {
     /// The source code
@@ -38,13 +36,6 @@ impl<'a> ErrorContext<'a> {
         }
     }
 
-    /// Extract source text for a span
-    pub fn snippet(&self, span: Span) -> &str {
-        let start = span.start.min(self.source.len());
-        let end = span.end.min(self.source.len());
-        &self.source[start..end]
-    }
-
     /// Get line containing offset
     pub fn line_at(&self, offset: usize) -> (usize, &str) {
         let line_idx = line_number(&self.line_starts, offset);
@@ -73,40 +64,6 @@ impl<'a> ErrorContext<'a> {
         let line_text = &self.source[line_start..line_end];
 
         (line_num, line_text)
-    }
-
-    /// Get multiple lines covering a span
-    pub fn lines_for_span(&self, span: Span) -> Vec<(usize, &str)> {
-        let start_line = line_number(&self.line_starts, span.start);
-        let end_line = line_number(&self.line_starts, span.end);
-
-        (start_line..=end_line)
-            .map(|line_idx| {
-                let line_num = line_idx + 1;
-                let line_start = self.line_starts.get(line_idx).copied().unwrap_or(0);
-                let line_end = self
-                    .line_starts
-                    .get(line_idx + 1)
-                    .copied()
-                    .unwrap_or(self.source.len());
-
-                // Trim trailing newline
-                let line_end = if line_end > line_start
-                    && self
-                        .source
-                        .as_bytes()
-                        .get(line_end - 1)
-                        .is_some_and(|&b| b == b'\n')
-                {
-                    line_end - 1
-                } else {
-                    line_end
-                };
-
-                let line_text = &self.source[line_start..line_end];
-                (line_num, line_text)
-            })
-            .collect()
     }
 
     /// Get the line start offset for a given line index

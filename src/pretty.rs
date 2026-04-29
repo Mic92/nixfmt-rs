@@ -5,8 +5,6 @@
 use crate::predoc::*;
 use crate::types::*;
 
-// Helper functions
-
 fn has_trivia<T>(ann: &Ann<T>) -> bool {
     !ann.pre_trivia.0.is_empty() || ann.trail_comment.is_some()
 }
@@ -204,12 +202,10 @@ fn push_absorb_rhs(doc: &mut Doc, expr: &Expression) {
     }
 }
 
-/// Calculate the display width of a text string (simple character count for now)
 fn text_width(s: &str) -> usize {
     s.chars().count()
 }
 
-/// Check if a string contains only whitespace
 fn is_spaces(s: &str) -> bool {
     s.chars().all(|c| c.is_whitespace())
 }
@@ -979,8 +975,6 @@ fn push_pretty_parenthesized(
     });
 }
 
-// Pretty instances
-
 impl Pretty for TrailingComment {
     fn pretty(&self, doc: &mut Doc) {
         doc.push(hardspace());
@@ -1051,7 +1045,6 @@ impl<T: Pretty> Pretty for Ann<T> {
     }
 }
 
-// Pretty for Item - wraps items in groups, passes through comments
 impl<T: Pretty> Pretty for Item<T> {
     fn pretty(&self, doc: &mut Doc) {
         match self {
@@ -1071,9 +1064,7 @@ fn push_pretty_set(
     items: &Items<Binder>,
     close: &Ann<Token>,
 ) {
-    // Empty attribute set
     if items.0.is_empty() && !has_trivia(open) && close.pre_trivia.0.is_empty() {
-        // Pretty print optional `rec` keyword with hardspace
         if let Some(rec) = krec {
             rec.pretty(doc);
             doc.push(hardspace());
@@ -1089,14 +1080,11 @@ fn push_pretty_set(
         return;
     }
 
-    // General set with items
-    // Pretty print optional `rec` keyword with hardspace
     if let Some(rec) = krec {
         rec.pretty(doc);
         doc.push(hardspace());
     }
 
-    // Open brace without trailing comment
     let open_without_trail = Ann {
         pre_trivia: open.pre_trivia.clone(),
         span: open.span,
@@ -1105,18 +1093,15 @@ fn push_pretty_set(
     };
     open_without_trail.pretty(doc);
 
-    // Separator: prefer hardline before close when items start with an empty line
     let starts_with_emptyline = match items.0.first() {
         Some(Item::Comments(trivia)) => trivia.0.iter().any(|t| matches!(t, Trivium::EmptyLine())),
         _ => false,
     };
 
-    // Check if braces are on different lines (matches Pretty.hs:203)
     let braces_on_different_lines = open.span.start_line != close.span.start_line;
 
-    // Separator: use hardline if wide, or when starting with an empty line,
-    // or when braces are on different lines; else use line
-    // This matches Pretty.hs:200-205
+    // Hardline separator forces multi-line layout when the input was already
+    // multi-line or starts with an empty line (Pretty.hs:200-205).
     let sep = if !items.0.is_empty() && (wide || starts_with_emptyline || braces_on_different_lines)
     {
         vec![hardline()]
@@ -1133,8 +1118,7 @@ fn push_pretty_set(
     close.pretty(doc);
 }
 
-/// Format a list of items with interleaved comments
-/// Based on Haskell prettyItems (Pretty.hs:108-120)
+/// Haskell `prettyItems` (Pretty.hs:108-120).
 fn push_pretty_items<T: Pretty>(doc: &mut Doc, items: &Items<T>) {
     push_pretty_items_sep(doc, items, &hardline());
 }
@@ -1237,7 +1221,6 @@ impl Pretty for Binder {
 impl Pretty for Token {
     fn pretty(&self, doc: &mut Doc) {
         use Token::*;
-        // Handle EnvPath separately since it needs formatting
         if let EnvPath(s) = self {
             push_text(doc, format!("<{}>", s));
             return;
@@ -1307,8 +1290,7 @@ impl Pretty for SimpleSelector {
             SimpleSelector::ID(id) => id.pretty(doc),
             SimpleSelector::String(ann) => {
                 ann.pre_trivia.pretty(doc);
-                // TODO: implement prettySimpleString
-                push_text(doc, "\"...\"");
+                push_pretty_simple_string(doc, &ann.value);
                 ann.trail_comment.pretty(doc);
             }
             SimpleSelector::Interpol(interp) => interp.pretty(doc),
@@ -1333,7 +1315,6 @@ impl Pretty for StringPart {
                 let trailing_empty = whole.trailing_trivia.0.is_empty();
                 let value = &whole.value;
 
-                // Check for absorbable term (e.g., sets, lists)
                 let absorbable_term = if trailing_empty {
                     match value {
                         Expression::Term(term) if is_absorbable_term(term) => Some(term),
@@ -1343,7 +1324,6 @@ impl Pretty for StringPart {
                     None
                 };
 
-                // Handle absorbable term: ${ { ... } } or ${ [ ... ] }
                 if let Some(term) = absorbable_term {
                     push_group(doc, |group_doc| {
                         push_text(group_doc, "${");
@@ -1353,7 +1333,6 @@ impl Pretty for StringPart {
                     return;
                 }
 
-                // Handle simple value: ${ x } without trailing trivia
                 if trailing_empty && is_simple_expression(value) {
                     push_text(doc, "${");
                     value.pretty(doc);
@@ -1361,7 +1340,6 @@ impl Pretty for StringPart {
                     return;
                 }
 
-                // Handle complex interpolation with line breaks
                 push_group(doc, |group_doc| {
                     push_text(group_doc, "${");
                     push_nested(group_doc, |nested| {
@@ -1379,7 +1357,8 @@ impl Pretty for StringPart {
 impl Pretty for Vec<StringPart> {
     fn pretty(&self, doc: &mut Doc) {
         match self.as_slice() {
-            // Handle special case: single interpolation with leading whitespace
+            // Single interpolation with leading whitespace: offset by the
+            // leading-space width so wrapped `${ ... }` lines up under the `$`.
             [StringPart::TextPart(pre), StringPart::Interpolation(whole)]
                 if is_spaces(pre) && whole.trailing_trivia.0.is_empty() =>
             {
@@ -1397,7 +1376,6 @@ impl Pretty for Vec<StringPart> {
                     });
                 });
             }
-            // Handle leading TextPart with offset
             [StringPart::TextPart(t), rest @ ..] => {
                 let indentation = text_width(
                     &t.chars()
@@ -1411,7 +1389,6 @@ impl Pretty for Vec<StringPart> {
                     }
                 });
             }
-            // Default: just concatenate
             _ => {
                 push_hcat(doc, self.clone());
             }
@@ -1500,20 +1477,16 @@ impl Pretty for Term {
             Term::Selection(term, selectors, default) => {
                 term.pretty(doc);
 
-                // Add separator based on term type
+                // Separator strength depends on how likely a break before the
+                // `.` chain is desirable.
                 match &**term {
-                    // If it is an ident, keep it all together
                     Term::Token(_) => {}
-                    // If it is a parenthesized expression, maybe add a line break
                     Term::Parenthesized(_, _, _) => doc.push(softline_prime()),
-                    // Otherwise, very likely add a line break
                     _ => doc.push(line_prime()),
                 };
 
-                // Add selectors
                 push_hcat(doc, selectors.clone());
 
-                // Add optional "or default" clause
                 if let Some((or_kw, def)) = default {
                     doc.push(softline());
                     push_nested(doc, |inner| {
@@ -1535,24 +1508,15 @@ impl Pretty for Expression {
                 push_pretty_app(doc, false, &[], false, self);
             }
             Expression::Operation(left, op, right) => {
-                // Special case: absorbable RHS with update/concat/plus operator
-                // Based on Haskell Pretty.hs:665-667:
-                // nest $ group' RegularG $ line <> pretty l <> line <>
-                //   group' Transparent (pretty op <> hardspace <> group' Priority (prettyTermWide t))
+                // `//`, `++`, `+` with an absorbable RHS get a compact layout
+                // (cf. the corresponding clause in `absorbRHS`).
                 if let Expression::Term(t) = &**right {
                     if is_absorbable_term(t) && op.value.is_update_concat_plus() {
-                        // Based on Haskell Pretty.hs:665-667:
-                        // nest $ group' RegularG $ line <> pretty l <> line <>
-                        //   group' Transparent (pretty op <> hardspace <> group' Priority (prettyTermWide t))
-                        // Note: The IR output shows all groups as RegularG, so we use push_group throughout
                         push_group(doc, |inner| {
-                            // Left operand - Lists now wrap themselves in groups automatically
                             left.pretty(inner);
                             inner.push(line());
-                            // Operator and RHS
                             op.pretty(inner);
                             inner.push(hardspace());
-                            // RHS term with nesting - Lists wrap themselves, Sets don't
                             push_nested(inner, |rhs_nested| {
                                 t.pretty(rhs_nested);
                             });
@@ -1561,7 +1525,6 @@ impl Pretty for Expression {
                     }
                 }
 
-                // Default case
                 push_pretty_operation(doc, false, self, op);
             }
             Expression::MemberCheck(expr, question, selectors) => {
@@ -1682,7 +1645,6 @@ impl Pretty for ParamAttr {
                 let make_pretty = |d: &mut Doc| {
                     name.pretty(d);
 
-                    // If there's a default value (? expr)
                     if let Some((qmark, def)) = default.as_ref() {
                         d.push(hardspace());
                         push_nested(d, |inner| {
@@ -1691,7 +1653,6 @@ impl Pretty for ParamAttr {
                         });
                     }
 
-                    // Add optional comma
                     if let Some(comma) = maybe_comma {
                         comma.pretty(d);
                     }
@@ -1800,8 +1761,6 @@ impl Pretty for Parameter {
                 });
             }
             Parameter::Context(left, at, right) => {
-                // Render without spacing - fixup will merge adjacent text elements
-                // This matches nixfmt reference: pretty param1 <> pretty at <> pretty param2
                 left.pretty(doc);
                 at.pretty(doc);
                 right.pretty(doc);
@@ -1812,14 +1771,10 @@ impl Pretty for Parameter {
 
 impl<T: Pretty> Pretty for Whole<T> {
     fn pretty(&self, doc: &mut Doc) {
-        // Wrap the entire content in a group
-        // This matches nixfmt's: pretty (Whole x finalTrivia) = group $ pretty x <> pretty finalTrivia
         push_group(doc, |doc| {
             self.value.pretty(doc);
             self.trailing_trivia.pretty(doc);
         });
-        // Do not force a final Hardline; reference nixfmt IR does not
-        // add a trailing newline at the top level in --ir output.
-        // Keeping parity avoids extra Spacing Hardline in diffs.
+        // No trailing Hardline: reference nixfmt's `--ir` output does not emit one.
     }
 }
