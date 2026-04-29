@@ -67,6 +67,12 @@ fn test_list_rendering() {
     test_ir_format("[ 1 2 ]");
     test_ir_format("[\n1 2\n]");
 }
+/// Regression test: language annotation inside an inner-argument list stays
+/// attached to its string with a hardspace (nixfmt f4bbd8c).
+#[test]
+fn test_inner_arg_list_language_annotation() {
+    test_ir_format(r#"f [ /* bash */ "x" ] y"#);
+}
 
 /// Regression test: empty lists/sets containing only a comment must be
 /// absorbable and rendered with hardlines so formatting is idempotent.
