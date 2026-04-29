@@ -25,6 +25,15 @@ pub(crate) enum ParseTrivium {
     LanguageAnnotation(String),
 }
 
+/// Cursor-only snapshot of the lexer (no heap state).
+#[derive(Clone, Copy)]
+struct LexerPos {
+    pos: usize,
+    byte_pos: usize,
+    line: usize,
+    column: usize,
+}
+
 /// Saved lexer state for backtracking
 #[derive(Clone)]
 pub(crate) struct LexerState {
@@ -49,11 +58,10 @@ pub(crate) struct Lexer {
     pub(crate) trivia_buffer: Trivia,
     pub(crate) recent_newlines: usize,
     pub(crate) recent_hspace: usize,
-    /// Position before last parse_trivia() call, for rewinding
-    trivia_start_pos: Option<usize>,
-    trivia_start_byte_pos: Option<usize>,
-    trivia_start_line: Option<usize>,
-    trivia_start_column: Option<usize>,
+    /// Position before last `parse_trivia()` call, for rewinding.
+    /// Kept as a single value so the four cursor components can never
+    /// drift out of sync (previously four independent `Option`s).
+    trivia_start: Option<LexerPos>,
     /// Scratch buffer reused while collecting `#` comments
     line_comment_buffer: String,
     /// Scratch buffer reused while collecting block comments
@@ -71,10 +79,7 @@ impl Lexer {
             trivia_buffer: Trivia::new(),
             recent_newlines: 0,
             recent_hspace: 0,
-            trivia_start_pos: None,
-            trivia_start_byte_pos: None,
-            trivia_start_line: None,
-            trivia_start_column: None,
+            trivia_start: None,
             line_comment_buffer: String::new(),
             block_comment_buffer: String::new(),
         }
@@ -501,6 +506,26 @@ impl Lexer {
         }
     }
 
+    /// Snapshot the cursor (position only, no trivia).
+    #[inline]
+    fn mark(&self) -> LexerPos {
+        LexerPos {
+            pos: self.pos,
+            byte_pos: self.byte_pos,
+            line: self.line,
+            column: self.column,
+        }
+    }
+
+    /// Restore the cursor from a snapshot taken by `mark()`.
+    #[inline]
+    fn reset(&mut self, mark: LexerPos) {
+        self.pos = mark.pos;
+        self.byte_pos = mark.byte_pos;
+        self.line = mark.line;
+        self.column = mark.column;
+    }
+
     /// Consume and return current character
     #[inline(always)]
     pub(crate) fn advance(&mut self) -> Option<char> {
@@ -543,10 +568,7 @@ impl Lexer {
     /// Parse trivia (comments and whitespace)
     pub(crate) fn parse_trivia(&mut self) -> Vec<ParseTrivium> {
         // Save position before parsing trivia, so we can rewind if needed
-        self.trivia_start_pos = Some(self.pos);
-        self.trivia_start_byte_pos = Some(self.byte_pos);
-        self.trivia_start_line = Some(self.line);
-        self.trivia_start_column = Some(self.column);
+        self.trivia_start = Some(self.mark());
 
         let mut trivia = Vec::new();
         self.recent_newlines = 0;
@@ -612,11 +634,8 @@ impl Lexer {
     /// Also clears the trivia buffer since rewound trivia should not be attached to next token
     pub(crate) fn rewind_trivia(&mut self) {
         // Rewind to the position before parse_trivia() was called
-        if let Some(pos) = self.trivia_start_pos {
-            self.pos = pos;
-            self.byte_pos = self.trivia_start_byte_pos.unwrap();
-            self.line = self.trivia_start_line.unwrap();
-            self.column = self.trivia_start_column.unwrap();
+        if let Some(mark) = self.trivia_start {
+            self.reset(mark);
         }
 
         self.recent_hspace = 0;
