@@ -29,6 +29,7 @@ pub(crate) enum ParseTrivium {
 #[derive(Clone)]
 pub(crate) struct LexerState {
     pub(crate) pos: usize,
+    pub(crate) byte_pos: usize,
     pub(crate) line: usize,
     pub(crate) column: usize,
     pub(crate) trivia_buffer: Trivia,
@@ -39,6 +40,9 @@ pub(crate) struct LexerState {
 pub(crate) struct Lexer {
     pub(crate) input: Vec<char>,
     pub(crate) pos: usize,
+    /// Byte offset corresponding to `pos`, kept in lockstep so span
+    /// construction is O(1) instead of re-scanning the prefix per token.
+    pub(crate) byte_pos: usize,
     pub(crate) line: usize,
     pub(crate) column: usize,
     /// Accumulated leading trivia for next token
@@ -47,6 +51,7 @@ pub(crate) struct Lexer {
     pub(crate) recent_hspace: usize,
     /// Position before last parse_trivia() call, for rewinding
     trivia_start_pos: Option<usize>,
+    trivia_start_byte_pos: Option<usize>,
     trivia_start_line: Option<usize>,
     trivia_start_column: Option<usize>,
     /// Scratch buffer reused while collecting `#` comments
@@ -60,12 +65,14 @@ impl Lexer {
         Lexer {
             input: source.chars().collect(),
             pos: 0,
+            byte_pos: 0,
             line: 1,
             column: 0,
             trivia_buffer: Trivia::new(),
             recent_newlines: 0,
             recent_hspace: 0,
             trivia_start_pos: None,
+            trivia_start_byte_pos: None,
             trivia_start_line: None,
             trivia_start_column: None,
             line_comment_buffer: String::new(),
@@ -77,6 +84,7 @@ impl Lexer {
     pub(crate) fn save_state(&self) -> LexerState {
         LexerState {
             pos: self.pos,
+            byte_pos: self.byte_pos,
             line: self.line,
             column: self.column,
             trivia_buffer: self.trivia_buffer.clone(),
@@ -88,6 +96,7 @@ impl Lexer {
     /// Restore saved state
     pub(crate) fn restore_state(&mut self, state: LexerState) {
         self.pos = state.pos;
+        self.byte_pos = state.byte_pos;
         self.line = state.line;
         self.column = state.column;
         self.trivia_buffer = state.trivia_buffer;
@@ -120,14 +129,14 @@ impl Lexer {
         }
 
         // Record start position BEFORE parsing the token (in byte offsets and line numbers)
-        let token_start = self.char_offset_to_byte(self.pos);
+        let token_start = self.byte_pos;
         let start_line = self.line;
 
         // Parse the token (note: next_token() also skips hspace, but that's ok since we already did)
         let token = self.next_token()?;
 
         // Record position AFTER parsing token to create span (in byte offsets and line numbers)
-        let token_end = self.char_offset_to_byte(self.pos);
+        let token_end = self.byte_pos;
         let end_line = self.line;
         let token_span =
             crate::types::Span::with_lines(token_start, token_end, start_line, end_line);
@@ -175,19 +184,9 @@ impl Lexer {
         std::mem::take(&mut self.trivia_buffer)
     }
 
-    /// Convert character offset to byte offset
-    fn char_offset_to_byte(&self, char_offset: usize) -> usize {
-        self.input
-            .iter()
-            .take(char_offset)
-            .map(|c| c.len_utf8())
-            .sum()
-    }
-
     /// Get current position as a zero-length span (in byte offsets)
     pub(crate) fn current_pos(&self) -> crate::types::Span {
-        let byte_pos = self.char_offset_to_byte(self.pos);
-        crate::types::Span::point(byte_pos)
+        crate::types::Span::point(self.byte_pos)
     }
 
     /// Parse next token (without trivia handling)
@@ -494,6 +493,7 @@ impl Lexer {
     pub(crate) fn advance(&mut self) -> Option<char> {
         let ch = self.peek()?;
         self.pos += 1;
+        self.byte_pos += ch.len_utf8();
         if ch == '\n' {
             self.line += 1;
             self.column = 0;
@@ -518,6 +518,7 @@ impl Lexer {
             match self.input[self.pos] {
                 ' ' | '\t' => {
                     self.pos += 1;
+                    self.byte_pos += 1;
                     self.column += 1;
                 }
                 _ => break,
@@ -530,6 +531,7 @@ impl Lexer {
     pub(crate) fn parse_trivia(&mut self) -> Vec<ParseTrivium> {
         // Save position before parsing trivia, so we can rewind if needed
         self.trivia_start_pos = Some(self.pos);
+        self.trivia_start_byte_pos = Some(self.byte_pos);
         self.trivia_start_line = Some(self.line);
         self.trivia_start_column = Some(self.column);
 
@@ -599,6 +601,7 @@ impl Lexer {
         // Rewind to the position before parse_trivia() was called
         if let Some(pos) = self.trivia_start_pos {
             self.pos = pos;
+            self.byte_pos = self.trivia_start_byte_pos.unwrap();
             self.line = self.trivia_start_line.unwrap();
             self.column = self.trivia_start_column.unwrap();
         }
