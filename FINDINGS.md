@@ -7,8 +7,8 @@
 - **Tests:** 6 regression tests in `tests/operator_associativity_test.rs` - all passing
 - **Note:** `-` correctly remains left-associative (unlike `+`)
 
-## Current nixpkgs Corpus Scan (`test_nixpkgs_compare.py`)
-- **Command:** `./test_nixpkgs_compare.py`
+## Current nixpkgs Corpus Scan (`scripts/diff_sweep.sh`)
+- **Command:** `./scripts/diff_sweep.sh ast`
 - **Summary:** 23 files under `../nixpkgs` currently diverge from nixfmt.
   - Parser accepts -> nixfmt rejects (7): `shell.nix`, `flake.nix`, `default.nix`, `ci/parse.nix`, `ci/default.nix`, `lib/trivial.nix`, `lib/flake.nix`
 - Both parse but AST differs (11): `ci/nixpkgs-vet.nix`, `lib/strings-with-deps.nix`, `lib/filesystem.nix`, `lib/debug.nix`, `lib/cli.nix`, `lib/meta.nix`, `lib/source-types.nix`, `lib/flake-version-info.nix`, `lib/versions.nix`, `lib/sources.nix`, `lib/gvariant.nix`

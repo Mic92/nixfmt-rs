@@ -2,3 +2,9 @@ target
 .cargo
 .rustup
 sweep-out/
+__pycache__/
+# local scratch files
+/test.ir
+/test.nix
+/test_debug.sh
+/test_render.nix

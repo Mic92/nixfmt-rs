@@ -130,8 +130,8 @@ With BUG #7 and #8 fixed, estimated pass rate would jump to **~85%**.
 ## Files for Reference
 
 ### Test Suites
-- `test_bug_finder.py` - Custom edge case fuzzer (83 tests)
-- `test_nixfmt_regression.py` - Runs against nixfmt's test corpus (24 tests)
+- `src/regression_tests/properties.rs` - Property tests over the vendored nixfmt corpus
+- `scripts/diff_sweep.sh` - Differential sweep against reference `nixfmt` over nixpkgs
 
 ### Documentation
 - `FINDINGS.md` - Detailed bug reports (13 bugs documented)
