@@ -17,8 +17,7 @@ dependencies and a single static binary.
 - `~/git/nixpkgs/pkgs/top-level/all-packages.nix` formats in ≈70 ms
   (release build, M-series mac).
 
-See [`FINDINGS.md`](FINDINGS.md) for the bug log that got us here and
-[`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) for how the pieces fit
+See [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) for how the pieces fit
 together.
 
 ## Build & run
