@@ -342,6 +342,32 @@ const fn is_hard_spacing(elem: &DocE) -> bool {
     )
 }
 
+/// `simplifyGroup` (Predoc.hs): unwrap `Group ann [Group ann xs]` to `xs`.
+fn simplify_group(ann: GroupAnn, mut body: Doc) -> Doc {
+    if body.len() == 1
+        && matches!(&body[0], DocE::Group(a2, _) if ann == *a2)
+        && let Some(DocE::Group(_, inner)) = body.pop()
+    {
+        return inner;
+    }
+    body
+}
+
+/// Span of leading liftable elements (hard spacings + comments) and start of
+/// trailing liftable elements (hard spacings) in a fixed-up group body.
+fn lift_bounds(body: &[DocE]) -> (usize, usize) {
+    let pre_end = body
+        .iter()
+        .position(|e| !is_hard_spacing(e) && !is_comment(e))
+        .unwrap_or(body.len());
+    let post_start = body
+        .iter()
+        .rposition(|e| !is_hard_spacing(e))
+        .map_or(0, |p| p + 1)
+        .max(pre_end);
+    (pre_end, post_start)
+}
+
 /// Check if element is a comment
 fn is_comment(elem: &DocE) -> bool {
     match elem {
@@ -507,34 +533,18 @@ fn fixup_mut(doc: &mut Vec<DocE>, mut nacc: isize, mut oacc: isize) {
                 }
                 fixup_mut(&mut body, nacc, oacc);
 
-                // Leading hard spacings and comments lift out of the group.
-                let pre_end = body
-                    .iter()
-                    .position(|e| !is_hard_spacing(e) && !is_comment(e))
-                    .unwrap_or(body.len());
-                // Trailing hard spacings lift out as well.
-                let post_start = body
-                    .iter()
-                    .rposition(|e| !is_hard_spacing(e))
-                    .map_or(0, |p| p + 1)
-                    .max(pre_end);
+                let (pre_end, post_start) = lift_bounds(&body);
 
                 if pre_end == 0 && post_start == body.len() && !body.is_empty() {
-                    // Fast path: nothing to lift. `simplifyGroup` then keep.
-                    if body.len() == 1
-                        && matches!(&body[0], DocE::Group(a2, _) if ann == *a2)
-                        && let Some(DocE::Group(_, inner)) = body.pop()
-                    {
-                        body = inner;
-                    }
-                    doc[w] = DocE::Group(ann, body);
+                    // Fast path: nothing to lift.
+                    doc[w] = DocE::Group(ann, simplify_group(ann, body));
                     w += 1;
                     continue;
                 }
 
                 // Slow path: split [pre | core | post] out of the recursed body.
                 let post = body.split_off(post_start);
-                let mut core = body.split_off(pre_end);
+                let core = body.split_off(pre_end);
                 let mut pre = body;
 
                 if core.is_empty() {
@@ -549,13 +559,7 @@ fn fixup_mut(doc: &mut Vec<DocE>, mut nacc: isize, mut oacc: isize) {
                     lifted.push(DocE::Nest(nacc, oacc));
                     doc.splice(w..r, lifted);
                 } else {
-                    // `simplifyGroup`
-                    if core.len() == 1
-                        && matches!(&core[0], DocE::Group(a2, _) if ann == *a2)
-                        && let Some(DocE::Group(_, inner)) = core.pop()
-                    {
-                        core = inner;
-                    }
+                    let core = simplify_group(ann, core);
                     // `fixup (a : pre)`: the lifted prefix is already fixed
                     // internally, so the only remaining rewrite is a possible
                     // spacing merge across the boundary with `doc[w-1]`.

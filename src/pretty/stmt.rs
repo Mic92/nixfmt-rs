@@ -2,7 +2,9 @@ use crate::predoc::{
     Doc, DocE, GroupAnn, Pretty, hardline, hardspace, line, push_group, push_group_ann,
     push_nested, push_surrounded,
 };
-use crate::types::{Expression, Leaf, Parameter};
+use crate::types::{Binder, Expression, Items, Leaf, Parameter, Trivia, Trivium};
+
+use super::term::push_pretty_items;
 
 use super::absorb::{is_absorbable_expr, push_absorb_expr};
 use super::util::{Width, move_trailing_comment_up};
@@ -44,6 +46,42 @@ pub(super) fn insert_into_app(insert: Expression, expr: Expression) -> (Expressi
 /// Render a `with` expression.
 /// Mirrors Haskell `prettyWith False` (Pretty.hs); the `prettyWith True`
 /// path is open-coded inside `push_absorb_expr`.
+/// `instance Pretty Expression` clause for `Let` (Pretty.hs).
+pub(super) fn pretty_let(
+    doc: &mut Doc,
+    let_kw: &Leaf,
+    binders: &Items<Binder>,
+    in_kw: &Leaf,
+    expr: &Expression,
+) {
+    // Strip trivia/trailing from `in` and move it down to the body.
+    let mut in_kw_clean = in_kw.clone();
+    in_kw_clean.pre_trivia = Trivia::new();
+    in_kw_clean.trail_comment = None;
+
+    // convertTrailing
+    let mut moved_trivia_vec: Vec<Trivium> = in_kw.pre_trivia.clone().into();
+    if let Some(trailing) = &in_kw.trail_comment {
+        moved_trivia_vec.push(trailing.into());
+    }
+    let moved_trivia: Trivia = moved_trivia_vec.into();
+
+    // letPart = group $ pretty let_ <> hardline <> nest (renderItems hardline binders)
+    push_group(doc, |g| {
+        let_kw.pretty(g);
+        g.push(hardline());
+        push_nested(g, |n| push_pretty_items(n, binders));
+    });
+    doc.push(hardline());
+    // inPart = group $ pretty in_ <> hardline <> trivia <> pretty expr
+    push_group(doc, |g| {
+        in_kw_clean.pretty(g);
+        g.push(hardline());
+        moved_trivia.pretty(g);
+        expr.pretty(g);
+    });
+}
+
 pub(super) fn pretty_with(
     doc: &mut Doc,
     with: &Leaf,

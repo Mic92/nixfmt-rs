@@ -110,49 +110,11 @@ impl<'a> ErrorFormatter<'a> {
 
         match &error.kind {
             ErrorKind::UnexpectedToken { expected, found } => {
-                if expected.len() == 1 && expected[0] == "';'" {
-                    writeln!(out, "{indent}= note: missing semicolon after definition").unwrap();
-                    writeln!(
-                        out,
-                        "{indent}= help: add a semicolon at the end of the previous line"
-                    )
-                    .unwrap();
-                } else if expected.len() == 1 && expected[0] == "'}'" {
-                    writeln!(
-                        out,
-                        "{indent}= note: string interpolations must be closed with '}}'"
-                    )
-                    .unwrap();
-                    writeln!(out, "{indent}= help: add '}}' to close the interpolation").unwrap();
-                } else if expected.len() == 1 && expected[0] == "'then'" {
-                    writeln!(
-                        out,
-                        "{indent}= note: if expressions require: if <condition> then <expr> else <expr>"
-                    )
-                    .unwrap();
-                    writeln!(out, "{indent}= help: add 'then' after the condition").unwrap();
-                } else if expected.len() == 1 && expected[0] == "'else'" {
-                    writeln!(
-                        out,
-                        "{indent}= note: if expressions require: if <condition> then <expr> else <expr>"
-                    )
-                    .unwrap();
-                    writeln!(
-                        out,
-                        "{indent}= help: add 'else' followed by the alternative expression"
-                    )
-                    .unwrap();
-                } else if expected.len() == 1 && expected[0] == "'in'" {
-                    writeln!(
-                        out,
-                        "{indent}= note: 'in' is required to complete the let expression"
-                    )
-                    .unwrap();
-                    writeln!(
-                        out,
-                        "{indent}= help: add 'in' followed by the expression body"
-                    )
-                    .unwrap();
+                if let [single] = expected.as_slice()
+                    && let Some((note, help)) = unexpected_token_hint(single)
+                {
+                    writeln!(out, "{indent}= note: {note}").unwrap();
+                    writeln!(out, "{indent}= help: {help}").unwrap();
                 } else if !expected.is_empty() {
                     let expected_str = if expected.len() == 1 {
                         expected[0].clone()
@@ -219,7 +181,36 @@ impl<'a> ErrorFormatter<'a> {
             .unwrap();
         }
     }
+}
 
+/// Canned `(note, help)` text for the common single-expected-token errors.
+fn unexpected_token_hint(expected: &str) -> Option<(&'static str, &'static str)> {
+    Some(match expected {
+        "';'" => (
+            "missing semicolon after definition",
+            "add a semicolon at the end of the previous line",
+        ),
+        "'}'" => (
+            "string interpolations must be closed with '}'",
+            "add '}' to close the interpolation",
+        ),
+        "'then'" => (
+            "if expressions require: if <condition> then <expr> else <expr>",
+            "add 'then' after the condition",
+        ),
+        "'else'" => (
+            "if expressions require: if <condition> then <expr> else <expr>",
+            "add 'else' followed by the alternative expression",
+        ),
+        "'in'" => (
+            "'in' is required to complete the let expression",
+            "add 'in' followed by the expression body",
+        ),
+        _ => return None,
+    })
+}
+
+impl ErrorFormatter<'_> {
     const fn closing_delimiter(opening: char) -> char {
         match opening {
             '{' => '}',
