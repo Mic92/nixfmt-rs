@@ -229,51 +229,18 @@ impl Lexer {
         }
 
         match ch {
-            '{' => {
-                self.advance();
-                Ok(Token::TBraceOpen)
-            }
-            '}' => {
-                self.advance();
-                Ok(Token::TBraceClose)
-            }
-            '[' => {
-                self.advance();
-                Ok(Token::TBrackOpen)
-            }
-            ']' => {
-                self.advance();
-                Ok(Token::TBrackClose)
-            }
-            '(' => {
-                self.advance();
-                Ok(Token::TParenOpen)
-            }
-            ')' => {
-                self.advance();
-                Ok(Token::TParenClose)
-            }
+            '{' => self.single(Token::TBraceOpen),
+            '}' => self.single(Token::TBraceClose),
+            '[' => self.single(Token::TBrackOpen),
+            ']' => self.single(Token::TBrackClose),
+            '(' => self.single(Token::TParenOpen),
+            ')' => self.single(Token::TParenClose),
             '=' => Ok(self.try_two_char('=', Token::TEqual, Token::TAssign)),
-            '@' => {
-                self.advance();
-                Ok(Token::TAt)
-            }
-            ':' => {
-                self.advance();
-                Ok(Token::TColon)
-            }
-            ',' => {
-                self.advance();
-                Ok(Token::TComma)
-            }
-            ';' => {
-                self.advance();
-                Ok(Token::TSemicolon)
-            }
-            '?' => {
-                self.advance();
-                Ok(Token::TQuestion)
-            }
+            '@' => self.single(Token::TAt),
+            ':' => self.single(Token::TColon),
+            ',' => self.single(Token::TComma),
+            ';' => self.single(Token::TSemicolon),
+            '?' => self.single(Token::TQuestion),
             '.' => {
                 if self.at("...") {
                     self.advance_by(3);
@@ -295,10 +262,7 @@ impl Lexer {
             }
             '+' => Ok(self.try_two_char('+', Token::TConcat, Token::TPlus)),
             '-' => Ok(self.try_two_char('>', Token::TImplies, Token::TMinus)),
-            '*' => {
-                self.advance();
-                Ok(Token::TMul)
-            }
+            '*' => self.single(Token::TMul),
             '/' => Ok(self.try_two_char('/', Token::TUpdate, Token::TDiv)),
             '!' => Ok(self.try_two_char('=', Token::TUnequal, Token::TNot)),
             '<' => {
@@ -343,10 +307,7 @@ impl Lexer {
                     _ => self.err_unexpected(&["'||'", "'|>'"], "'|'"),
                 }
             }
-            '"' => {
-                self.advance();
-                Ok(Token::TDoubleQuote)
-            }
+            '"' => self.single(Token::TDoubleQuote),
             '\'' => {
                 if self.at("''") {
                     self.advance_by(2);
@@ -364,10 +325,7 @@ impl Lexer {
                 }
             }
             '0'..='9' => self.parse_number(),
-            '~' => {
-                self.advance();
-                Ok(Token::TTilde)
-            }
+            '~' => self.single(Token::TTilde),
             _ => {
                 // `ch` was derived from a single byte; for the error message
                 // decode the actual codepoint so multi-byte input is reported
@@ -547,6 +505,14 @@ impl Lexer {
             self.reset(mark);
         }
         r
+    }
+
+    /// Advance one char and return `Ok(tok)`; for trivial single-char arms in
+    /// `next_token`.
+    #[inline(always)]
+    fn single(&mut self, tok: Token) -> crate::error::Result<Token> {
+        self.advance();
+        Ok(tok)
     }
 
     /// Consume and return current character
