@@ -11,6 +11,34 @@ mod trivia;
 #[cfg(test)]
 mod tests;
 
+/// Update `line`/`column` to account for having advanced over `slice`.
+/// Nix source is overwhelmingly ASCII, so the no-newline ASCII case is the
+/// fast path; only count chars when non-ASCII bytes are present.
+///
+/// Free function rather than `&mut self` so callers may borrow
+/// `self.source` for `slice` while mutating the two counters.
+#[inline]
+fn bump_line_col(line: &mut usize, column: &mut usize, slice: &str) {
+    match memchr::memrchr(b'\n', slice.as_bytes()) {
+        None => {
+            *column += if slice.is_ascii() {
+                slice.len()
+            } else {
+                slice.chars().count()
+            };
+        }
+        Some(last_nl) => {
+            *line += memchr::memchr_iter(b'\n', slice.as_bytes()).count();
+            let tail = &slice[last_nl + 1..];
+            *column = if tail.is_ascii() {
+                tail.len()
+            } else {
+                tail.chars().count()
+            };
+        }
+    }
+}
+
 /// Intermediate trivia representation during parsing
 #[derive(Debug, Clone)]
 pub(crate) enum ParseTrivium {
@@ -550,30 +578,9 @@ impl Lexer {
         }
         let start = self.byte_pos;
         let end = start + len;
-        let slice = &self.source[start..end];
         self.byte_pos = end;
-        // Maintain line/column. Typical string content has no newlines on the
-        // indented path (caller passes `b'\n'` as a stop byte) and short runs
-        // on the simple path, so prefer the no-newline ASCII fast path.
-        match memchr::memrchr(b'\n', slice.as_bytes()) {
-            None => {
-                self.column += if slice.is_ascii() {
-                    len
-                } else {
-                    slice.chars().count()
-                };
-            }
-            Some(last_nl) => {
-                self.line += memchr::memchr_iter(b'\n', slice.as_bytes()).count();
-                let tail = &slice[last_nl + 1..];
-                self.column = if tail.is_ascii() {
-                    tail.len()
-                } else {
-                    tail.chars().count()
-                };
-            }
-        }
-        slice
+        bump_line_col(&mut self.line, &mut self.column, &self.source[start..end]);
+        &self.source[start..end]
     }
 
     /// Move the cursor to absolute byte offset `target` (which must be on a
@@ -581,26 +588,13 @@ impl Lexer {
     /// the skipped slice. Used after a `memchr` jump.
     pub(super) fn seek_to(&mut self, target: usize) {
         debug_assert!(target >= self.byte_pos);
-        let slice = &self.source[self.byte_pos..target];
-        match memchr::memrchr(b'\n', slice.as_bytes()) {
-            None => {
-                self.column += if slice.is_ascii() {
-                    slice.len()
-                } else {
-                    slice.chars().count()
-                };
-            }
-            Some(last_nl) => {
-                self.line += memchr::memchr_iter(b'\n', slice.as_bytes()).count();
-                let tail = &slice[last_nl + 1..];
-                self.column = if tail.is_ascii() {
-                    tail.len()
-                } else {
-                    tail.chars().count()
-                };
-            }
-        }
+        let start = self.byte_pos;
         self.byte_pos = target;
+        bump_line_col(
+            &mut self.line,
+            &mut self.column,
+            &self.source[start..target],
+        );
     }
 
     /// Bulk-advance over the next `len` bytes of source, which must contain no
@@ -611,16 +605,10 @@ impl Lexer {
     pub(super) fn advance_bytes_no_newline(&mut self, len: usize) -> &str {
         let start = self.byte_pos;
         let end = start + len;
-        let slice = &self.source[start..end];
-        debug_assert!(!slice.as_bytes().contains(&b'\n'));
+        debug_assert!(!self.source.as_bytes()[start..end].contains(&b'\n'));
         self.byte_pos = end;
-        // Nix source is overwhelmingly ASCII; only count chars when it isn't.
-        self.column += if slice.is_ascii() {
-            len
-        } else {
-            slice.chars().count()
-        };
-        slice
+        bump_line_col(&mut self.line, &mut self.column, &self.source[start..end]);
+        &self.source[start..end]
     }
 
     /// Check if we're at end of input
