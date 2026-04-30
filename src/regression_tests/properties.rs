@@ -305,38 +305,14 @@ fn collect_inputs() -> Vec<PathBuf> {
 // ---------------------------------------------------------------------------
 
 fn minimised_diff(a: &str, b: &str) -> String {
-    use diff::DiffResult::*;
-    const CTX: usize = 2;
-    let results = diff::lines(a, b);
-    let mut keep = vec![false; results.len()];
-    for (i, r) in results.iter().enumerate() {
-        if !matches!(r, Both(..)) {
-            let lo = i.saturating_sub(CTX);
-            let hi = (i + CTX + 1).min(results.len());
-            #[allow(clippy::needless_range_loop)]
-            for k in lo..hi {
-                keep[k] = true;
-            }
-        }
-    }
-    let mut out = String::new();
-    let mut last_kept = true;
-    for (i, r) in results.iter().enumerate() {
-        if !keep[i] {
-            if last_kept {
-                out.push_str("  ...\n");
-            }
-            last_kept = false;
-            continue;
-        }
-        last_kept = true;
-        match r {
-            Left(l) => out.push_str(&format!("- {l}\n")),
-            Right(r) => out.push_str(&format!("+ {r}\n")),
-            Both(l, _) => out.push_str(&format!("  {l}\n")),
-        }
-    }
-    out
+    diff::render(
+        a,
+        b,
+        diff::DiffOpts {
+            context: Some(2),
+            color: false,
+        },
+    )
 }
 
 // ---------------------------------------------------------------------------

@@ -99,6 +99,66 @@ pub fn lines<'a>(left: &'a str, right: &'a str) -> Vec<DiffResult<&'a str>> {
     slice(&left_lines, &right_lines)
 }
 
+/// Rendering options for [`render`].
+#[derive(Debug, Default, Clone, Copy)]
+pub struct DiffOpts {
+    /// If `Some(n)`, elide unchanged lines further than `n` lines from any
+    /// change, replacing each elided run with a single `  ...` marker.
+    /// If `None`, every line is kept.
+    pub context: Option<usize>,
+    /// Wrap `-`/`+`/context lines in ANSI color escapes.
+    pub color: bool,
+}
+
+/// Render a unified-style line diff of `a` vs `b` into a `String`.
+pub fn render(a: &str, b: &str, opts: DiffOpts) -> String {
+    let results = lines(a, b);
+
+    // Decide which lines to keep when a context window is requested.
+    let keep: Vec<bool> = match opts.context {
+        None => vec![true; results.len()],
+        Some(ctx) => {
+            let mut keep = vec![false; results.len()];
+            for (i, r) in results.iter().enumerate() {
+                if !matches!(r, DiffResult::Both(..)) {
+                    let lo = i.saturating_sub(ctx);
+                    let hi = (i + ctx + 1).min(results.len());
+                    #[allow(clippy::needless_range_loop)]
+                    for k in lo..hi {
+                        keep[k] = true;
+                    }
+                }
+            }
+            keep
+        }
+    };
+
+    let (red, green, dim, reset) = if opts.color {
+        (RED, GREEN, DIM, RESET)
+    } else {
+        ("", "", "", "")
+    };
+
+    let mut out = String::new();
+    let mut last_kept = true;
+    for (i, r) in results.iter().enumerate() {
+        if !keep[i] {
+            if last_kept {
+                out.push_str("  ...\n");
+            }
+            last_kept = false;
+            continue;
+        }
+        last_kept = true;
+        match r {
+            DiffResult::Left(l) => out.push_str(&format!("{red}- {l}{reset}\n")),
+            DiffResult::Right(r) => out.push_str(&format!("{green}+ {r}{reset}\n")),
+            DiffResult::Both(l, _) => out.push_str(&format!("{dim}  {l}{reset}\n")),
+        }
+    }
+    out
+}
+
 /// Print a colored diff to stderr
 ///
 /// # Example
@@ -113,19 +173,17 @@ pub fn lines<'a>(left: &'a str, right: &'a str) -> Vec<DiffResult<&'a str>> {
 /// // + let z = 3;
 /// ```
 pub fn print_colored_diff(expected: &str, actual: &str) {
-    for diff_line in lines(expected, actual) {
-        match diff_line {
-            DiffResult::Left(l) => {
-                eprintln!("{RED}- {l}{RESET}");
-            }
-            DiffResult::Both(l, _) => {
-                eprintln!("{DIM}  {l}{RESET}");
-            }
-            DiffResult::Right(r) => {
-                eprintln!("{GREEN}+ {r}{RESET}");
-            }
-        }
-    }
+    eprint!(
+        "{}",
+        render(
+            expected,
+            actual,
+            DiffOpts {
+                context: None,
+                color: true,
+            },
+        )
+    );
 }
 
 #[cfg(test)]
