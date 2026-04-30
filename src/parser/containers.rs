@@ -20,7 +20,7 @@ impl Parser {
             None
         };
 
-        let open_brace = self.expect_token_match(|t| matches!(t, Token::TBraceOpen))?;
+        let open_brace = self.expect_token(Token::TBraceOpen, "'{'")?;
         let opening_span = open_brace.span;
         let bindings = self.parse_binders()?;
 
@@ -31,7 +31,7 @@ impl Parser {
 
     /// Parse list: [ ... ]
     pub(super) fn parse_list(&mut self) -> Result<Term> {
-        let open_bracket = self.expect_token_match(|t| matches!(t, Token::TBrackOpen))?;
+        let open_bracket = self.expect_token(Token::TBrackOpen, "'['")?;
         let opening_span = open_bracket.span;
         let items = self.parse_list_items()?;
 
@@ -87,7 +87,7 @@ impl Parser {
 
     /// Parse parenthesized expression: ( expr )
     pub(super) fn parse_parenthesized(&mut self) -> Result<Term> {
-        let open_paren = self.expect_token_match(|t| matches!(t, Token::TParenOpen))?;
+        let open_paren = self.expect_token(Token::TParenOpen, "'('")?;
         let opening_span = open_paren.span;
 
         let expr = self.parse_expression()?;

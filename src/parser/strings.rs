@@ -343,7 +343,7 @@ impl Parser {
         self.advance()?;
 
         let expr = self.parse_expression()?;
-        let close = self.expect_token_match(|t| matches!(t, Token::TBraceClose))?;
+        let close = self.expect_token(Token::TBraceClose, "'}'")?;
 
         Ok(Ann {
             pre_trivia: open.pre_trivia,

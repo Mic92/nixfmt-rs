@@ -120,7 +120,7 @@ impl Parser {
                     let first_param = Parameter::ID(ident);
                     self.validate_context_parameter(&first_param, &second_param)?;
 
-                    let colon = self.expect_token_match(|t| matches!(t, Token::TColon))?;
+                    let colon = self.expect_token(Token::TColon, "':'")?;
                     let body = self.parse_expression()?;
                     Ok(Expression::Abstraction(
                         Parameter::Context(Box::new(first_param), at_tok, Box::new(second_param)),
@@ -165,7 +165,7 @@ impl Parser {
                     let first_param = Parameter::Set(open_brace, Vec::new(), close_brace);
                     self.validate_context_parameter(&first_param, &second_param)?;
 
-                    let colon = self.expect_token_match(|t| matches!(t, Token::TColon))?;
+                    let colon = self.expect_token(Token::TColon, "':'")?;
                     let body = self.parse_expression()?;
                     Ok(Expression::Abstraction(
                         Parameter::Context(Box::new(first_param), at_tok, Box::new(second_param)),
@@ -195,8 +195,7 @@ impl Parser {
                     Some(attrs) => {
                         self.check_duplicate_formals(&attrs)?;
 
-                        let close_brace =
-                            self.expect_token_match(|t| matches!(t, Token::TBraceClose))?;
+                        let close_brace = self.expect_token(Token::TBraceClose, "'}'")?;
 
                         if matches!(self.current.value, Token::TColon) {
                             // Set parameter: { x, y }: body
@@ -215,7 +214,7 @@ impl Parser {
                             let first_param = Parameter::Set(open_brace, attrs, close_brace);
                             self.validate_context_parameter(&first_param, &second_param)?;
 
-                            let colon = self.expect_token_match(|t| matches!(t, Token::TColon))?;
+                            let colon = self.expect_token(Token::TColon, "':'")?;
                             let body = self.parse_expression()?;
                             Ok(Expression::Abstraction(
                                 Parameter::Context(
@@ -241,8 +240,7 @@ impl Parser {
                         let open_brace = self.take_and_advance()?;
 
                         let bindings = self.parse_binders()?;
-                        let close_brace =
-                            self.expect_token_match(|t| matches!(t, Token::TBraceClose))?;
+                        let close_brace = self.expect_token(Token::TBraceClose, "'}'")?;
                         let set_term = Term::Set(None, open_brace, bindings, close_brace);
                         let term_with_selection = self.parse_postfix_selection(set_term)?;
                         self.continue_operation_from(Expression::Term(term_with_selection))
@@ -254,7 +252,7 @@ impl Parser {
                 let attrs = self.parse_param_attrs()?;
                 self.check_duplicate_formals(&attrs)?;
 
-                let close_brace = self.expect_token_match(|t| matches!(t, Token::TBraceClose))?;
+                let close_brace = self.expect_token(Token::TBraceClose, "'}'")?;
 
                 if matches!(self.current.value, Token::TColon) {
                     let colon = self.take_and_advance()?;
@@ -272,7 +270,7 @@ impl Parser {
                     let first_param = Parameter::Set(open_brace, attrs, close_brace);
                     self.validate_context_parameter(&first_param, &second_param)?;
 
-                    let colon = self.expect_token_match(|t| matches!(t, Token::TColon))?;
+                    let colon = self.expect_token(Token::TColon, "':'")?;
                     let body = self.parse_expression()?;
                     Ok(Expression::Abstraction(
                         Parameter::Context(Box::new(first_param), at_tok, Box::new(second_param)),
@@ -290,7 +288,7 @@ impl Parser {
             _ => {
                 // Must be set literal with bindings
                 let bindings = self.parse_binders()?;
-                let close_brace = self.expect_token_match(|t| matches!(t, Token::TBraceClose))?;
+                let close_brace = self.expect_token(Token::TBraceClose, "'}'")?;
                 let set_term = Term::Set(None, open_brace, bindings, close_brace);
                 let term_with_selection = self.parse_postfix_selection(set_term)?;
                 self.continue_operation_from(Expression::Term(term_with_selection))
@@ -333,7 +331,7 @@ impl Parser {
 
                 let param =
                     Parameter::Context(Box::new(first_param), at_tok, Box::new(second_param));
-                let colon = self.expect_token_match(|t| matches!(t, Token::TColon))?;
+                let colon = self.expect_token(Token::TColon, "':'")?;
                 let body = self.parse_expression()?;
                 return Ok(Expression::Abstraction(param, colon, Box::new(body)));
             } else {
@@ -348,7 +346,7 @@ impl Parser {
 
         if matches!(self.current.value, Token::TColon) {
             let param = self.expr_to_parameter(expr)?;
-            let colon = self.expect_token_match(|t| matches!(t, Token::TColon))?;
+            let colon = self.expect_token(Token::TColon, "':'")?;
             let body = self.parse_expression()?;
             Ok(Expression::Abstraction(param, colon, Box::new(body)))
         } else {
@@ -809,19 +807,27 @@ impl Parser {
         }
     }
 
-    /// Expect specific token, advance if matches
-    fn expect_token_match<F>(&mut self, predicate: F) -> Result<Ann<Token>>
-    where
-        F: Fn(&Token) -> bool,
-    {
-        if predicate(&self.current.value) {
+    /// Expect a specific token, advance if it matches, otherwise emit an
+    /// `UnexpectedToken` error using `label` as the expected description.
+    fn expect_token(&mut self, tok: Token, label: &'static str) -> Result<Leaf> {
+        if self.current.value == tok {
             self.take_and_advance()
         } else {
             Err(ParseError::unexpected(
                 self.current.span,
-                vec![], // caller doesn't specify what's expected
+                vec![label.to_string()],
                 format!("'{}'", self.current.value.text()),
             ))
+        }
+    }
+
+    /// Expect a `;` and emit a `MissingToken` error mentioning the preceding
+    /// construct otherwise.
+    fn expect_semicolon_after(&mut self, after: &'static str) -> Result<Leaf> {
+        if matches!(self.current.value, Token::TSemicolon) {
+            self.take_and_advance()
+        } else {
+            Err(ParseError::missing(self.current.span, "';'", after))
         }
     }
 

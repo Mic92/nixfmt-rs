@@ -46,10 +46,10 @@ impl Parser {
 
     /// Parse set parameter or context parameter starting with {
     fn parse_set_or_context_parameter(&mut self) -> Result<Parameter> {
-        let open_brace = self.expect_token_match(|t| matches!(t, Token::TBraceOpen))?;
+        let open_brace = self.expect_token(Token::TBraceOpen, "'{'")?;
         let attrs = self.parse_param_attrs()?;
         self.check_duplicate_formals(&attrs)?;
-        let close_brace = self.expect_token_match(|t| matches!(t, Token::TBraceClose))?;
+        let close_brace = self.expect_token(Token::TBraceClose, "'}'")?;
 
         let set_param = Parameter::Set(open_brace, attrs, close_brace);
 

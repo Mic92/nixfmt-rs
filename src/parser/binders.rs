@@ -41,12 +41,12 @@ impl Parser {
 
     /// Parse inherit statement: inherit [ (expr) ] names... ;
     fn parse_inherit(&mut self) -> Result<Binder> {
-        let inherit_tok = self.expect_token_match(|t| matches!(t, Token::KInherit))?;
+        let inherit_tok = self.expect_token(Token::KInherit, "'inherit'")?;
 
         let from = if matches!(self.current.value, Token::TParenOpen) {
             let open = self.take_and_advance()?;
             let expr = self.parse_expression()?;
-            let close = self.expect_token_match(|t| matches!(t, Token::TParenClose))?;
+            let close = self.expect_token(Token::TParenClose, "')'")?;
             Some(Term::Parenthesized(open, Box::new(expr), close))
         } else {
             None
@@ -76,7 +76,7 @@ impl Parser {
             selectors.push(sel);
         }
 
-        let semi = self.expect_token_match(|t| matches!(t, Token::TSemicolon))?;
+        let semi = self.expect_token(Token::TSemicolon, "';'")?;
 
         Ok(Binder::Inherit(inherit_tok, from, selectors, semi))
     }
@@ -107,7 +107,7 @@ impl Parser {
             ));
         }
 
-        let eq = self.expect_token_match(|t| matches!(t, Token::TAssign))?;
+        let eq = self.expect_token(Token::TAssign, "'='")?;
         let expr = self.parse_expression()?;
 
         // Special case: if the expression is an Application, the user likely forgot
