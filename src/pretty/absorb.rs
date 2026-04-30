@@ -90,6 +90,14 @@ pub(super) fn push_absorb_expr(doc: &mut Doc, width: Width, expr: &Expression) {
     }
 }
 
+/// `nest $ lead <> group …`
+fn push_nested_rhs(doc: &mut Doc, lead: DocE, f: impl FnOnce(&mut Doc)) {
+    push_nested(doc, |d| {
+        d.push(lead);
+        push_group(d, f);
+    });
+}
+
 /// Format the right-hand side of an assignment or function-parameter default value.
 ///
 /// This mirrors Haskell `absorbRHS` (Pretty.hs ~ line 657) one-to-one: each match
@@ -105,17 +113,15 @@ pub(super) fn push_absorb_rhs(doc: &mut Doc, expr: &Expression) {
                 [Item::Item(Binder::Inherit(_, _, _, _))]
             ) =>
         {
-            push_nested(doc, |d| {
-                d.push(hardspace());
-                push_group(d, |inner| push_absorb_expr(inner, Width::Regular, expr));
+            push_nested_rhs(doc, hardspace(), |inner| {
+                push_absorb_expr(inner, Width::Regular, expr)
             });
         }
 
         // Absorbable expression. Always start on the same line, force-expand attrsets.
         _ if is_absorbable_expr(expr) => {
-            push_nested(doc, |d| {
-                d.push(hardspace());
-                push_group(d, |inner| push_absorb_expr(inner, Width::Wide, expr));
+            push_nested_rhs(doc, hardspace(), |inner| {
+                push_absorb_expr(inner, Width::Wide, expr)
             });
         }
 
@@ -133,10 +139,7 @@ pub(super) fn push_absorb_rhs(doc: &mut Doc, expr: &Expression) {
         Expression::Term(Term::SimpleString(_))
         | Expression::Term(Term::IndentedString(_))
         | Expression::Term(Term::Path(_)) => {
-            push_nested(doc, |d| {
-                d.push(hardspace());
-                push_group(d, |inner| expr.pretty(inner));
-            });
+            push_nested_rhs(doc, hardspace(), |inner| expr.pretty(inner));
         }
 
         // Non-absorbable term: if multi-line, force it onto a new indented line.
@@ -212,10 +215,7 @@ pub(super) fn push_absorb_rhs(doc: &mut Doc, expr: &Expression) {
         // - fits with a newline after `=` → do that
         // - otherwise start on a new line and expand fully
         _ => {
-            push_nested(doc, |d| {
-                d.push(line());
-                push_group(d, |inner| expr.pretty(inner));
-            });
+            push_nested_rhs(doc, line(), |inner| expr.pretty(inner));
         }
     }
 }
