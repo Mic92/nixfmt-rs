@@ -298,14 +298,7 @@ impl Lexer {
                     self.advance();
                     Ok(Token::TAnd)
                 } else {
-                    Err(Box::new(crate::error::ParseError {
-                        span: self.current_pos(),
-                        kind: crate::error::ErrorKind::UnexpectedToken {
-                            expected: vec!["'&&'".to_string()],
-                            found: "'&'".to_string(),
-                        },
-                        labels: vec![],
-                    }))
+                    self.err_unexpected(&["'&&'"], "'&'")
                 }
             }
             '|' => {
@@ -319,14 +312,7 @@ impl Lexer {
                         self.advance();
                         Ok(Token::TPipeForward)
                     }
-                    _ => Err(Box::new(crate::error::ParseError {
-                        span: self.current_pos(),
-                        kind: crate::error::ErrorKind::UnexpectedToken {
-                            expected: vec!["'||'".to_string(), "'|>'".to_string()],
-                            found: "'|'".to_string(),
-                        },
-                        labels: vec![],
-                    })),
+                    _ => self.err_unexpected(&["'||'", "'|>'"], "'|'"),
                 }
             }
             '"' => {
@@ -338,14 +324,7 @@ impl Lexer {
                     self.advance_by(2);
                     Ok(Token::TDoubleSingleQuote)
                 } else {
-                    Err(Box::new(crate::error::ParseError {
-                        span: self.current_pos(),
-                        kind: crate::error::ErrorKind::UnexpectedToken {
-                            expected: vec!["''".to_string()],
-                            found: "'".to_string(),
-                        },
-                        labels: vec![],
-                    }))
+                    self.err_unexpected(&["''"], "'")
                 }
             }
             '$' => {
@@ -353,14 +332,7 @@ impl Lexer {
                     self.advance_by(2);
                     Ok(Token::TInterOpen)
                 } else {
-                    Err(Box::new(crate::error::ParseError {
-                        span: self.current_pos(),
-                        kind: crate::error::ErrorKind::UnexpectedToken {
-                            expected: vec!["'${'".to_string()],
-                            found: "'$'".to_string(),
-                        },
-                        labels: vec![],
-                    }))
+                    self.err_unexpected(&["'${'"], "'$'")
                 }
             }
             '0'..='9' => self.parse_number(),
@@ -373,14 +345,7 @@ impl Lexer {
                 // decode the actual codepoint so multi-byte input is reported
                 // correctly.
                 let ch = self.peek().unwrap();
-                Err(Box::new(crate::error::ParseError {
-                    span: self.current_pos(),
-                    kind: crate::error::ErrorKind::UnexpectedToken {
-                        expected: vec![],
-                        found: format!("'{}'", ch),
-                    },
-                    labels: vec![],
-                }))
+                self.err_unexpected(&[], &format!("'{}'", ch))
             }
         }
     }
@@ -458,6 +423,19 @@ impl Lexer {
             kind: crate::error::ErrorKind::UnclosedDelimiter {
                 delimiter: '<',
                 opening_span,
+            },
+            labels: vec![],
+        }))
+    }
+
+    /// Build an `UnexpectedToken` error at the current cursor.
+    #[cold]
+    fn err_unexpected<T>(&self, expected: &[&str], found: &str) -> crate::error::Result<T> {
+        Err(Box::new(crate::error::ParseError {
+            span: self.current_pos(),
+            kind: crate::error::ErrorKind::UnexpectedToken {
+                expected: expected.iter().map(|s| s.to_string()).collect(),
+                found: found.to_string(),
             },
             labels: vec![],
         }))
