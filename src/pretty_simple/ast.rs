@@ -127,32 +127,11 @@ impl PrettySimple for Term {
     }
 }
 
-impl PrettySimple for Item<Term> {
+impl<T: PrettySimple> PrettySimple for Item<T> {
     fn format<W: Writer>(&self, w: &mut W) {
         match self {
-            Item::Item(term) => {
-                format_constructor!(w, "Item", [term]);
-            }
-            Item::Comments(trivia) => {
-                w.write_plain("Comments");
-                sub_expr(w, trivia);
-            }
-        }
-    }
-
-    fn is_simple(&self) -> bool {
-        match self {
-            Item::Item(_) => false,
-            Item::Comments(trivia) => trivia.is_simple(),
-        }
-    }
-}
-
-impl PrettySimple for Item<Binder> {
-    fn format<W: Writer>(&self, w: &mut W) {
-        match self {
-            Item::Item(binder) => {
-                format_constructor!(w, "Item", [binder]);
+            Item::Item(inner) => {
+                format_constructor!(w, "Item", [inner]);
             }
             Item::Comments(trivia) => {
                 w.write_plain("Comments");
