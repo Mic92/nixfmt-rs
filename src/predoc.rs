@@ -296,7 +296,7 @@ pub fn push_offset<F>(doc: &mut Doc, level: usize, f: F)
 where
     F: FnOnce(&mut Doc),
 {
-    push_nest_pair(doc, 0, level as isize, f);
+    push_nest_pair(doc, 0, level.cast_signed(), f);
 }
 
 // Renderer: Convert IR (Doc) to formatted text
@@ -383,7 +383,10 @@ pub fn unexpand_spacing_prime(mut limit: Option<i32>, doc: &[DocE]) -> Option<Do
         match elem {
             DocE::Text(_, _, _, t) => {
                 if let Some(n) = limit.as_mut() {
-                    *n -= text_width(t) as i32;
+                    #[allow(clippy::cast_possible_truncation, clippy::cast_possible_wrap)]
+                    {
+                        *n -= text_width(t) as i32;
+                    }
                 }
                 result.push(elem.clone());
             }
@@ -485,8 +488,8 @@ fn fixup_mut(doc: &mut Vec<DocE>, mut nacc: isize, mut oacc: isize) {
                     b.push_str(&txt);
                     continue;
                 }
-                let l = l as isize + nacc;
-                let o = o as isize + oacc;
+                let l = l.cast_signed() + nacc;
+                let o = o.cast_signed() + oacc;
                 debug_assert!(l >= 0 && o >= 0, "unbalanced Nest deltas");
                 let (l, o) = (l.cast_unsigned(), o.cast_unsigned());
                 doc[w] = DocE::Text(l, o, ann, txt);
@@ -545,7 +548,6 @@ fn fixup_mut(doc: &mut Vec<DocE>, mut nacc: isize, mut oacc: isize) {
                     lifted.extend(post);
                     lifted.push(DocE::Nest(nacc, oacc));
                     doc.splice(w..r, lifted);
-                    r = w;
                 } else {
                     // `simplifyGroup`
                     if core.len() == 1
@@ -575,8 +577,8 @@ fn fixup_mut(doc: &mut Vec<DocE>, mut nacc: isize, mut oacc: isize) {
                             .chain(post),
                     );
                     w += pre_len + 1;
-                    r = w;
                 }
+                r = w;
             }
         }
     }
@@ -594,7 +596,7 @@ fn fixup_mut(doc: &mut Vec<DocE>, mut nacc: isize, mut oacc: isize) {
 /// `WRITE` selects whether the compact rendering is appended to `out` (and
 /// rolled back on failure). Monomorphised so the width-only path carries no
 /// branch or `&mut String` overhead.
-#[inline(always)]
+#[inline]
 fn fits_impl<const WRITE: bool>(
     mut ni: isize,
     mut c: isize,
@@ -669,8 +671,8 @@ fn fits_impl<const WRITE: bool>(
                     out.push_str(t);
                 }
                 width += w;
-                c -= w as isize;
-                ni -= w as isize;
+                c -= w.cast_signed();
+                ni -= w.cast_signed();
                 if c < 0 {
                     fail!();
                 }
@@ -747,8 +749,8 @@ fn first_line_width(chain: Look<'_>) -> usize {
 
 /// Mirrors `firstLineFits` in Nixfmt/Predoc.hs.
 fn first_line_fits(target_width: usize, max_width: usize, chain: Look<'_>) -> bool {
-    let max = max_width as isize;
-    let target = target_width as isize;
+    let max = max_width.cast_signed();
+    let target = target_width.cast_signed();
     let mut c = max;
     let mut it = LookIter::new(chain);
     let mut pending: Option<Spacing> = None;
@@ -774,14 +776,14 @@ fn first_line_fits(target_width: usize, max_width: usize, chain: Look<'_>) -> bo
         }
         match elem {
             None => return max - c <= target,
-            Some(DocE::Text(_, _, TextAnn::RegularT, t)) => c -= text_width(t) as isize,
+            Some(DocE::Text(_, _, TextAnn::RegularT, t)) => c -= text_width(t).cast_signed(),
             Some(DocE::Text(..) | DocE::Nest(..)) => {}
             Some(DocE::Group(_, ys)) => {
                 rest.clear();
                 rest.extend(it.stack.iter().rev().map(|(s, i)| &s[*i..]));
                 let rest_width = first_line_width(&rest);
-                match fits_width(c - rest_width as isize, ys) {
-                    Some(w) => c -= w as isize,
+                match fits_width(c - rest_width.cast_signed(), ys) {
+                    Some(w) => c -= w.cast_signed(),
                     None => it.push_front(ys),
                 }
             }
@@ -1136,13 +1138,13 @@ fn try_render_group(
             0
         };
 
-        let budget = tw as isize - first_line_width(lookahead) as isize;
+        let budget = tw.cast_signed() - first_line_width(lookahead).cast_signed();
         let mark = out.len();
         let total_indent = indent_for(nl, &state.1, iw) + off;
         for _ in 0..total_indent {
             out.push(' ');
         }
-        if let Some(w) = fits(will_increase as isize, budget, grp, out) {
+        if let Some(w) = fits(will_increase.cast_signed(), budget, grp, out) {
             apply_indent(nl, state, iw);
             state.0 += w;
             true
@@ -1153,13 +1155,14 @@ fn try_render_group(
     } else {
         let line_nl = indents.last().map_or(0, |(_, l)| *l);
         let will_increase = if next_indent(lookahead).0 > line_nl {
-            iw as isize
+            iw.cast_signed()
         } else {
             0
         };
 
-        let budget = tw as isize - cc as isize - first_line_width(lookahead) as isize;
-        match fits(will_increase - cc as isize, budget, grp, out) {
+        let budget =
+            tw.cast_signed() - cc.cast_signed() - first_line_width(lookahead).cast_signed();
+        match fits(will_increase - cc.cast_signed(), budget, grp, out) {
             Some(w) => {
                 state.0 += w;
                 true

@@ -9,6 +9,7 @@ use crate::pretty_simple::PrettySimple;
 use std::process::Command;
 
 /// Which reference-nixfmt mode to invoke and where its output lands.
+#[derive(Clone, Copy)]
 enum RefMode {
     Ast,
     Ir,

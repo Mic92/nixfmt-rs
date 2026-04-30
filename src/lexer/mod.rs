@@ -431,20 +431,20 @@ impl Lexer {
     }
 
     /// Remaining input from the cursor.
-    #[inline(always)]
+    #[inline]
     fn rest(&self) -> &str {
         // `byte_pos` is always on a char boundary.
         unsafe { self.source.get_unchecked(self.byte_pos..) }
     }
 
     /// Peek at current byte without consuming (None at EOF).
-    #[inline(always)]
+    #[inline]
     pub(crate) fn peek_byte(&self) -> Option<u8> {
         self.source.as_bytes().get(self.byte_pos).copied()
     }
 
     /// Peek at current character without consuming
-    #[inline(always)]
+    #[inline]
     pub(crate) fn peek(&self) -> Option<char> {
         let b = self.peek_byte()?;
         if b < 0x80 {
@@ -463,7 +463,7 @@ impl Lexer {
 
     /// Check whether the upcoming input matches `s` byte-for-byte.
     /// Replaces open-coded `peek() == Some(a) && peek_ahead(1) == Some(b)` ladders.
-    #[inline(always)]
+    #[inline]
     pub(crate) fn at(&self, s: &str) -> bool {
         self.source.as_bytes()[self.byte_pos..].starts_with(s.as_bytes())
     }
@@ -512,14 +512,14 @@ impl Lexer {
 
     /// Advance one char and return `Ok(tok)`; for trivial single-char arms in
     /// `next_token`.
-    #[inline(always)]
+    #[inline]
     fn single(&mut self, tok: Token) -> crate::error::Result<Token> {
         self.advance();
         Ok(tok)
     }
 
     /// Consume and return current character
-    #[inline(always)]
+    #[inline]
     pub(crate) fn advance(&mut self) -> Option<char> {
         let b = self.peek_byte()?;
         if b < 0x80 {
@@ -601,7 +601,7 @@ impl Lexer {
     }
 
     /// Check if we're at end of input
-    #[inline(always)]
+    #[inline]
     fn is_eof(&self) -> bool {
         self.byte_pos >= self.source.len()
     }

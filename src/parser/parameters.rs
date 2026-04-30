@@ -56,7 +56,7 @@ impl Parser {
                 let second = self.parse_full_parameter()?;
 
                 let first_param = Parameter::ID(ident);
-                self.validate_context_parameter(&first_param, &second)?;
+                Self::validate_context_parameter(&first_param, &second)?;
 
                 Ok(Parameter::Context(
                     Box::new(first_param),
@@ -79,7 +79,7 @@ impl Parser {
     fn parse_set_or_context_parameter(&mut self) -> Result<Parameter> {
         let open_brace = self.expect_token(Token::TBraceOpen, "'{'")?;
         let attrs = self.parse_param_attrs()?;
-        self.check_duplicate_formals(&attrs)?;
+        Self::check_duplicate_formals(&attrs)?;
         let close_brace = self.expect_token(Token::TBraceClose, "'}'")?;
 
         let set_param = Parameter::Set(open_brace, attrs, close_brace);
@@ -87,7 +87,7 @@ impl Parser {
         if matches!(self.current.value, Token::TAt) {
             let at_tok = self.take_and_advance()?;
             let second = self.parse_full_parameter()?;
-            self.validate_context_parameter(&set_param, &second)?;
+            Self::validate_context_parameter(&set_param, &second)?;
 
             Ok(Parameter::Context(
                 Box::new(set_param),
@@ -162,7 +162,7 @@ impl Parser {
 
     /// Check for duplicate formal parameters
     /// Validates that no parameter name appears more than once in the attrs list
-    pub(super) fn check_duplicate_formals(&self, attrs: &[ParamAttr]) -> Result<()> {
+    pub(super) fn check_duplicate_formals(attrs: &[ParamAttr]) -> Result<()> {
         use std::collections::HashSet;
         let mut seen: HashSet<&str> = HashSet::new();
         match find_formal(attrs, |name| !seen.insert(name)) {
@@ -173,7 +173,7 @@ impl Parser {
 
     /// Check if pattern name shadows a formal parameter
     /// For args@{x, y}: the pattern name 'args' must not appear in the formals
-    fn check_pattern_shadows_formal(&self, pattern_name: &str, attrs: &[ParamAttr]) -> Result<()> {
+    fn check_pattern_shadows_formal(pattern_name: &str, attrs: &[ParamAttr]) -> Result<()> {
         match find_formal(attrs, |name| name == pattern_name) {
             Some((span, name)) => Err(duplicate_formal_error(span, name)),
             None => Ok(()),
@@ -182,17 +182,13 @@ impl Parser {
 
     /// Validate context parameter: check that pattern name doesn't shadow a formal
     /// For id@{formals} or {formals}@id patterns
-    pub(super) fn validate_context_parameter(
-        &self,
-        first: &Parameter,
-        second: &Parameter,
-    ) -> Result<()> {
+    pub(super) fn validate_context_parameter(first: &Parameter, second: &Parameter) -> Result<()> {
         match (first, second) {
             // `args@{x, y, z}` or `{x, y, z}@args`
             (Parameter::ID(pattern_leaf), Parameter::Set(_, attrs, _))
             | (Parameter::Set(_, attrs, _), Parameter::ID(pattern_leaf)) => {
                 if let Token::Identifier(pattern_name) = &pattern_leaf.value {
-                    self.check_pattern_shadows_formal(pattern_name, attrs)?;
+                    Self::check_pattern_shadows_formal(pattern_name, attrs)?;
                 }
             }
             _ => {}
@@ -202,7 +198,7 @@ impl Parser {
     }
 
     /// Convert expression to parameter (for lambda detection)
-    pub(super) fn expr_to_parameter(&self, expr: Expression) -> Result<Parameter> {
+    pub(super) fn expr_to_parameter(expr: Expression) -> Result<Parameter> {
         match expr {
             Expression::Term(Term::Token(ann)) => {
                 if matches!(ann.value, Token::Identifier(_)) {
@@ -218,7 +214,7 @@ impl Parser {
             Expression::Term(Term::Set(None, open, items, close)) => {
                 // Convert set literal to set parameter
                 // This happens for: { x, y }: or { x ? 1 }: patterns
-                let attrs = self.items_to_param_attrs(items)?;
+                let attrs = Self::items_to_param_attrs(items)?;
                 Ok(Parameter::Set(open, attrs, close))
             }
             _ => Err(ParseError::invalid(
@@ -230,7 +226,7 @@ impl Parser {
     }
 
     /// Convert Items<Binder> to Vec<ParamAttr>
-    pub(super) fn items_to_param_attrs(&self, items: Items<Binder>) -> Result<Vec<ParamAttr>> {
+    pub(super) fn items_to_param_attrs(items: Items<Binder>) -> Result<Vec<ParamAttr>> {
         let mut attrs = Vec::new();
 
         for item in items.0 {

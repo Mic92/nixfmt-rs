@@ -367,14 +367,6 @@ fn classify_indented_string(ann: Ann<Vec<Vec<StringPart>>>) -> Term {
         }
     }
 
-    // More than one line means the original literal contained a newline.
-    let should_be_simple =
-        ann.value.len() <= 1 && !ann.value.iter().flatten().any(has_quote_or_backslash);
-
-    if !should_be_simple {
-        return Term::IndentedString(ann);
-    }
-
     fn convert_escapes(t: &str) -> String {
         let mut out = String::with_capacity(t.len());
         let bytes = t.as_bytes();
@@ -394,6 +386,14 @@ fn classify_indented_string(ann: Ann<Vec<Vec<StringPart>>>) -> Term {
             }
         }
         out
+    }
+
+    // More than one line means the original literal contained a newline.
+    let should_be_simple =
+        ann.value.len() <= 1 && !ann.value.iter().flatten().any(has_quote_or_backslash);
+
+    if !should_be_simple {
+        return Term::IndentedString(ann);
     }
 
     let value = ann
@@ -423,8 +423,11 @@ fn process_indented(lines: Vec<Vec<StringPart>>) -> Vec<Vec<StringPart>> {
     let lines = remove_empty_first_line(lines);
     let lines = remove_empty_last_line(lines);
     let lines = strip_common_indentation(lines);
-    let lines: Vec<_> = lines.into_iter().flat_map(split_on_newlines).collect();
-    lines.into_iter().map(merge_adjacent_text).collect()
+    lines
+        .into_iter()
+        .flat_map(split_on_newlines)
+        .map(merge_adjacent_text)
+        .collect()
 }
 
 /// Split text parts on newlines, creating separate lines
@@ -549,7 +552,7 @@ fn line_prefix(line: &[StringPart]) -> Option<String> {
 }
 
 /// Find the common leading space prefix across all lines
-fn find_common_space_prefix(prefixes: Vec<String>) -> Option<String> {
+fn find_common_space_prefix(prefixes: &[String]) -> Option<String> {
     if prefixes.is_empty() {
         return None;
     }
@@ -597,7 +600,7 @@ fn strip_prefix_from_line(prefix: &str, mut line: Vec<StringPart>) -> Vec<String
 fn strip_common_indentation(lines: Vec<Vec<StringPart>>) -> Vec<Vec<StringPart>> {
     let prefixes: Vec<String> = lines.iter().filter_map(|line| line_prefix(line)).collect();
 
-    match find_common_space_prefix(prefixes) {
+    match find_common_space_prefix(&prefixes) {
         None => lines.into_iter().map(|_| Vec::new()).collect(),
         Some(prefix) => lines
             .into_iter()
