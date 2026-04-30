@@ -1,3 +1,4 @@
+#![allow(clippy::too_many_lines)]
 //! Example demonstrating error visualization
 //!
 //! This example shows what error messages look like for common parsing errors.

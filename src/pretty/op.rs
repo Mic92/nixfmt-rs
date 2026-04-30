@@ -1,5 +1,5 @@
-use crate::predoc::{Doc, Pretty, hardspace, line, push_group, push_nested};
-use crate::types::{Expression, Leaf};
+use crate::predoc::{Doc, Pretty, hardspace, line, push_group, push_nested, softline};
+use crate::types::{Expression, Leaf, Token};
 
 use super::absorb::is_absorbable_term;
 use super::app::push_pretty_app;
@@ -40,6 +40,52 @@ fn push_absorb_operation(doc: &mut Doc, expr: &Expression) {
             expr.pretty(doc);
         }
     }
+}
+
+/// `instance Pretty Expression` clause for `Operation` (Pretty.hs).
+pub(super) fn pretty_operation(
+    doc: &mut Doc,
+    whole: &Expression,
+    left: &Expression,
+    op: &Leaf,
+    right: &Expression,
+) {
+    // Non-chainable comparison operators: `softline` lets the op stay on the
+    // LHS's last line whenever the remainder fits.
+    if matches!(
+        op.value,
+        Token::TLess
+            | Token::TGreater
+            | Token::TLessEqual
+            | Token::TGreaterEqual
+            | Token::TEqual
+            | Token::TUnequal
+    ) {
+        left.pretty(doc);
+        doc.push(softline());
+        op.pretty(doc);
+        doc.push(hardspace());
+        right.pretty(doc);
+        return;
+    }
+
+    // `//`, `++`, `+` with an absorbable RHS get a compact layout
+    // (cf. the corresponding clause in `absorbRHS`).
+    if let Expression::Term(t) = right
+        && is_absorbable_term(t)
+        && op.value.is_update_concat_plus()
+    {
+        push_group(doc, |inner| {
+            left.pretty(inner);
+            inner.push(line());
+            op.pretty(inner);
+            inner.push(hardspace());
+            push_nested(inner, |n| t.pretty(n));
+        });
+        return;
+    }
+
+    push_pretty_operation(doc, false, whole, op);
 }
 
 pub(super) fn push_pretty_operation(

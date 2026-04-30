@@ -48,5 +48,3 @@ codegen-units = 1
 [lints.clippy]
 pedantic = { level = "warn", priority = -1 }
 nursery = { level = "warn", priority = -1 }
-# Large match-based dispatchers mirror the Haskell structure 1:1.
-too_many_lines = "allow"

@@ -240,47 +240,20 @@ impl Lexer {
             ',' => Ok(self.single(Token::TComma)),
             ';' => Ok(self.single(Token::TSemicolon)),
             '?' => Ok(self.single(Token::TQuestion)),
-            '.' => {
-                if self.at("...") {
-                    self.advance_by(3);
-                    Ok(Token::TEllipsis)
-                } else if self.peek_ahead(1).is_some_and(|c| c.is_ascii_digit()) {
-                    self.advance();
-                    let mut num = String::from(".");
-                    num.push_str(&self.consume_digits());
-
-                    if let Some(exp) = self.parse_exponent() {
-                        num.push_str(&exp);
-                    }
-
-                    Ok(Token::Float(num.into()))
-                } else {
-                    self.advance();
-                    Ok(Token::TDot)
-                }
-            }
+            '.' => Ok(self.parse_dot_token()),
             '+' => Ok(self.try_two_char('+', Token::TConcat, Token::TPlus)),
             '-' => Ok(self.try_two_char('>', Token::TImplies, Token::TMinus)),
             '*' => Ok(self.single(Token::TMul)),
             '/' => Ok(self.try_two_char('/', Token::TUpdate, Token::TDiv)),
             '!' => Ok(self.try_two_char('=', Token::TUnequal, Token::TNot)),
+            '<' if self.peek_ahead(1).is_some_and(char::is_alphanumeric) => self.parse_env_path(),
             '<' => {
-                if self.peek_ahead(1).is_some_and(char::is_alphanumeric) {
-                    self.parse_env_path()
-                } else {
-                    self.advance();
-                    match self.peek() {
-                        Some('=') => {
-                            self.advance();
-                            Ok(Token::TLessEqual)
-                        }
-                        Some('|') => {
-                            self.advance();
-                            Ok(Token::TPipeBackward)
-                        }
-                        _ => Ok(Token::TLess),
-                    }
-                }
+                self.advance();
+                Ok(match self.peek() {
+                    Some('=') => self.single(Token::TLessEqual),
+                    Some('|') => self.single(Token::TPipeBackward),
+                    _ => Token::TLess,
+                })
             }
             '>' => Ok(self.try_two_char('=', Token::TGreaterEqual, Token::TGreater)),
             '&' => {
@@ -359,6 +332,25 @@ impl Lexer {
             (4, b't') if text == "then" => Token::KThen,
             (4, b'w') if text == "with" => Token::KWith,
             _ => Token::Identifier(text.into()),
+        }
+    }
+
+    /// `.` may start `...`, a leading-dot float, or be `TDot`.
+    fn parse_dot_token(&mut self) -> Token {
+        if self.at("...") {
+            self.advance_by(3);
+            Token::TEllipsis
+        } else if self.peek_ahead(1).is_some_and(|c| c.is_ascii_digit()) {
+            self.advance();
+            let mut num = String::from(".");
+            num.push_str(&self.consume_digits());
+            if let Some(exp) = self.parse_exponent() {
+                num.push_str(&exp);
+            }
+            Token::Float(num.into())
+        } else {
+            self.advance();
+            Token::TDot
         }
     }
 

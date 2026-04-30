@@ -23,12 +23,11 @@ mod util;
 
 use absorb::{is_absorbable_term, push_absorb_rhs};
 use app::push_pretty_app;
-use op::push_pretty_operation;
-use stmt::{insert_into_app, pretty_if, pretty_with, push_absorb_abs};
+use op::pretty_operation;
+use stmt::{insert_into_app, pretty_if, pretty_let, pretty_with, push_absorb_abs};
 use string::{push_pretty_indented_string, push_pretty_simple_string};
 use term::{
-    push_pretty_items, push_pretty_parenthesized, push_pretty_set, push_pretty_term_list,
-    push_pretty_term_wide,
+    push_pretty_parenthesized, push_pretty_set, push_pretty_term_list, push_pretty_term_wide,
 };
 use util::{Width, is_simple_selector, move_trailing_comment_up, pretty_ann_with};
 
@@ -333,44 +332,7 @@ impl Pretty for Expression {
                 push_pretty_app(doc, false, &[], false, self);
             }
             Self::Operation(left, op, right) => {
-                // Non-chainable comparison operators: `softline` lets the op
-                // stay on the LHS's last line whenever the remainder fits.
-                if matches!(
-                    op.value,
-                    Token::TLess
-                        | Token::TGreater
-                        | Token::TLessEqual
-                        | Token::TGreaterEqual
-                        | Token::TEqual
-                        | Token::TUnequal
-                ) {
-                    left.pretty(doc);
-                    doc.push(softline());
-                    op.pretty(doc);
-                    doc.push(hardspace());
-                    right.pretty(doc);
-                    return;
-                }
-
-                // `//`, `++`, `+` with an absorbable RHS get a compact layout
-                // (cf. the corresponding clause in `absorbRHS`).
-                if let Self::Term(t) = &**right
-                    && is_absorbable_term(t)
-                    && op.value.is_update_concat_plus()
-                {
-                    push_group(doc, |inner| {
-                        left.pretty(inner);
-                        inner.push(line());
-                        op.pretty(inner);
-                        inner.push(hardspace());
-                        push_nested(inner, |rhs_nested| {
-                            t.pretty(rhs_nested);
-                        });
-                    });
-                    return;
-                }
-
-                push_pretty_operation(doc, false, self, op);
+                pretty_operation(doc, self, left, op, right);
             }
             Self::MemberCheck(expr, question, selectors) => {
                 expr.pretty(doc);
@@ -390,44 +352,7 @@ impl Pretty for Expression {
                 expr.pretty(doc);
             }
             Self::Let(let_kw, binders, in_kw, expr) => {
-                // Strip trivia/trailing from `in` and move it down to the body,
-                // mirroring the Haskell clause for `Let`.
-                let mut in_kw_clean = in_kw.clone();
-                in_kw_clean.pre_trivia = Trivia::new();
-                in_kw_clean.trail_comment = None;
-
-                // convertTrailing
-                let mut moved_trivia_vec: Vec<Trivium> = in_kw.pre_trivia.clone().into();
-                if let Some(trailing) = &in_kw.trail_comment {
-                    moved_trivia_vec.push(trailing.into());
-                }
-                let moved_trivia: Trivia = moved_trivia_vec.into();
-
-                // letPart = group $ pretty let_ <> hardline <> letBody
-                // letBody = nest $ renderItems hardline binders
-                let let_part = |doc: &mut Doc| {
-                    push_group(doc, |g| {
-                        let_kw.pretty(g);
-                        g.push(hardline());
-                        push_nested(g, |n| {
-                            push_pretty_items(n, binders);
-                        });
-                    });
-                };
-                // inPart = group $ pretty in_ <> hardline <> trivia <> pretty expr
-                let in_part = |doc: &mut Doc| {
-                    push_group(doc, |g| {
-                        in_kw_clean.pretty(g);
-                        g.push(hardline());
-                        moved_trivia.pretty(g);
-                        expr.pretty(g);
-                    });
-                };
-
-                // letPart <> hardline <> inPart
-                let_part(doc);
-                doc.push(hardline());
-                in_part(doc);
+                pretty_let(doc, let_kw, binders, in_kw, expr);
             }
             Self::If(if_kw, _, _, _, _, _) => {
                 // group' RegularG $ prettyIf line $ mapFirstToken moveTrailingCommentUp expr
