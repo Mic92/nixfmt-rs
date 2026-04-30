@@ -219,8 +219,8 @@ pub(super) fn push_pretty_app(
 
     // Two trailing list arguments are rendered as a pair of regular groups so
     // they wrap together; lists are never "simple", so renderSimple cannot apply.
-    if let (Expression::Application(f2, l1), Expression::Term(Term::List(_, _, _))) = (&**f, &**a) {
-        if matches!(**l1, Expression::Term(Term::List(_, _, _))) {
+    if let (Expression::Application(f2, l1), Expression::Term(Term::List(_, _, _))) = (&**f, &**a)
+        && matches!(**l1, Expression::Term(Term::List(_, _, _))) {
             push_group(doc, |g| {
                 g.extend_from_slice(pre);
                 push_group_ann(g, GroupAnn::Transparent, |inner| {
@@ -237,7 +237,6 @@ pub(super) fn push_pretty_app(
             post_hardline(doc);
             return;
         }
-    }
 
     let mut rendered_f: Doc = pre.to_vec();
     push_group_ann(&mut rendered_f, GroupAnn::Transparent, |g| {
@@ -245,8 +244,8 @@ pub(super) fn push_pretty_app(
     });
 
     // renderSimple
-    if is_simple_expression(expr) {
-        if let Some(unexpanded) = unexpand_spacing_prime(None, &rendered_f) {
+    if is_simple_expression(expr)
+        && let Some(unexpanded) = unexpand_spacing_prime(None, &rendered_f) {
             push_group(doc, |g| {
                 g.extend(unexpanded);
                 g.push(hardspace());
@@ -255,7 +254,6 @@ pub(super) fn push_pretty_app(
             post_hardline(doc);
             return;
         }
-    }
 
     push_group(doc, |g| {
         g.extend(rendered_f);

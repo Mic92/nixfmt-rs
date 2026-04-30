@@ -138,21 +138,17 @@ fn push_pretty_items_sep<T: Pretty>(doc: &mut Doc, items: &Items<T>, sep: &DocE)
                 }
 
                 // Special case: language annotation comment followed by string item
-                if i + 1 < items.len() {
-                    if let Item::Comments(trivia) = &items[i] {
-                        if trivia.len() == 1 {
-                            if let Trivium::LanguageAnnotation(lang) = &trivia[0] {
-                                if let Item::Item(string_item) = &items[i + 1] {
+                if i + 1 < items.len()
+                    && let Item::Comments(trivia) = &items[i]
+                        && trivia.len() == 1
+                            && let Trivium::LanguageAnnotation(lang) = &trivia[0]
+                                && let Item::Item(string_item) = &items[i + 1] {
                                     Trivium::LanguageAnnotation(lang.clone()).pretty(doc);
                                     doc.push(hardspace());
                                     push_group(doc, |d| string_item.pretty(d));
                                     i += 2;
                                     continue;
                                 }
-                            }
-                        }
-                    }
-                }
 
                 items[i].pretty(doc);
                 i += 1;

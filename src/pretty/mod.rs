@@ -73,12 +73,11 @@ impl Pretty for Trivia {
         }
 
         // Special case: single language annotation renders inline
-        if self.len() == 1 {
-            if let Trivium::LanguageAnnotation(_) = &self[0] {
+        if self.len() == 1
+            && let Trivium::LanguageAnnotation(_) = &self[0] {
                 self[0].pretty(doc);
                 return;
             }
-        }
 
         doc.push(hardline());
         for trivium in self {
@@ -344,8 +343,8 @@ impl Pretty for Expression {
 
                 // `//`, `++`, `+` with an absorbable RHS get a compact layout
                 // (cf. the corresponding clause in `absorbRHS`).
-                if let Expression::Term(t) = &**right {
-                    if is_absorbable_term(t) && op.value.is_update_concat_plus() {
+                if let Expression::Term(t) = &**right
+                    && is_absorbable_term(t) && op.value.is_update_concat_plus() {
                         push_group(doc, |inner| {
                             left.pretty(inner);
                             inner.push(line());
@@ -357,7 +356,6 @@ impl Pretty for Expression {
                         });
                         return;
                     }
-                }
 
                 push_pretty_operation(doc, false, self, op);
             }
@@ -467,12 +465,11 @@ impl Pretty for Expression {
                 doc.push(line());
                 // Haskell `Abstraction` (set-param) clause: absorbable body
                 // gets `group (prettyTermWide t)`.
-                if let Expression::Term(t) = &**body {
-                    if is_absorbable_term(t) {
+                if let Expression::Term(t) = &**body
+                    && is_absorbable_term(t) {
                         push_group(doc, |g| push_pretty_term_wide(g, t));
                         return;
                     }
-                }
                 body.pretty(doc);
             }
         }

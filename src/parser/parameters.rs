@@ -18,13 +18,11 @@ fn find_formal<'a>(
     mut pred: impl FnMut(&'a str) -> bool,
 ) -> Option<(Span, &'a str)> {
     for attr in attrs {
-        if let ParamAttr::ParamAttr(name_leaf, _, _) = attr {
-            if let Token::Identifier(name) = &name_leaf.value {
-                if pred(name.as_str()) {
+        if let ParamAttr::ParamAttr(name_leaf, _, _) = attr
+            && let Token::Identifier(name) = &name_leaf.value
+                && pred(name.as_str()) {
                     return Some((name_leaf.span, name.as_str()));
                 }
-            }
-        }
     }
     None
 }

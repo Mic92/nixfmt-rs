@@ -182,16 +182,14 @@ fn render_param_attrs(attrs: &[ParamAttr]) -> Vec<Doc> {
             let mut rendered = Vec::new();
             let is_last = idx + 1 == attrs.len();
 
-            if is_last {
-                if let ParamAttr::ParamAttr(name, default, Some(comma)) = attr {
-                    if is_lone_ann(comma) {
+            if is_last
+                && let ParamAttr::ParamAttr(name, default, Some(comma)) = attr
+                    && is_lone_ann(comma) {
                         ParamAttr::ParamAttr(name.clone(), default.clone(), None)
                             .pretty(&mut rendered);
                         push_trailing(&mut rendered, ",");
                         return rendered;
                     }
-                }
-            }
 
             attr.pretty(&mut rendered);
             rendered
