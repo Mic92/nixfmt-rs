@@ -20,6 +20,58 @@ pub struct ParseError {
 }
 
 impl ParseError {
+    /// Build a boxed [`ErrorKind::UnexpectedToken`] error with no labels.
+    pub fn unexpected(
+        span: Span,
+        expected: impl Into<Vec<String>>,
+        found: impl Into<String>,
+    ) -> Box<Self> {
+        Box::new(Self {
+            span,
+            kind: ErrorKind::UnexpectedToken {
+                expected: expected.into(),
+                found: found.into(),
+            },
+            labels: Vec::new(),
+        })
+    }
+
+    /// Build a boxed [`ErrorKind::InvalidSyntax`] error with no labels.
+    pub fn invalid(span: Span, description: impl Into<String>, hint: Option<String>) -> Box<Self> {
+        Box::new(Self {
+            span,
+            kind: ErrorKind::InvalidSyntax {
+                description: description.into(),
+                hint,
+            },
+            labels: Vec::new(),
+        })
+    }
+
+    /// Build a boxed [`ErrorKind::UnclosedDelimiter`] error with no labels.
+    pub fn unclosed(span: Span, delimiter: char, opening_span: Span) -> Box<Self> {
+        Box::new(Self {
+            span,
+            kind: ErrorKind::UnclosedDelimiter {
+                delimiter,
+                opening_span,
+            },
+            labels: Vec::new(),
+        })
+    }
+
+    /// Build a boxed [`ErrorKind::MissingToken`] error with no labels.
+    pub fn missing(span: Span, token: &str, after: &str) -> Box<Self> {
+        Box::new(Self {
+            span,
+            kind: ErrorKind::MissingToken {
+                token: token.into(),
+                after: after.into(),
+            },
+            labels: Vec::new(),
+        })
+    }
+
     /// Create a simple error with just a message
     pub fn new(span: Span, msg: impl Into<String>) -> Self {
         Self {

@@ -29,7 +29,7 @@ fn first_token_comment(expr: &Expression) -> Trivia {
     fn ann<T>(a: &Ann<T>) -> Trivia {
         let mut t = a.pre_trivia.clone();
         if let Some(tc) = &a.trail_comment {
-            t.push(Trivium::LineComment(format!(" {}", tc.0)));
+            t.push(tc.into());
         }
         t
     }
@@ -72,11 +72,7 @@ fn first_token_comment(expr: &Expression) -> Trivia {
 /// chain, which is almost always a small `Term`, so the deep clone is cheap.
 fn strip_first_comment(expr: &Expression) -> Expression {
     fn ann<T: Clone>(a: &Ann<T>) -> Ann<T> {
-        Ann {
-            pre_trivia: Trivia::new(),
-            trail_comment: None,
-            ..a.clone()
-        }
+        a.bare()
     }
     fn param(p: &Parameter) -> Parameter {
         match p {
@@ -219,6 +215,11 @@ fn push_absorb_app(doc: &mut Doc, expr: &Expression, indent_function: bool, comm
     }
 }
 
+/// `group' Priority $ nest …`
+fn push_priority_nest(doc: &mut Doc, f: impl FnOnce(&mut Doc)) {
+    push_group_ann(doc, GroupAnn::Priority, |g| push_nested(g, f));
+}
+
 /// Render the last argument of a function call. Mirrors Haskell `absorbLast`.
 fn push_absorb_last(doc: &mut Doc, arg: &Expression) {
     match arg {
@@ -226,9 +227,7 @@ fn push_absorb_last(doc: &mut Doc, arg: &Expression) {
             // Haskell: `group' Priority $ nest $ prettyTerm t`. `prettyTerm`
             // (unlike `instance Pretty Term`) does *not* wrap a `List` in an
             // extra group.
-            push_group_ann(doc, GroupAnn::Priority, |g| {
-                push_nested(g, |n| push_pretty_term(n, t));
-            });
+            push_priority_nest(doc, |n| push_pretty_term(n, t));
         }
         // Parenthesised single-ID-parameter abstraction with absorbable body.
         Expression::Term(Term::Parenthesized(open, inner, close))
@@ -245,15 +244,13 @@ fn push_absorb_last(doc: &mut Doc, arg: &Expression) {
             let Expression::Term(body_term) = &**body else {
                 unreachable!()
             };
-            push_group_ann(doc, GroupAnn::Priority, |g| {
-                push_nested(g, |n| {
-                    open.pretty(n);
-                    name.pretty(n);
-                    colon.pretty(n);
-                    n.push(hardspace());
-                    push_pretty_term_wide(n, body_term);
-                    close.pretty(n);
-                });
+            push_priority_nest(doc, |n| {
+                open.pretty(n);
+                name.pretty(n);
+                colon.pretty(n);
+                n.push(hardspace());
+                push_pretty_term_wide(n, body_term);
+                close.pretty(n);
             });
         }
         // Parenthesised `ident { ... }` application with absorbable body.
@@ -276,14 +273,12 @@ fn push_absorb_last(doc: &mut Doc, arg: &Expression) {
             let Expression::Term(body_term) = &**a else {
                 unreachable!()
             };
-            push_group_ann(doc, GroupAnn::Priority, |g| {
-                push_nested(g, |n| {
-                    open.pretty(n);
-                    ident.pretty(n);
-                    n.push(hardspace());
-                    push_pretty_term_wide(n, body_term);
-                    close.pretty(n);
-                });
+            push_priority_nest(doc, |n| {
+                open.pretty(n);
+                ident.pretty(n);
+                n.push(hardspace());
+                push_pretty_term_wide(n, body_term);
+                close.pretty(n);
             });
         }
         Expression::Term(Term::Parenthesized(open, expr, close)) => {

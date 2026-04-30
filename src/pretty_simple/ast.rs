@@ -2,90 +2,50 @@
 
 use super::{
     NUMBER_COLOR, PrettySimple, STRING_CONTENT_COLOR, STRING_QUOTE_COLOR, Writer, escape_string,
-    format_delimited_value, sub_expr, write_delimited,
+    format_bracket_list, sub_expr, write_delimited,
 };
 use crate::format_constructor;
 use crate::format_enum;
 use crate::format_record;
 use crate::types::*;
 
-/// PrettySimple for &str - quoted string literals
-/// Based on pretty-simple's StringLit
-impl PrettySimple for &str {
-    fn format<W: Writer>(&self, w: &mut W) {
-        w.write_colored("\"", STRING_QUOTE_COLOR);
-        // Escape special characters to match Haskell's show behavior
-        let escaped = escape_string(self);
-        w.write_colored(&escaped, STRING_CONTENT_COLOR);
-        w.write_colored("\"", STRING_QUOTE_COLOR);
-    }
-
-    fn is_simple(&self) -> bool {
-        true
-    }
-
-    fn is_atomic(&self) -> bool {
-        true
-    }
+/// Generate a `PrettySimple` impl for a primitive/atomic type:
+/// `is_simple` and `is_atomic` are always `true`; only `format` varies.
+macro_rules! simple_atom {
+    ($ty:ty, |$self_:ident, $w:ident| $body:expr) => {
+        impl PrettySimple for $ty {
+            fn format<W: Writer>(&self, $w: &mut W) {
+                let $self_ = self;
+                $body
+            }
+            fn is_simple(&self) -> bool {
+                true
+            }
+            fn is_atomic(&self) -> bool {
+                true
+            }
+        }
+    };
 }
 
-/// PrettySimple for String - delegates to &str
-impl PrettySimple for String {
-    fn format<W: Writer>(&self, w: &mut W) {
-        self.as_str().format(w);
-    }
+// &str / String: quoted string literals (pretty-simple's StringLit)
+simple_atom!(&str, |s, w| {
+    w.write_colored("\"", STRING_QUOTE_COLOR);
+    // Escape special characters to match Haskell's show behavior
+    w.write_colored(&escape_string(s), STRING_CONTENT_COLOR);
+    w.write_colored("\"", STRING_QUOTE_COLOR);
+});
+simple_atom!(String, |s, w| s.as_str().format(w));
 
-    fn is_simple(&self) -> bool {
-        true
-    }
+// isize / usize: number literals (pretty-simple's NumberLit)
+simple_atom!(isize, |n, w| w.write_colored(&n.to_string(), NUMBER_COLOR));
+simple_atom!(usize, |n, w| w.write_colored(&n.to_string(), NUMBER_COLOR));
 
-    fn is_atomic(&self) -> bool {
-        true
-    }
-}
-
-impl PrettySimple for isize {
-    fn format<W: Writer>(&self, w: &mut W) {
-        w.write_colored(&self.to_string(), NUMBER_COLOR);
-    }
-    fn is_simple(&self) -> bool {
-        true
-    }
-    fn is_atomic(&self) -> bool {
-        true
-    }
-}
-
-/// PrettySimple for usize - number literals
-/// Based on pretty-simple's NumberLit
-impl PrettySimple for usize {
-    fn format<W: Writer>(&self, w: &mut W) {
-        w.write_colored(&self.to_string(), NUMBER_COLOR);
-    }
-
-    fn is_simple(&self) -> bool {
-        true
-    }
-
-    fn is_atomic(&self) -> bool {
-        true
-    }
-}
-
-/// PrettySimple for bool - Haskell Bool values
-impl PrettySimple for bool {
-    fn format<W: Writer>(&self, w: &mut W) {
-        w.write_plain(if *self { "True" } else { "False" });
-    }
-
-    fn is_simple(&self) -> bool {
-        true
-    }
-
-    fn is_atomic(&self) -> bool {
-        true
-    }
-}
+simple_atom!(bool, |b, w| w.write_plain(if *b {
+    "True"
+} else {
+    "False"
+}));
 
 impl PrettySimple for Whole<Expression> {
     fn format<W: Writer>(&self, w: &mut W) {
@@ -127,32 +87,11 @@ impl PrettySimple for Term {
     }
 }
 
-impl PrettySimple for Item<Term> {
+impl<T: PrettySimple> PrettySimple for Item<T> {
     fn format<W: Writer>(&self, w: &mut W) {
         match self {
-            Item::Item(term) => {
-                format_constructor!(w, "Item", [term]);
-            }
-            Item::Comments(trivia) => {
-                w.write_plain("Comments");
-                sub_expr(w, trivia);
-            }
-        }
-    }
-
-    fn is_simple(&self) -> bool {
-        match self {
-            Item::Item(_) => false,
-            Item::Comments(trivia) => trivia.is_simple(),
-        }
-    }
-}
-
-impl PrettySimple for Item<Binder> {
-    fn format<W: Writer>(&self, w: &mut W) {
-        match self {
-            Item::Item(binder) => {
-                format_constructor!(w, "Item", [binder]);
+            Item::Item(inner) => {
+                format_constructor!(w, "Item", [inner]);
             }
             Item::Comments(trivia) => {
                 w.write_plain("Comments");
@@ -382,50 +321,7 @@ impl<T: PrettySimple> PrettySimple for Ann<T> {
 /// - Any element complex: multiline with comma-first
 impl<T: PrettySimple> PrettySimple for Vec<T> {
     fn format<W: Writer>(&self, w: &mut W) {
-        // Empty list: [] - use current depth, don't increment
-        if self.is_empty() {
-            w.with_color(|w_color| {
-                let bracket_color = w_color.current_color();
-                w_color.write_colored("[", bracket_color);
-                w_color.write_colored("]", bracket_color);
-            });
-            return;
-        }
-
-        // Non-empty: increment depth first, then capture color (matching Open annotation)
-        // EXACT Haskell logic from list function (Printer.hs:252-254):
-        //   [xs] | all isSimple xs -> space <> hcat (map (prettyExpr opts) xs) <> space
-        //   _ -> concatWith lineAndCommaSep ...
-        w.with_color(|w_color| {
-            let bracket_color = w_color.current_color();
-            w_color.with_depth(|w_inner| {
-                if self.len() == 1 && self[0].is_simple() {
-                    // Case: [xs] | all isSimple xs (ONE row, all elements simple)
-                    w_inner.write_colored("[", bracket_color);
-                    w_inner.write_plain(" ");
-                    for (i, item) in self.iter().enumerate() {
-                        if i > 0 {
-                            w_inner.write_plain(" ");
-                        }
-                        item.format(w_inner);
-                    }
-                    w_inner.write_plain(" ");
-                    w_inner.write_colored("]", bracket_color);
-                } else {
-                    // Case: _ (multiline with comma-first)
-                    w_inner.write_colored("[", bracket_color);
-                    for (i, item) in self.iter().enumerate() {
-                        if i > 0 {
-                            w_inner.newline();
-                            w_inner.write_colored(",", bracket_color);
-                        }
-                        format_delimited_value(w_inner, item);
-                    }
-                    w_inner.newline();
-                    w_inner.write_colored("]", bracket_color);
-                }
-            });
-        });
+        format_bracket_list(w, self, true);
     }
 
     fn is_simple(&self) -> bool {

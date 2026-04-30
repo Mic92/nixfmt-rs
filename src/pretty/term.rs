@@ -3,18 +3,15 @@ use crate::types::*;
 
 use super::absorb::{is_absorbable_expr, is_absorbable_term, push_absorb_expr};
 use super::app::push_pretty_app;
-use super::util::{Width, has_trivia, is_lone_ann, items_has_only_comments, split_paren_trivia};
+use super::util::{
+    Width, has_trivia, is_lone_ann, items_has_only_comments, push_empty_brackets,
+    split_paren_trivia,
+};
 
 /// Mirrors `prettyTerm (List ..)` in Nixfmt/Pretty.hs (no surrounding group).
 pub(super) fn push_pretty_term_list(doc: &mut Doc, open: &Leaf, items: &Items<Term>, close: &Leaf) {
     if items.0.is_empty() && open.trail_comment.is_none() && close.pre_trivia.is_empty() {
-        open.pretty(doc);
-        if open.span.start_line != close.span.start_line {
-            doc.push(hardline());
-        } else {
-            doc.push(hardspace());
-        }
-        close.pretty(doc);
+        push_empty_brackets(doc, open, close);
     } else {
         push_render_list(doc, hardline(), open, items, close);
     }
@@ -50,11 +47,7 @@ pub(super) fn push_render_list(
     items: &Items<Term>,
     close: &Ann<Token>,
 ) {
-    let open_clean = Ann {
-        trail_comment: None,
-        ..open.clone()
-    };
-    open_clean.pretty(doc);
+    open.without_trail().pretty(doc);
 
     let sur = if open.span.start_line != close.span.start_line
         || items_has_only_comments(items)
@@ -91,14 +84,7 @@ pub(super) fn push_pretty_set(
             rec.pretty(doc);
             doc.push(hardspace());
         }
-        open.pretty(doc);
-        // If the braces are on different lines, keep them like that
-        doc.push(if open.span.start_line != close.span.start_line {
-            hardline()
-        } else {
-            hardspace()
-        });
-        close.pretty(doc);
+        push_empty_brackets(doc, open, close);
         return;
     }
 
@@ -107,13 +93,7 @@ pub(super) fn push_pretty_set(
         doc.push(hardspace());
     }
 
-    let open_without_trail = Ann {
-        pre_trivia: open.pre_trivia.clone(),
-        span: open.span,
-        trail_comment: None,
-        value: open.value.clone(),
-    };
-    open_without_trail.pretty(doc);
+    open.without_trail().pretty(doc);
 
     let starts_with_emptyline = match items.0.first() {
         Some(Item::Comments(trivia)) => trivia.iter().any(|t| matches!(t, Trivium::EmptyLine())),
@@ -183,7 +163,7 @@ fn push_pretty_items_sep<T: Pretty>(doc: &mut Doc, items: &Items<T>, sep: &DocE)
 
 /// Render the nested document that appears between parentheses.
 /// Mirrors `inner` in Haskell `prettyTerm (Parenthesized ...)`.
-fn push_parenthesized_inner(doc: &mut Doc, expr: &Expression) {
+pub(super) fn push_parenthesized_inner(doc: &mut Doc, expr: &Expression) {
     match expr {
         _ if is_absorbable_expr(expr) => {
             push_group(doc, |inner| {

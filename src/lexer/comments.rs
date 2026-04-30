@@ -86,18 +86,7 @@ impl Lexer {
 
         // Optionally consume exactly one newline; a blank line between the
         // comment and the string disqualifies it as a language annotation.
-        match self.peek() {
-            Some('\n') => {
-                self.advance();
-            }
-            Some('\r') => {
-                self.advance();
-                if self.peek() == Some('\n') {
-                    self.advance();
-                }
-            }
-            _ => {}
-        }
+        self.eat_one_eol();
         let _ = self.skip_hspace();
 
         let result = self.peek() == Some('"') || self.at("''");
@@ -120,18 +109,14 @@ fn is_valid_language_identifier(s: &str) -> bool {
 /// Split text into lines, normalize line endings, and drop trailing empty lines
 /// This matches nixfmt's splitLines function which does `dropWhileEnd Text.null`
 pub(super) fn split_lines(text: &str) -> Vec<String> {
-    let mut lines: Vec<String> = text
+    let lines: Vec<String> = text
         .replace("\r\n", "\n")
         .lines()
         .map(|line| line.trim_end().to_string())
         .collect();
 
     // Drop trailing empty lines (matches Haskell's dropWhileEnd Text.null)
-    while lines.last().is_some_and(|line| line.is_empty()) {
-        lines.pop();
-    }
-
-    lines
+    drop_while_empty_end(lines)
 }
 
 /// Remove aligned stars from block comments (Lexer.hs:110-118)

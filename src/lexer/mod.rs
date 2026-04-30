@@ -11,6 +11,34 @@ mod trivia;
 #[cfg(test)]
 mod tests;
 
+/// Update `line`/`column` to account for having advanced over `slice`.
+/// Nix source is overwhelmingly ASCII, so the no-newline ASCII case is the
+/// fast path; only count chars when non-ASCII bytes are present.
+///
+/// Free function rather than `&mut self` so callers may borrow
+/// `self.source` for `slice` while mutating the two counters.
+#[inline]
+fn bump_line_col(line: &mut usize, column: &mut usize, slice: &str) {
+    match memchr::memrchr(b'\n', slice.as_bytes()) {
+        None => {
+            *column += if slice.is_ascii() {
+                slice.len()
+            } else {
+                slice.chars().count()
+            };
+        }
+        Some(last_nl) => {
+            *line += memchr::memchr_iter(b'\n', slice.as_bytes()).count();
+            let tail = &slice[last_nl + 1..];
+            *column = if tail.is_ascii() {
+                tail.len()
+            } else {
+                tail.chars().count()
+            };
+        }
+    }
+}
+
 /// Intermediate trivia representation during parsing
 #[derive(Debug, Clone)]
 pub(crate) enum ParseTrivium {
@@ -298,14 +326,7 @@ impl Lexer {
                     self.advance();
                     Ok(Token::TAnd)
                 } else {
-                    Err(Box::new(crate::error::ParseError {
-                        span: self.current_pos(),
-                        kind: crate::error::ErrorKind::UnexpectedToken {
-                            expected: vec!["'&&'".to_string()],
-                            found: "'&'".to_string(),
-                        },
-                        labels: vec![],
-                    }))
+                    self.err_unexpected(&["'&&'"], "'&'")
                 }
             }
             '|' => {
@@ -319,14 +340,7 @@ impl Lexer {
                         self.advance();
                         Ok(Token::TPipeForward)
                     }
-                    _ => Err(Box::new(crate::error::ParseError {
-                        span: self.current_pos(),
-                        kind: crate::error::ErrorKind::UnexpectedToken {
-                            expected: vec!["'||'".to_string(), "'|>'".to_string()],
-                            found: "'|'".to_string(),
-                        },
-                        labels: vec![],
-                    })),
+                    _ => self.err_unexpected(&["'||'", "'|>'"], "'|'"),
                 }
             }
             '"' => {
@@ -338,14 +352,7 @@ impl Lexer {
                     self.advance_by(2);
                     Ok(Token::TDoubleSingleQuote)
                 } else {
-                    Err(Box::new(crate::error::ParseError {
-                        span: self.current_pos(),
-                        kind: crate::error::ErrorKind::UnexpectedToken {
-                            expected: vec!["''".to_string()],
-                            found: "'".to_string(),
-                        },
-                        labels: vec![],
-                    }))
+                    self.err_unexpected(&["''"], "'")
                 }
             }
             '$' => {
@@ -353,14 +360,7 @@ impl Lexer {
                     self.advance_by(2);
                     Ok(Token::TInterOpen)
                 } else {
-                    Err(Box::new(crate::error::ParseError {
-                        span: self.current_pos(),
-                        kind: crate::error::ErrorKind::UnexpectedToken {
-                            expected: vec!["'${'".to_string()],
-                            found: "'$'".to_string(),
-                        },
-                        labels: vec![],
-                    }))
+                    self.err_unexpected(&["'${'"], "'$'")
                 }
             }
             '0'..='9' => self.parse_number(),
@@ -373,39 +373,20 @@ impl Lexer {
                 // decode the actual codepoint so multi-byte input is reported
                 // correctly.
                 let ch = self.peek().unwrap();
-                Err(Box::new(crate::error::ParseError {
-                    span: self.current_pos(),
-                    kind: crate::error::ErrorKind::UnexpectedToken {
-                        expected: vec![],
-                        found: format!("'{}'", ch),
-                    },
-                    labels: vec![],
-                }))
+                self.err_unexpected(&[], &format!("'{}'", ch))
             }
         }
     }
 
     /// Parse identifier or keyword
     fn parse_ident_or_keyword(&mut self) -> crate::error::Result<Token> {
-        let start_byte = self.byte_pos;
+        // Nix identifiers are ASCII-only: [a-zA-Z_][a-zA-Z0-9_'-]*.
+        let len = self
+            .take_ascii_while(|b| b.is_ascii_alphanumeric() || matches!(b, b'_' | b'-' | b'\''))
+            .len();
+        let start_byte = self.byte_pos - len;
         let bytes = self.source.as_bytes();
-
-        // Nix identifiers are ASCII-only: [a-zA-Z_][a-zA-Z0-9_'-]*, so every
-        // accepted byte is a full char and cannot be a newline.
-        let mut i = self.byte_pos;
-        while i < bytes.len() {
-            let b = bytes[i];
-            if b.is_ascii_alphanumeric() || matches!(b, b'_' | b'-' | b'\'') {
-                i += 1;
-            } else {
-                break;
-            }
-        }
-        let len = i - start_byte;
-        self.byte_pos = i;
-        self.column += len;
-
-        let text = &self.source[start_byte..i];
+        let text = &self.source[start_byte..self.byte_pos];
 
         // First-byte + length dispatch keeps the common "not a keyword" path
         // to a single comparison instead of up to nine `memcmp`s.
@@ -458,6 +439,19 @@ impl Lexer {
             kind: crate::error::ErrorKind::UnclosedDelimiter {
                 delimiter: '<',
                 opening_span,
+            },
+            labels: vec![],
+        }))
+    }
+
+    /// Build an `UnexpectedToken` error at the current cursor.
+    #[cold]
+    fn err_unexpected<T>(&self, expected: &[&str], found: &str) -> crate::error::Result<T> {
+        Err(Box::new(crate::error::ParseError {
+            span: self.current_pos(),
+            kind: crate::error::ErrorKind::UnexpectedToken {
+                expected: expected.iter().map(|s| s.to_string()).collect(),
+                found: found.to_string(),
             },
             labels: vec![],
         }))
@@ -572,30 +566,9 @@ impl Lexer {
         }
         let start = self.byte_pos;
         let end = start + len;
-        let slice = &self.source[start..end];
         self.byte_pos = end;
-        // Maintain line/column. Typical string content has no newlines on the
-        // indented path (caller passes `b'\n'` as a stop byte) and short runs
-        // on the simple path, so prefer the no-newline ASCII fast path.
-        match memchr::memrchr(b'\n', slice.as_bytes()) {
-            None => {
-                self.column += if slice.is_ascii() {
-                    len
-                } else {
-                    slice.chars().count()
-                };
-            }
-            Some(last_nl) => {
-                self.line += memchr::memchr_iter(b'\n', slice.as_bytes()).count();
-                let tail = &slice[last_nl + 1..];
-                self.column = if tail.is_ascii() {
-                    tail.len()
-                } else {
-                    tail.chars().count()
-                };
-            }
-        }
-        slice
+        bump_line_col(&mut self.line, &mut self.column, &self.source[start..end]);
+        &self.source[start..end]
     }
 
     /// Move the cursor to absolute byte offset `target` (which must be on a
@@ -603,26 +576,13 @@ impl Lexer {
     /// the skipped slice. Used after a `memchr` jump.
     pub(super) fn seek_to(&mut self, target: usize) {
         debug_assert!(target >= self.byte_pos);
-        let slice = &self.source[self.byte_pos..target];
-        match memchr::memrchr(b'\n', slice.as_bytes()) {
-            None => {
-                self.column += if slice.is_ascii() {
-                    slice.len()
-                } else {
-                    slice.chars().count()
-                };
-            }
-            Some(last_nl) => {
-                self.line += memchr::memchr_iter(b'\n', slice.as_bytes()).count();
-                let tail = &slice[last_nl + 1..];
-                self.column = if tail.is_ascii() {
-                    tail.len()
-                } else {
-                    tail.chars().count()
-                };
-            }
-        }
+        let start = self.byte_pos;
         self.byte_pos = target;
+        bump_line_col(
+            &mut self.line,
+            &mut self.column,
+            &self.source[start..target],
+        );
     }
 
     /// Bulk-advance over the next `len` bytes of source, which must contain no
@@ -633,16 +593,26 @@ impl Lexer {
     pub(super) fn advance_bytes_no_newline(&mut self, len: usize) -> &str {
         let start = self.byte_pos;
         let end = start + len;
-        let slice = &self.source[start..end];
-        debug_assert!(!slice.as_bytes().contains(&b'\n'));
+        debug_assert!(!self.source.as_bytes()[start..end].contains(&b'\n'));
         self.byte_pos = end;
-        // Nix source is overwhelmingly ASCII; only count chars when it isn't.
-        self.column += if slice.is_ascii() {
-            len
-        } else {
-            slice.chars().count()
-        };
-        slice
+        bump_line_col(&mut self.line, &mut self.column, &self.source[start..end]);
+        &self.source[start..end]
+    }
+
+    /// Consume the longest run of ASCII bytes satisfying `pred` and return it
+    /// as a `&str` borrow into `self.source`. `pred` must never accept `b'\n'`
+    /// (so `column` can be bumped by byte count without line tracking).
+    #[inline]
+    pub(super) fn take_ascii_while(&mut self, pred: impl Fn(u8) -> bool) -> &str {
+        let bytes = self.source.as_bytes();
+        let start = self.byte_pos;
+        let mut i = start;
+        while i < bytes.len() && pred(bytes[i]) {
+            i += 1;
+        }
+        self.byte_pos = i;
+        self.column += i - start;
+        &self.source[start..i]
     }
 
     /// Check if we're at end of input
@@ -654,16 +624,7 @@ impl Lexer {
     /// Skip horizontal whitespace (spaces and tabs, but not newlines)
     #[inline]
     fn skip_hspace(&mut self) -> usize {
-        let bytes = self.source.as_bytes();
-        let start = self.byte_pos;
-        let mut i = start;
-        while i < bytes.len() && matches!(bytes[i], b' ' | b'\t') {
-            i += 1;
-        }
-        let n = i - start;
-        self.byte_pos = i;
-        self.column += n;
-        n
+        self.take_ascii_while(|b| matches!(b, b' ' | b'\t')).len()
     }
 
     /// Consume trivia when it is purely horizontal/vertical whitespace.
@@ -739,12 +700,11 @@ impl Lexer {
                     self.trivia_scratch.push(c);
                 }
                 Some('/') if self.at("/*") => {
-                    let saved_state = self.save_state();
-
+                    // try_parse_language_annotation already restores state on
+                    // failure, so no outer save/restore is needed here.
                     if let Some(lang_annot) = self.try_parse_language_annotation() {
                         self.trivia_scratch.push(lang_annot);
                     } else {
-                        self.restore_state(saved_state);
                         let c = self.parse_block_comment();
                         self.trivia_scratch.push(c);
                     }
@@ -756,30 +716,38 @@ impl Lexer {
 
     /// Parse consecutive newlines, return count
     fn parse_newlines(&mut self) -> usize {
-        let bytes = self.source.as_bytes();
         let mut count = 0;
-        while self.byte_pos < bytes.len() {
-            match bytes[self.byte_pos] {
-                b'\n' => {
+        while self.eat_one_eol() {
+            count += 1;
+        }
+        count
+    }
+
+    /// Consume a single end-of-line sequence (`\n`, `\r\n`, or bare `\r`).
+    /// A bare `\r` advances `column` but not `line`, matching the historical
+    /// behaviour of `parse_newlines`.
+    #[inline]
+    pub(super) fn eat_one_eol(&mut self) -> bool {
+        let bytes = self.source.as_bytes();
+        match bytes.get(self.byte_pos) {
+            Some(&b'\n') => {
+                self.byte_pos += 1;
+                self.line += 1;
+                self.column = 0;
+                true
+            }
+            Some(&b'\r') => {
+                self.byte_pos += 1;
+                self.column += 1;
+                if bytes.get(self.byte_pos) == Some(&b'\n') {
                     self.byte_pos += 1;
                     self.line += 1;
                     self.column = 0;
-                    count += 1;
                 }
-                b'\r' => {
-                    self.byte_pos += 1;
-                    self.column += 1;
-                    if bytes.get(self.byte_pos) == Some(&b'\n') {
-                        self.byte_pos += 1;
-                        self.line += 1;
-                        self.column = 0;
-                    }
-                    count += 1;
-                }
-                _ => break,
+                true
             }
+            _ => false,
         }
-        count
     }
 
     /// Rewind the last trivia consumed (horizontal spaces, newlines, and comments)

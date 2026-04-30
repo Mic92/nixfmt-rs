@@ -222,6 +222,66 @@ pub(crate) fn format_delimited_value<T: PrettySimple, W: Writer>(w: &mut W, valu
     }
 }
 
+/// Shared bracket-list rendering for `Vec<T>` and `IR`.
+///
+/// Mirrors pretty-simple's `list "[" "]"` logic:
+/// - empty            → `[]`
+/// - one simple row   → `[ e1 e2 ... ]` (inline)
+/// - otherwise        → multiline, comma-first
+///
+/// `bump_depth` controls whether the body is rendered at one extra indentation
+/// level. `Vec<T>` does this (matching pretty-simple's `Open` annotation),
+/// whereas the top-level `IR` dump stays at depth 0 so its first column lines
+/// up with the Haskell reference output.
+pub(crate) fn format_bracket_list<T: PrettySimple, W: Writer>(
+    w: &mut W,
+    items: &[T],
+    bump_depth: bool,
+) {
+    if items.is_empty() {
+        w.with_color(|w_color| {
+            let bracket_color = w_color.current_color();
+            w_color.write_colored("[", bracket_color);
+            w_color.write_colored("]", bracket_color);
+        });
+        return;
+    }
+
+    w.with_color(|w_color| {
+        let bracket_color = w_color.current_color();
+        let body = |w_inner: &mut W| {
+            if items.len() == 1 && items[0].is_simple() {
+                w_inner.write_colored("[", bracket_color);
+                w_inner.write_plain(" ");
+                for (i, item) in items.iter().enumerate() {
+                    if i > 0 {
+                        w_inner.write_plain(" ");
+                    }
+                    item.format(w_inner);
+                }
+                w_inner.write_plain(" ");
+                w_inner.write_colored("]", bracket_color);
+            } else {
+                w_inner.write_colored("[", bracket_color);
+                for (i, item) in items.iter().enumerate() {
+                    if i > 0 {
+                        w_inner.newline();
+                        w_inner.write_colored(",", bracket_color);
+                    }
+                    format_delimited_value(w_inner, item);
+                }
+                w_inner.newline();
+                w_inner.write_colored("]", bracket_color);
+            }
+        };
+        if bump_depth {
+            w_color.with_depth(body);
+        } else {
+            body(w_color);
+        }
+    });
+}
+
 /// Helper for inline delimiters - writes colored delimiters with content on single line
 /// Format: <open> <content> <close>
 /// Caller is responsible for color/depth context

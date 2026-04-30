@@ -1,9 +1,9 @@
 use crate::predoc::*;
 use crate::types::*;
 
-use super::absorb::{is_absorbable_expr, is_absorbable_term, push_absorb_expr};
-use super::app::push_pretty_app;
-use super::util::{Width, is_simple_expression, is_spaces, text_width};
+use super::absorb::is_absorbable_term;
+use super::term::push_parenthesized_inner;
+use super::util::{is_simple_expression, is_spaces};
 
 impl Pretty for StringPart {
     fn pretty(&self, doc: &mut Doc) {
@@ -61,35 +61,6 @@ impl Pretty for StringPart {
     }
 }
 
-/// Body of `${ … }` when the interpolation is the only thing on a string line.
-/// Direct port of the `inner` `where`-clause of the `[TextPart pre, Interpolation …]`
-/// arm in Haskell `instance Pretty [StringPart]`; the case split mirrors
-/// `prettyTerm (Parenthesized …)` as noted upstream.
-fn push_lone_interp_inner(doc: &mut Doc, expr: &Expression) {
-    match expr {
-        _ if is_absorbable_expr(expr) => {
-            push_group(doc, |g| push_absorb_expr(g, Width::Regular, expr));
-        }
-        Expression::Application(_, _) => {
-            push_pretty_app(doc, true, &[], true, expr);
-        }
-        Expression::Term(Term::Selection(t, _, _)) if is_absorbable_term(t) => {
-            doc.push(line_prime());
-            push_group(doc, |g| expr.pretty(g));
-            doc.push(line_prime());
-        }
-        Expression::Term(Term::Selection(_, _, _)) => {
-            push_group(doc, |g| expr.pretty(g));
-            doc.push(line_prime());
-        }
-        _ => {
-            doc.push(line_prime());
-            push_group(doc, |g| expr.pretty(g));
-            doc.push(line_prime());
-        }
-    }
-}
-
 impl Pretty for Vec<StringPart> {
     fn pretty(&self, doc: &mut Doc) {
         // When the interpolation is the only thing on the string line (modulo
@@ -111,7 +82,8 @@ impl Pretty for Vec<StringPart> {
             push_offset(doc, text_width(pre), |d| {
                 push_group(d, |g| {
                     push_text(g, "${");
-                    push_nested(g, |n| push_lone_interp_inner(n, expr));
+                    // Upstream keeps this case split identical to `prettyTerm (Parenthesized …)`.
+                    push_nested(g, |n| push_parenthesized_inner(n, expr));
                     push_text(g, "}");
                 });
             });

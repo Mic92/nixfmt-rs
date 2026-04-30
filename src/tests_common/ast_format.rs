@@ -8,6 +8,76 @@ use crate::colored_writer::ColoredWriter;
 use crate::pretty_simple::PrettySimple;
 use std::process::Command;
 
+/// Which reference-nixfmt mode to invoke and where its output lands.
+enum RefMode {
+    Ast,
+    Ir,
+    Format,
+}
+
+/// Spawn the reference `nixfmt` binary in the requested mode, feed it `input`
+/// on stdin, and return the textual output we want to compare against.
+///
+/// `--ast`/`--ir` write to stderr; the plain formatter writes to stdout and is
+/// additionally required to exit successfully.
+fn run_reference_nixfmt(input: &str, mode: RefMode) -> String {
+    let mut cmd = Command::new("nixfmt");
+    match mode {
+        RefMode::Ast => {
+            cmd.arg("--ast");
+        }
+        RefMode::Ir => {
+            cmd.arg("--ir");
+        }
+        RefMode::Format => {}
+    }
+    cmd.arg("-");
+
+    let nixfmt_output = cmd
+        .stdin(std::process::Stdio::piped())
+        .stdout(std::process::Stdio::piped())
+        .stderr(std::process::Stdio::piped())
+        .spawn()
+        .and_then(|mut child| {
+            use std::io::Write;
+            child.stdin.as_mut().unwrap().write_all(input.as_bytes())?;
+            child.wait_with_output()
+        })
+        .expect("Failed to run nixfmt");
+
+    match mode {
+        // nixfmt --ast / --ir write to stderr, not stdout.
+        RefMode::Ast | RefMode::Ir => {
+            String::from_utf8(nixfmt_output.stderr).expect("nixfmt output is not valid UTF-8")
+        }
+        RefMode::Format => {
+            assert!(
+                nixfmt_output.status.success(),
+                "reference nixfmt rejected input:\n{}\n--- stderr ---\n{}",
+                input,
+                String::from_utf8_lossy(&nixfmt_output.stderr)
+            );
+            String::from_utf8(nixfmt_output.stdout).expect("nixfmt output is not valid UTF-8")
+        }
+    }
+}
+
+/// Print the standard "TEST FAILED" block (input, expected, got, colored diff)
+/// and panic.
+fn fail_with_diff(kind: &str, input: &str, expected: &str, got: &str) -> ! {
+    eprintln!("TEST FAILED: {}", kind);
+    eprintln!("INPUT:\n{}", input);
+    eprintln!("\n=== EXPECTED (nixfmt) ===");
+    eprintln!("{}", expected);
+    eprintln!("\n=== GOT (ours) ===");
+    eprintln!("{}", got);
+    eprintln!("\n=== DIFF ===");
+
+    diff::print_colored_diff(expected, got);
+
+    panic!("{} output mismatch", kind);
+}
+
 /// Test helper: run nixfmt --ast and compare with our output
 ///
 /// This function:
@@ -35,36 +105,10 @@ pub fn test_ast_format(input: &str) {
     ast.format(&mut writer);
     let our_output = writer.finish();
 
-    let nixfmt_output = Command::new("nixfmt")
-        .arg("--ast")
-        .arg("-")
-        .stdin(std::process::Stdio::piped())
-        .stdout(std::process::Stdio::piped())
-        .stderr(std::process::Stdio::piped())
-        .spawn()
-        .and_then(|mut child| {
-            use std::io::Write;
-            child.stdin.as_mut().unwrap().write_all(input.as_bytes())?;
-            child.wait_with_output()
-        })
-        .expect("Failed to run nixfmt");
-
-    // nixfmt --ast writes to stderr, not stdout.
-    let expected =
-        String::from_utf8(nixfmt_output.stderr).expect("nixfmt output is not valid UTF-8");
+    let expected = run_reference_nixfmt(input, RefMode::Ast);
 
     if our_output != expected {
-        eprintln!("TEST FAILED: AST");
-        eprintln!("INPUT:\n{}", input);
-        eprintln!("\n=== EXPECTED (nixfmt) ===");
-        eprintln!("{}", expected);
-        eprintln!("\n=== GOT (ours) ===");
-        eprintln!("{}", our_output);
-        eprintln!("\n=== DIFF ===");
-
-        diff::print_colored_diff(&expected, &our_output);
-
-        panic!("AST output mismatch");
+        fail_with_diff("AST", input, &expected, &our_output);
     }
 }
 
@@ -97,36 +141,10 @@ pub fn test_ir_format(input: &str) {
     ir.format(&mut writer);
     let our_output = writer.finish();
 
-    let nixfmt_output = Command::new("nixfmt")
-        .arg("--ir")
-        .arg("-")
-        .stdin(std::process::Stdio::piped())
-        .stdout(std::process::Stdio::piped())
-        .stderr(std::process::Stdio::piped())
-        .spawn()
-        .and_then(|mut child| {
-            use std::io::Write;
-            child.stdin.as_mut().unwrap().write_all(input.as_bytes())?;
-            child.wait_with_output()
-        })
-        .expect("Failed to run nixfmt");
-
-    // nixfmt --ir writes to stderr, not stdout.
-    let expected =
-        String::from_utf8(nixfmt_output.stderr).expect("nixfmt output is not valid UTF-8");
+    let expected = run_reference_nixfmt(input, RefMode::Ir);
 
     if our_output != expected {
-        eprintln!("TEST FAILED: IR");
-        eprintln!("INPUT:\n{}", input);
-        eprintln!("\n=== EXPECTED (nixfmt) ===");
-        eprintln!("{}", expected);
-        eprintln!("\n=== GOT (ours) ===");
-        eprintln!("{}", our_output);
-        eprintln!("\n=== DIFF ===");
-
-        diff::print_colored_diff(&expected, &our_output);
-
-        panic!("IR output mismatch");
+        fail_with_diff("IR", input, &expected, &our_output);
     }
 }
 
@@ -138,38 +156,9 @@ pub fn test_ir_format(input: &str) {
 pub fn test_format(input: &str) {
     let our_output = crate::format(input).expect("nixfmt_rs failed to format input");
 
-    let nixfmt_output = Command::new("nixfmt")
-        .arg("-")
-        .stdin(std::process::Stdio::piped())
-        .stdout(std::process::Stdio::piped())
-        .stderr(std::process::Stdio::piped())
-        .spawn()
-        .and_then(|mut child| {
-            use std::io::Write;
-            child.stdin.as_mut().unwrap().write_all(input.as_bytes())?;
-            child.wait_with_output()
-        })
-        .expect("Failed to run nixfmt");
-
-    assert!(
-        nixfmt_output.status.success(),
-        "reference nixfmt rejected input:\n{}\n--- stderr ---\n{}",
-        input,
-        String::from_utf8_lossy(&nixfmt_output.stderr)
-    );
-
-    let expected =
-        String::from_utf8(nixfmt_output.stdout).expect("nixfmt output is not valid UTF-8");
+    let expected = run_reference_nixfmt(input, RefMode::Format);
 
     if our_output != expected {
-        eprintln!("TEST FAILED: format");
-        eprintln!("INPUT:\n{}", input);
-        eprintln!("\n=== EXPECTED (nixfmt) ===");
-        eprintln!("{}", expected);
-        eprintln!("\n=== GOT (ours) ===");
-        eprintln!("{}", our_output);
-        eprintln!("\n=== DIFF ===");
-        diff::print_colored_diff(&expected, &our_output);
-        panic!("format output mismatch");
+        fail_with_diff("format", input, &expected, &our_output);
     }
 }

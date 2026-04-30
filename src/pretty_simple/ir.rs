@@ -1,56 +1,18 @@
 //! PrettySimple implementations for IR (intermediate representation) nodes
 
-use super::{PrettySimple, Writer};
+use super::{PrettySimple, Writer, format_bracket_list};
 use crate::format_constructor;
 use crate::predoc::*;
 
 impl PrettySimple for IR {
     fn format<W: Writer>(&self, w: &mut W) {
-        // Format like Vec<DocE> but WITHOUT incrementing depth
-        // The top-level IR should be at depth 0, not depth 1
-
-        if self.0.is_empty() {
-            w.with_color(|w_color| {
-                let bracket_color = w_color.current_color();
-                w_color.write_colored("[", bracket_color);
-                w_color.write_colored("]", bracket_color);
-            });
-            return;
+        // Same layout as Vec<DocE>, but without bumping depth so the top-level
+        // dump stays at column 0 like the Haskell reference output.
+        format_bracket_list(w, &self.0, false);
+        if !self.0.is_empty() {
+            // Final newline to match nixfmt output.
+            w.newline();
         }
-
-        // Same as Vec::format but skip the with_depth call
-        w.with_color(|w_color| {
-            let bracket_color = w_color.current_color();
-            // Vec::format calls w_color.with_depth here, but we don't (keeps IR at depth 0)
-
-            if self.0.len() == 1 && self.0[0].is_simple() {
-                w_color.write_colored("[", bracket_color);
-                w_color.write_plain(" ");
-                self.0[0].format(w_color);
-                w_color.write_plain(" ");
-                w_color.write_colored("]", bracket_color);
-            } else {
-                w_color.write_colored("[", bracket_color);
-                for (i, item) in self.0.iter().enumerate() {
-                    if i > 0 {
-                        w_color.newline();
-                        w_color.write_colored(",", bracket_color);
-                    }
-                    // Inline format_delimited_value logic
-                    if item.has_delimiters() && !item.is_empty() && !item.is_simple() {
-                        w_color.newline();
-                        item.format(w_color);
-                    } else {
-                        w_color.write_plain(" ");
-                        item.format(w_color);
-                    }
-                }
-                w_color.newline();
-                w_color.write_colored("]", bracket_color);
-            }
-        });
-        // Add final newline to match nixfmt output
-        w.newline();
     }
 }
 

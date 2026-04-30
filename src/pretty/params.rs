@@ -2,7 +2,7 @@ use crate::predoc::*;
 use crate::types::*;
 
 use super::absorb::push_absorb_rhs;
-use super::util::{is_lone_ann, move_trailing_comment_up};
+use super::util::{is_lone_ann, move_trailing_comment_up, push_empty_brackets};
 
 impl Pretty for ParamAttr {
     fn pretty(&self, doc: &mut Doc) {
@@ -206,17 +206,7 @@ impl Pretty for Parameter {
             Parameter::Set(open, attrs, close) => {
                 let open = move_trailing_comment_up(open);
                 if attrs.is_empty() {
-                    let sep = if open.span.start_line != close.span.start_line {
-                        hardline()
-                    } else {
-                        hardspace()
-                    };
-
-                    push_group(doc, |doc| {
-                        open.pretty(doc);
-                        doc.push(sep);
-                        close.pretty(doc);
-                    });
+                    push_group(doc, |doc| push_empty_brackets(doc, &open, close));
                     return;
                 }
 
@@ -233,11 +223,7 @@ impl Pretty for Parameter {
                     });
                     doc.push(sep_after);
                     push_nested(doc, |inner| close.pre_trivia.pretty(inner));
-                    Ann {
-                        pre_trivia: Trivia::new(),
-                        ..close.clone()
-                    }
-                    .pretty(doc);
+                    close.without_pre().pretty(doc);
                 });
             }
             Parameter::Context(left, at, right) => {

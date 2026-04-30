@@ -6,7 +6,7 @@
 //! - `with ...; ...` - With expressions (scope introduction)
 //! - `assert ...; ...` - Assert expressions
 
-use crate::error::{ErrorKind, ParseError, Result};
+use crate::error::Result;
 use crate::types::*;
 
 use super::Parser;
@@ -14,22 +14,9 @@ use super::Parser;
 impl Parser {
     /// Parse let expression: let bindings in expr
     pub(super) fn parse_let(&mut self) -> Result<Expression> {
-        let let_tok = self.expect_token_match(|t| matches!(t, Token::KLet))?;
+        let let_tok = self.expect_token(Token::KLet, "'let'")?;
         let bindings = self.parse_binders()?;
-
-        let in_tok = if matches!(self.current.value, Token::KIn) {
-            self.take_and_advance()?
-        } else {
-            return Err(Box::new(ParseError {
-                span: self.current.span,
-                kind: ErrorKind::UnexpectedToken {
-                    expected: vec!["'in'".to_string()],
-                    found: format!("'{}'", self.current.value.text()),
-                },
-                labels: vec![],
-            }));
-        };
-
+        let in_tok = self.expect_token(Token::KIn, "'in'")?;
         let body = self.parse_expression()?;
 
         Ok(Expression::Let(let_tok, bindings, in_tok, Box::new(body)))
@@ -37,37 +24,11 @@ impl Parser {
 
     /// Parse if expression: if cond then expr else expr
     pub(super) fn parse_if(&mut self) -> Result<Expression> {
-        let if_tok = self.expect_token_match(|t| matches!(t, Token::KIf))?;
+        let if_tok = self.expect_token(Token::KIf, "'if'")?;
         let cond = self.parse_expression()?;
-
-        let then_tok = if matches!(self.current.value, Token::KThen) {
-            self.take_and_advance()?
-        } else {
-            return Err(Box::new(ParseError {
-                span: self.current.span,
-                kind: ErrorKind::UnexpectedToken {
-                    expected: vec!["'then'".to_string()],
-                    found: format!("'{}'", self.current.value.text()),
-                },
-                labels: vec![],
-            }));
-        };
-
+        let then_tok = self.expect_token(Token::KThen, "'then'")?;
         let then_expr = self.parse_expression()?;
-
-        let else_tok = if matches!(self.current.value, Token::KElse) {
-            self.take_and_advance()?
-        } else {
-            return Err(Box::new(ParseError {
-                span: self.current.span,
-                kind: ErrorKind::UnexpectedToken {
-                    expected: vec!["'else'".to_string()],
-                    found: format!("'{}'", self.current.value.text()),
-                },
-                labels: vec![],
-            }));
-        };
-
+        let else_tok = self.expect_token(Token::KElse, "'else'")?;
         let else_expr = self.parse_expression()?;
 
         Ok(Expression::If(
@@ -82,57 +43,36 @@ impl Parser {
 
     /// Parse with expression: with expr ; expr
     pub(super) fn parse_with(&mut self) -> Result<Expression> {
-        let with_tok = self.expect_token_match(|t| matches!(t, Token::KWith))?;
-        let expr1 = self.parse_expression()?;
-
-        let semi = if matches!(self.current.value, Token::TSemicolon) {
-            self.take_and_advance()?
-        } else {
-            return Err(Box::new(ParseError {
-                span: self.current.span,
-                kind: ErrorKind::MissingToken {
-                    token: "';'".to_string(),
-                    after: "'with' expression".to_string(),
-                },
-                labels: vec![],
-            }));
-        };
-
-        let expr2 = self.parse_expression()?;
-
-        Ok(Expression::With(
-            with_tok,
-            Box::new(expr1),
-            semi,
-            Box::new(expr2),
-        ))
+        self.parse_keyword_semi_expr(
+            Token::KWith,
+            "'with'",
+            "'with' expression",
+            Expression::With,
+        )
     }
 
     /// Parse assert expression: assert cond ; expr
     pub(super) fn parse_assert(&mut self) -> Result<Expression> {
-        let assert_tok = self.expect_token_match(|t| matches!(t, Token::KAssert))?;
-        let cond = self.parse_expression()?;
+        self.parse_keyword_semi_expr(
+            Token::KAssert,
+            "'assert'",
+            "'assert' condition",
+            Expression::Assert,
+        )
+    }
 
-        let semi = if matches!(self.current.value, Token::TSemicolon) {
-            self.take_and_advance()?
-        } else {
-            return Err(Box::new(ParseError {
-                span: self.current.span,
-                kind: ErrorKind::MissingToken {
-                    token: "';'".to_string(),
-                    after: "'assert' condition".to_string(),
-                },
-                labels: vec![],
-            }));
-        };
-
+    /// Shared shape for `with` / `assert`: `<kw> expr ; expr`.
+    fn parse_keyword_semi_expr(
+        &mut self,
+        keyword: Token,
+        kw_label: &'static str,
+        semi_after: &'static str,
+        build: fn(Leaf, Box<Expression>, Leaf, Box<Expression>) -> Expression,
+    ) -> Result<Expression> {
+        let kw = self.expect_token(keyword, kw_label)?;
+        let head = self.parse_expression()?;
+        let semi = self.expect_semicolon_after(semi_after)?;
         let body = self.parse_expression()?;
-
-        Ok(Expression::Assert(
-            assert_tok,
-            Box::new(cond),
-            semi,
-            Box::new(body),
-        ))
+        Ok(build(kw, Box::new(head), semi, Box::new(body)))
     }
 }

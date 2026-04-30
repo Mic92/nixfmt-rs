@@ -152,36 +152,32 @@ impl<T: Pretty, U: Pretty> Pretty for (T, U) {
     }
 }
 
-/// Push a text element
-pub(crate) fn push_text(doc: &mut Doc, s: impl Into<String>) {
+/// Push a text element with the given annotation, dropping empty strings.
+pub(crate) fn push_text_ann(doc: &mut Doc, ann: TextAnn, s: impl Into<String>) {
     let s = s.into();
     if !s.is_empty() {
-        doc.push(DocE::Text(0, 0, TextAnn::RegularT, s));
+        doc.push(DocE::Text(0, 0, ann, s));
     }
+}
+
+/// Push a text element
+pub(crate) fn push_text(doc: &mut Doc, s: impl Into<String>) {
+    push_text_ann(doc, TextAnn::RegularT, s);
 }
 
 /// Push a comment element
 pub(crate) fn push_comment(doc: &mut Doc, s: impl Into<String>) {
-    let s = s.into();
-    if !s.is_empty() {
-        doc.push(DocE::Text(0, 0, TextAnn::Comment, s));
-    }
+    push_text_ann(doc, TextAnn::Comment, s);
 }
 
 /// Push a trailing comment element
 pub(crate) fn push_trailing_comment(doc: &mut Doc, s: impl Into<String>) {
-    let s = s.into();
-    if !s.is_empty() {
-        doc.push(DocE::Text(0, 0, TextAnn::TrailingComment, s));
-    }
+    push_text_ann(doc, TextAnn::TrailingComment, s);
 }
 
 /// Push a trailing text element (only rendered in expanded groups)
 pub(crate) fn push_trailing(doc: &mut Doc, s: impl Into<String>) {
-    let s = s.into();
-    if !s.is_empty() {
-        doc.push(DocE::Text(0, 0, TextAnn::Trailing, s));
-    }
+    push_text_ann(doc, TextAnn::Trailing, s);
 }
 
 /// Push a grouped document using a closure
@@ -189,9 +185,7 @@ pub(crate) fn push_group<F>(doc: &mut Doc, f: F)
 where
     F: FnOnce(&mut Doc),
 {
-    let mut inner = Vec::new();
-    f(&mut inner);
-    doc.push(DocE::Group(GroupAnn::RegularG, inner));
+    push_group_ann(doc, GroupAnn::RegularG, f);
 }
 
 /// Push a group with specific annotation using a closure
@@ -204,16 +198,24 @@ where
     doc.push(DocE::Group(ann, inner));
 }
 
+/// Surround `f`'s output with a balanced `Nest(dn, doff)` / `Nest(-dn, -doff)`
+/// pair. `fixup` later bakes the accumulated deltas into each `Text` so the
+/// renderer's indent stack logic is unchanged.
+pub(crate) fn push_nest_pair<F>(doc: &mut Doc, dn: isize, doff: isize, f: F)
+where
+    F: FnOnce(&mut Doc),
+{
+    doc.push(DocE::Nest(dn, doff));
+    f(doc);
+    doc.push(DocE::Nest(-dn, -doff));
+}
+
 /// Push a nested document (increase indentation) using a closure.
-/// Emits a `Nest` delta pair around the region; `fixup` bakes the accumulated
-/// delta into each `Text` so the renderer's indent stack logic is unchanged.
 pub(crate) fn push_nested<F>(doc: &mut Doc, f: F)
 where
     F: FnOnce(&mut Doc),
 {
-    doc.push(DocE::Nest(1, 0));
-    f(doc);
-    doc.push(DocE::Nest(-1, 0));
+    push_nest_pair(doc, 1, 0, f);
 }
 
 /// Line break or nothing (soft)
@@ -291,10 +293,7 @@ pub(crate) fn push_offset<F>(doc: &mut Doc, level: usize, f: F)
 where
     F: FnOnce(&mut Doc),
 {
-    let level = level as isize;
-    doc.push(DocE::Nest(0, level));
-    f(doc);
-    doc.push(DocE::Nest(0, -level));
+    push_nest_pair(doc, 0, level as isize, f);
 }
 
 // Renderer: Convert IR (Doc) to formatted text
@@ -326,7 +325,7 @@ pub(crate) fn render_with_config(doc: Doc, config: &RenderConfig) -> String {
 /// Display width of `s`. Haskell `textWidth = Text.length`, i.e. one column
 /// per Unicode scalar; we match that so multi-byte UTF-8 (e.g. `«»`) doesn't
 /// over-count and force spurious line breaks.
-fn text_width(s: &str) -> usize {
+pub(crate) fn text_width(s: &str) -> usize {
     s.chars().count()
 }
 

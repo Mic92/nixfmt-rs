@@ -3,7 +3,7 @@
 //! This module handles parsing of bindings in Nix attribute sets and let expressions,
 //! including both `inherit` statements and attribute assignments (name = value).
 
-use crate::error::{ErrorKind, ParseError, Result};
+use crate::error::{ParseError, Result};
 use crate::types::*;
 
 use super::{Parser, spans};
@@ -41,12 +41,12 @@ impl Parser {
 
     /// Parse inherit statement: inherit [ (expr) ] names... ;
     fn parse_inherit(&mut self) -> Result<Binder> {
-        let inherit_tok = self.expect_token_match(|t| matches!(t, Token::KInherit))?;
+        let inherit_tok = self.expect_token(Token::KInherit, "'inherit'")?;
 
         let from = if matches!(self.current.value, Token::TParenOpen) {
             let open = self.take_and_advance()?;
             let expr = self.parse_expression()?;
-            let close = self.expect_token_match(|t| matches!(t, Token::TParenClose))?;
+            let close = self.expect_token(Token::TParenClose, "')'")?;
             Some(Term::Parenthesized(open, Box::new(expr), close))
         } else {
             None
@@ -66,20 +66,17 @@ impl Parser {
                         if matches!(&w.value, Expression::Term(Term::SimpleString(_)))
                 );
                 if !ok {
-                    return Err(Box::new(ParseError {
+                    return Err(ParseError::unexpected(
                         span,
-                        kind: ErrorKind::UnexpectedToken {
-                            expected: vec!["identifier".into(), "string".into()],
-                            found: "interpolation".into(),
-                        },
-                        labels: vec![],
-                    }));
+                        vec!["identifier".into(), "string".into()],
+                        "interpolation",
+                    ));
                 }
             }
             selectors.push(sel);
         }
 
-        let semi = self.expect_token_match(|t| matches!(t, Token::TSemicolon))?;
+        let semi = self.expect_token(Token::TSemicolon, "';'")?;
 
         Ok(Binder::Inherit(inherit_tok, from, selectors, semi))
     }
@@ -103,17 +100,14 @@ impl Parser {
 
         // Check for common mistake: attribute path followed by semicolon (forgot = and value)
         if matches!(self.current.value, Token::TSemicolon) {
-            return Err(Box::new(ParseError {
-                span: self.current.span,
-                kind: ErrorKind::UnexpectedToken {
-                    expected: vec!["'='".to_string()],
-                    found: "';'".to_string(),
-                },
-                labels: vec![],
-            }));
+            return Err(ParseError::unexpected(
+                self.current.span,
+                vec!["'='".to_string()],
+                "';'",
+            ));
         }
 
-        let eq = self.expect_token_match(|t| matches!(t, Token::TAssign))?;
+        let eq = self.expect_token(Token::TAssign, "'='")?;
         let expr = self.parse_expression()?;
 
         // Special case: if the expression is an Application, the user likely forgot
@@ -131,34 +125,21 @@ impl Parser {
             // EOF found - check if this is an unclosed nested set
             // If the expression is a set, the closing brace might have belonged to an outer scope
             if let Expression::Term(Term::Set(_, open_brace, _, close_brace)) = &expr {
-                Err(Box::new(ParseError {
-                    span: close_brace.span,
-                    kind: ErrorKind::UnclosedDelimiter {
-                        delimiter: '{',
-                        opening_span: open_brace.span,
-                    },
-                    labels: vec![],
-                }))
+                Err(ParseError::unclosed(close_brace.span, '{', open_brace.span))
             } else {
-                Err(Box::new(ParseError {
-                    span: expr_end_span,
-                    kind: ErrorKind::UnexpectedToken {
-                        expected: vec!["';'".to_string()],
-                        found: "'end of file'".to_string(),
-                    },
-                    labels: vec![],
-                }))
+                Err(ParseError::unexpected(
+                    expr_end_span,
+                    vec!["';'".to_string()],
+                    "'end of file'",
+                ))
             }
         } else {
             // Missing semicolon - point to the END of the expression
-            Err(Box::new(ParseError {
-                span: expr_end_span,
-                kind: ErrorKind::UnexpectedToken {
-                    expected: vec!["';'".to_string()],
-                    found: format!("'{}'", self.current.value.text()),
-                },
-                labels: vec![],
-            }))
+            Err(ParseError::unexpected(
+                expr_end_span,
+                vec!["';'".to_string()],
+                format!("'{}'", self.current.value.text()),
+            ))
         }
     }
 
@@ -186,18 +167,15 @@ impl Parser {
                 let interpol = self.parse_selector_interpolation()?;
                 Ok(SimpleSelector::Interpol(interpol))
             }
-            _ => Err(Box::new(ParseError {
-                span: self.current.span,
-                kind: ErrorKind::UnexpectedToken {
-                    expected: vec![
-                        "identifier".to_string(),
-                        "string".to_string(),
-                        "interpolation".to_string(),
-                    ],
-                    found: format!("'{}'", self.current.value.text()),
-                },
-                labels: vec![],
-            })),
+            _ => Err(ParseError::unexpected(
+                self.current.span,
+                vec![
+                    "identifier".to_string(),
+                    "string".to_string(),
+                    "interpolation".to_string(),
+                ],
+                format!("'{}'", self.current.value.text()),
+            )),
         }
     }
 

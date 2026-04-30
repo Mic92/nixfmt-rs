@@ -1,6 +1,8 @@
 {
   mkShell,
-  rustup,
+  cargo,
+  rustc,
+  clippy,
   cargo-tarpaulin,
   rust-analyzer,
   rustfmt,
@@ -8,7 +10,9 @@
 }:
 mkShell {
   packages = [
-    rustup
+    cargo
+    rustc
+    clippy
     cargo-tarpaulin
     rust-analyzer
     rustfmt
@@ -16,8 +20,6 @@ mkShell {
   ];
 
   shellHook = ''
-    # Set up rustup home in project directory
-    export RUSTUP_HOME="$PWD/.rustup"
     export CARGO_HOME="$PWD/.cargo"
     export PATH="$CARGO_HOME/bin:$PATH"
   '';

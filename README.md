@@ -41,7 +41,6 @@ echo '{a=1;}' | ./target/release/nixfmt_rs --ir
 
 ```bash
 cargo test                       # full suite
-cargo llvm-cov --html            # coverage report → target/llvm-cov/html/
 
 # differential check vs. reference `nixfmt` over a nixpkgs checkout
 # modes: format | ir | ast; env: NIXPKGS, LIMIT, JOBS, MAX_BYTES, REF, OUT
