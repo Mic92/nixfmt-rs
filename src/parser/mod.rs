@@ -677,6 +677,28 @@ impl Parser {
     }
 
     /// Collect pre_trivia as Comments item if not empty (common pattern)
+    /// Parse a sequence of items separated by trivia until `is_end` matches
+    /// the current token. Leading trivia on each item (and on the closing
+    /// token) is hoisted into `Item::Comments`. Callers must include
+    /// `Token::Sof` in `is_end` so EOF terminates the loop; trailing trivia
+    /// is not collected at EOF since there is no closing delimiter to own it.
+    fn parse_items<T>(
+        &mut self,
+        is_end: impl Fn(&Token) -> bool,
+        mut one: impl FnMut(&mut Self) -> Result<T>,
+    ) -> Result<Items<T>> {
+        let mut items = Vec::new();
+        while !is_end(&self.current.value) {
+            self.collect_trivia_as_comments(&mut items);
+            let item = one(self)?;
+            items.push(Item::Item(item));
+        }
+        if !matches!(self.current.value, Token::Sof) {
+            self.collect_trivia_as_comments(&mut items);
+        }
+        Ok(Items(items))
+    }
+
     fn collect_trivia_as_comments<T>(&mut self, items: &mut Vec<Item<T>>) {
         if !self.current.pre_trivia.is_empty() {
             items.push(Item::Comments(std::mem::take(&mut self.current.pre_trivia)));

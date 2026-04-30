@@ -11,23 +11,10 @@ use super::{Parser, spans};
 impl Parser {
     /// Parse a list of binders (for let expressions and attribute sets)
     pub(super) fn parse_binders(&mut self) -> Result<Items<Binder>> {
-        let mut items = Vec::new();
-
-        while !matches!(
-            self.current.value,
-            Token::KIn | Token::TBraceClose | Token::Sof
-        ) {
-            self.collect_trivia_as_comments(&mut items);
-
-            let binder = self.parse_binder()?;
-            items.push(Item::Item(binder));
-        }
-
-        if matches!(self.current.value, Token::KIn | Token::TBraceClose) {
-            self.collect_trivia_as_comments(&mut items);
-        }
-
-        Ok(Items(items))
+        self.parse_items(
+            |t| matches!(t, Token::KIn | Token::TBraceClose | Token::Sof),
+            |p| p.parse_binder(),
+        )
     }
 
     /// Parse a single binder (inherit or assignment)

@@ -42,47 +42,39 @@ impl Parser {
 
     /// Parse list items (terms)
     fn parse_list_items(&mut self) -> Result<Items<Term>> {
-        let mut items = Vec::new();
+        self.parse_items(
+            |t| matches!(t, Token::TBrackClose | Token::Sof),
+            |p| {
+                // Check for commas (not valid in Nix lists)
+                if matches!(p.current.value, Token::TComma) {
+                    return Err(ParseError::invalid(
+                        p.current.span,
+                        "commas are not used to separate list elements in Nix",
+                        Some("use spaces to separate list elements: [1 2 3]".to_string()),
+                    ));
+                }
 
-        while !matches!(self.current.value, Token::TBrackClose | Token::Sof) {
-            // Check for commas (not valid in Nix lists)
-            if matches!(self.current.value, Token::TComma) {
-                return Err(ParseError::invalid(
-                    self.current.span,
-                    "commas are not used to separate list elements in Nix",
-                    Some("use spaces to separate list elements: [1 2 3]".to_string()),
-                ));
-            }
+                // Check for mismatched closing delimiters before trying to parse
+                if matches!(
+                    p.current.value,
+                    Token::TBraceClose | Token::TParenClose | Token::TInterClose
+                ) {
+                    return Err(ParseError::invalid(
+                        p.current.span,
+                        format!(
+                            "mismatched delimiter: expected ']', found '{}'",
+                            p.current.value.text()
+                        ),
+                        Some(format!(
+                            "change '{}' to ']' to match the opening bracket",
+                            p.current.value.text()
+                        )),
+                    ));
+                }
 
-            // Check for mismatched closing delimiters before trying to parse
-            if matches!(
-                self.current.value,
-                Token::TBraceClose | Token::TParenClose | Token::TInterClose
-            ) {
-                return Err(ParseError::invalid(
-                    self.current.span,
-                    format!(
-                        "mismatched delimiter: expected ']', found '{}'",
-                        self.current.value.text()
-                    ),
-                    Some(format!(
-                        "change '{}' to ']' to match the opening bracket",
-                        self.current.value.text()
-                    )),
-                ));
-            }
-
-            self.collect_trivia_as_comments(&mut items);
-
-            let term = self.parse_term()?;
-            items.push(Item::Item(term));
-        }
-
-        if matches!(self.current.value, Token::TBrackClose) {
-            self.collect_trivia_as_comments(&mut items);
-        }
-
-        Ok(Items(items))
+                p.parse_term()
+            },
+        )
     }
 
     /// Parse parenthesized expression: ( expr )
