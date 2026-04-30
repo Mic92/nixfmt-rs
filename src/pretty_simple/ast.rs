@@ -9,83 +9,43 @@ use crate::format_enum;
 use crate::format_record;
 use crate::types::*;
 
-/// PrettySimple for &str - quoted string literals
-/// Based on pretty-simple's StringLit
-impl PrettySimple for &str {
-    fn format<W: Writer>(&self, w: &mut W) {
-        w.write_colored("\"", STRING_QUOTE_COLOR);
-        // Escape special characters to match Haskell's show behavior
-        let escaped = escape_string(self);
-        w.write_colored(&escaped, STRING_CONTENT_COLOR);
-        w.write_colored("\"", STRING_QUOTE_COLOR);
-    }
-
-    fn is_simple(&self) -> bool {
-        true
-    }
-
-    fn is_atomic(&self) -> bool {
-        true
-    }
+/// Generate a `PrettySimple` impl for a primitive/atomic type:
+/// `is_simple` and `is_atomic` are always `true`; only `format` varies.
+macro_rules! simple_atom {
+    ($ty:ty, |$self_:ident, $w:ident| $body:expr) => {
+        impl PrettySimple for $ty {
+            fn format<W: Writer>(&self, $w: &mut W) {
+                let $self_ = self;
+                $body
+            }
+            fn is_simple(&self) -> bool {
+                true
+            }
+            fn is_atomic(&self) -> bool {
+                true
+            }
+        }
+    };
 }
 
-/// PrettySimple for String - delegates to &str
-impl PrettySimple for String {
-    fn format<W: Writer>(&self, w: &mut W) {
-        self.as_str().format(w);
-    }
+// &str / String: quoted string literals (pretty-simple's StringLit)
+simple_atom!(&str, |s, w| {
+    w.write_colored("\"", STRING_QUOTE_COLOR);
+    // Escape special characters to match Haskell's show behavior
+    w.write_colored(&escape_string(s), STRING_CONTENT_COLOR);
+    w.write_colored("\"", STRING_QUOTE_COLOR);
+});
+simple_atom!(String, |s, w| s.as_str().format(w));
 
-    fn is_simple(&self) -> bool {
-        true
-    }
+// isize / usize: number literals (pretty-simple's NumberLit)
+simple_atom!(isize, |n, w| w.write_colored(&n.to_string(), NUMBER_COLOR));
+simple_atom!(usize, |n, w| w.write_colored(&n.to_string(), NUMBER_COLOR));
 
-    fn is_atomic(&self) -> bool {
-        true
-    }
-}
-
-impl PrettySimple for isize {
-    fn format<W: Writer>(&self, w: &mut W) {
-        w.write_colored(&self.to_string(), NUMBER_COLOR);
-    }
-    fn is_simple(&self) -> bool {
-        true
-    }
-    fn is_atomic(&self) -> bool {
-        true
-    }
-}
-
-/// PrettySimple for usize - number literals
-/// Based on pretty-simple's NumberLit
-impl PrettySimple for usize {
-    fn format<W: Writer>(&self, w: &mut W) {
-        w.write_colored(&self.to_string(), NUMBER_COLOR);
-    }
-
-    fn is_simple(&self) -> bool {
-        true
-    }
-
-    fn is_atomic(&self) -> bool {
-        true
-    }
-}
-
-/// PrettySimple for bool - Haskell Bool values
-impl PrettySimple for bool {
-    fn format<W: Writer>(&self, w: &mut W) {
-        w.write_plain(if *self { "True" } else { "False" });
-    }
-
-    fn is_simple(&self) -> bool {
-        true
-    }
-
-    fn is_atomic(&self) -> bool {
-        true
-    }
-}
+simple_atom!(bool, |b, w| w.write_plain(if *b {
+    "True"
+} else {
+    "False"
+}));
 
 impl PrettySimple for Whole<Expression> {
     fn format<W: Writer>(&self, w: &mut W) {
