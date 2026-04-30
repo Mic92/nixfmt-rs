@@ -4,7 +4,7 @@
 //! including both `inherit` statements and attribute assignments (name = value).
 
 use crate::error::{ParseError, Result};
-use crate::types::*;
+use crate::types::{Binder, Expression, Items, Selector, SimpleSelector, StringPart, Term, Token};
 
 use super::{Parser, spans};
 
@@ -13,7 +13,7 @@ impl Parser {
     pub(super) fn parse_binders(&mut self) -> Result<Items<Binder>> {
         self.parse_items(
             |t| matches!(t, Token::KIn | Token::TBraceClose | Token::Sof),
-            |p| p.parse_binder(),
+            Self::parse_binder,
         )
     }
 
@@ -189,7 +189,7 @@ impl Parser {
     }
 
     /// Check if current token can start a simple selector
-    pub(super) fn is_simple_selector_start(&self) -> bool {
+    pub(super) const fn is_simple_selector_start(&self) -> bool {
         matches!(
             self.current.value,
             Token::Identifier(_) | Token::TDoubleQuote | Token::TInterOpen

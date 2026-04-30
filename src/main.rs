@@ -264,7 +264,7 @@ fn expand_paths(args: &[String]) -> impl Iterator<Item = PathBuf> + '_ {
                     .filter_map(Result::ok)
                     .filter(|e| e.file_type().is_file())
                     .filter(|e| e.path().extension().is_some_and(|x| x == "nix"))
-                    .map(|e| e.into_path()),
+                    .map(walkdir::DirEntry::into_path),
             )
         } else {
             either::Right(std::iter::once(p.to_owned()))
@@ -288,8 +288,8 @@ mod either {
         type Item = T;
         fn next(&mut self) -> Option<T> {
             match self {
-                Either::Left(l) => l.next(),
-                Either::Right(r) => r.next(),
+                Self::Left(l) => l.next(),
+                Self::Right(r) => r.next(),
             }
         }
     }

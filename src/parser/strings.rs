@@ -5,7 +5,7 @@
 //! merging adjacent text parts, stripping common indentation).
 
 use crate::error::{ErrorKind, ParseError, Result};
-use crate::types::*;
+use crate::types::{Ann, StringPart, Term, Token, Trivium, Whole};
 
 use super::Parser;
 

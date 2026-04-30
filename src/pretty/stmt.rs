@@ -1,5 +1,8 @@
-use crate::predoc::*;
-use crate::types::*;
+use crate::predoc::{
+    Doc, DocE, GroupAnn, Pretty, hardline, hardspace, line, push_group, push_group_ann,
+    push_nested, push_surrounded,
+};
+use crate::types::{Expression, Leaf, Parameter};
 
 use super::absorb::{is_absorbable_expr, push_absorb_expr};
 use super::util::{Width, move_trailing_comment_up};

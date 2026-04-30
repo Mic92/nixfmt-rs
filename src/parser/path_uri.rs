@@ -5,7 +5,7 @@
 //! and have specific validation rules (e.g., no trailing slashes).
 
 use crate::error::{ParseError, Result};
-use crate::types::*;
+use crate::types::{Span, StringPart, Term, Token};
 
 use super::Parser;
 
@@ -211,7 +211,7 @@ impl Parser {
 
     /// Check if there's whitespace before current token
     /// Used to distinguish paths from operators: "a/b" (path) vs "a / b" (division)
-    fn has_preceding_whitespace(&self) -> bool {
+    const fn has_preceding_whitespace(&self) -> bool {
         self.lexer.recent_hspace > 0 || self.lexer.recent_newlines > 0
     }
 

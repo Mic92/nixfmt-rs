@@ -8,7 +8,7 @@
 /// Sequential spacings are reduced to a single spacing by taking the maximum.
 /// This means that e.g. a Space followed by an Emptyline results in just an Emptyline.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
-pub(crate) enum Spacing {
+pub enum Spacing {
     /// Line break or nothing (soft)
     Softbreak,
     /// Line break or nothing
@@ -31,7 +31,7 @@ pub(crate) enum Spacing {
 ///
 /// Controls how groups are expanded during layout
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(crate) enum GroupAnn {
+pub enum GroupAnn {
     /// Regular group - expand if doesn't fit
     RegularG,
     /// Priority group - try to keep compressed longer
@@ -46,7 +46,7 @@ pub(crate) enum GroupAnn {
 ///
 /// Controls how text contributes to line length calculations
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(crate) enum TextAnn {
+pub enum TextAnn {
     /// Regular text
     RegularT,
     /// Comment (doesn't count towards line length limits)
@@ -61,7 +61,7 @@ pub(crate) enum TextAnn {
 ///
 /// Documents are represented as lists of these elements
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub(crate) enum DocE {
+pub enum DocE {
     /// Text element
     /// (`nesting_depth`, offset, annotation, text)
     Text(usize, usize, TextAnn, String),
@@ -77,7 +77,7 @@ pub(crate) enum DocE {
 }
 
 /// Document - a list of document elements
-pub(crate) type Doc = Vec<DocE>;
+pub type Doc = Vec<DocE>;
 
 /// Borrowed lookahead: a chain of slices scanned in order. Lets the layout
 /// engine pass "rest of current level ++ outer lookahead" without cloning.
@@ -127,7 +127,7 @@ impl<'a> Iterator for LookIter<'a> {
 pub struct IR(pub(crate) Doc);
 
 /// Pretty-printable trait
-pub(crate) trait Pretty {
+pub trait Pretty {
     fn pretty(&self, doc: &mut Doc);
 }
 
@@ -153,7 +153,7 @@ impl<T: Pretty, U: Pretty> Pretty for (T, U) {
 }
 
 /// Push a text element with the given annotation, dropping empty strings.
-pub(crate) fn push_text_ann(doc: &mut Doc, ann: TextAnn, s: impl Into<String>) {
+pub fn push_text_ann(doc: &mut Doc, ann: TextAnn, s: impl Into<String>) {
     let s = s.into();
     if !s.is_empty() {
         doc.push(DocE::Text(0, 0, ann, s));
@@ -161,27 +161,27 @@ pub(crate) fn push_text_ann(doc: &mut Doc, ann: TextAnn, s: impl Into<String>) {
 }
 
 /// Push a text element
-pub(crate) fn push_text(doc: &mut Doc, s: impl Into<String>) {
+pub fn push_text(doc: &mut Doc, s: impl Into<String>) {
     push_text_ann(doc, TextAnn::RegularT, s);
 }
 
 /// Push a comment element
-pub(crate) fn push_comment(doc: &mut Doc, s: impl Into<String>) {
+pub fn push_comment(doc: &mut Doc, s: impl Into<String>) {
     push_text_ann(doc, TextAnn::Comment, s);
 }
 
 /// Push a trailing comment element
-pub(crate) fn push_trailing_comment(doc: &mut Doc, s: impl Into<String>) {
+pub fn push_trailing_comment(doc: &mut Doc, s: impl Into<String>) {
     push_text_ann(doc, TextAnn::TrailingComment, s);
 }
 
 /// Push a trailing text element (only rendered in expanded groups)
-pub(crate) fn push_trailing(doc: &mut Doc, s: impl Into<String>) {
+pub fn push_trailing(doc: &mut Doc, s: impl Into<String>) {
     push_text_ann(doc, TextAnn::Trailing, s);
 }
 
 /// Push a grouped document using a closure
-pub(crate) fn push_group<F>(doc: &mut Doc, f: F)
+pub fn push_group<F>(doc: &mut Doc, f: F)
 where
     F: FnOnce(&mut Doc),
 {
@@ -189,7 +189,7 @@ where
 }
 
 /// Push a group with specific annotation using a closure
-pub(crate) fn push_group_ann<F>(doc: &mut Doc, ann: GroupAnn, f: F)
+pub fn push_group_ann<F>(doc: &mut Doc, ann: GroupAnn, f: F)
 where
     F: FnOnce(&mut Doc),
 {
@@ -204,7 +204,7 @@ where
 /// Surround `f`'s output with a balanced `Nest(dn, doff)` / `Nest(-dn, -doff)`
 /// pair. `fixup` later bakes the accumulated deltas into each `Text` so the
 /// renderer's indent stack logic is unchanged.
-pub(crate) fn push_nest_pair<F>(doc: &mut Doc, dn: isize, doff: isize, f: F)
+pub fn push_nest_pair<F>(doc: &mut Doc, dn: isize, doff: isize, f: F)
 where
     F: FnOnce(&mut Doc),
 {
@@ -214,7 +214,7 @@ where
 }
 
 /// Push a nested document (increase indentation) using a closure.
-pub(crate) fn push_nested<F>(doc: &mut Doc, f: F)
+pub fn push_nested<F>(doc: &mut Doc, f: F)
 where
     F: FnOnce(&mut Doc),
 {
@@ -222,47 +222,47 @@ where
 }
 
 /// Line break or nothing (soft)
-pub(crate) fn softline_prime() -> DocE {
+pub const fn softline_prime() -> DocE {
     DocE::Spacing(Spacing::Softbreak)
 }
 
 /// Line break or nothing
-pub(crate) fn line_prime() -> DocE {
+pub const fn line_prime() -> DocE {
     DocE::Spacing(Spacing::Break)
 }
 
 /// Line break or space (soft)
-pub(crate) fn softline() -> DocE {
+pub const fn softline() -> DocE {
     DocE::Spacing(Spacing::Softspace)
 }
 
 /// Line break or space
-pub(crate) fn line() -> DocE {
+pub const fn line() -> DocE {
     DocE::Spacing(Spacing::Space)
 }
 
 /// Always space
-pub(crate) fn hardspace() -> DocE {
+pub const fn hardspace() -> DocE {
     DocE::Spacing(Spacing::Hardspace)
 }
 
 /// Always line break
-pub(crate) fn hardline() -> DocE {
+pub const fn hardline() -> DocE {
     DocE::Spacing(Spacing::Hardline)
 }
 
 /// Two line breaks (blank line)
-pub(crate) fn emptyline() -> DocE {
+pub const fn emptyline() -> DocE {
     DocE::Spacing(Spacing::Emptyline)
 }
 
 /// n line breaks
-pub(crate) fn newline() -> DocE {
+pub const fn newline() -> DocE {
     DocE::Spacing(Spacing::Newlines(1))
 }
 
 /// Push documents separated by a separator
-pub(crate) fn push_sep_by<P: Pretty>(doc: &mut Doc, separator: &Doc, docs: Vec<P>) {
+pub fn push_sep_by<P: Pretty>(doc: &mut Doc, separator: &Doc, docs: Vec<P>) {
     let mut first = true;
     for item in docs {
         if !first {
@@ -274,14 +274,14 @@ pub(crate) fn push_sep_by<P: Pretty>(doc: &mut Doc, separator: &Doc, docs: Vec<P
 }
 
 /// Push multiple documents horizontally without spacing
-pub(crate) fn push_hcat<P: Pretty>(doc: &mut Doc, docs: Vec<P>) {
+pub fn push_hcat<P: Pretty>(doc: &mut Doc, docs: Vec<P>) {
     for item in docs {
         item.pretty(doc);
     }
 }
 
 /// Push a document surrounded by the same elements on both sides using a closure
-pub(crate) fn push_surrounded<F>(doc: &mut Doc, outside: &Doc, f: F)
+pub fn push_surrounded<F>(doc: &mut Doc, outside: &Doc, f: F)
 where
     F: FnOnce(&mut Doc),
 {
@@ -292,7 +292,7 @@ where
 
 /// Push a document with manual offset to all text elements using a closure
 /// This is used for indented strings where we need to preserve the original indentation
-pub(crate) fn push_offset<F>(doc: &mut Doc, level: usize, f: F)
+pub fn push_offset<F>(doc: &mut Doc, level: usize, f: F)
 where
     F: FnOnce(&mut Doc),
 {
@@ -304,7 +304,7 @@ where
 // Implementation of the Wadler/Leijen layout algorithm from nixfmt
 
 /// Configuration for rendering
-pub(crate) struct RenderConfig {
+pub struct RenderConfig {
     /// Maximum line width (default: 100)
     pub width: usize,
     /// Indentation width in spaces (default: 2)
@@ -313,7 +313,7 @@ pub(crate) struct RenderConfig {
 
 impl Default for RenderConfig {
     fn default() -> Self {
-        RenderConfig {
+        Self {
             width: 100,
             indent_width: 2,
         }
@@ -321,19 +321,19 @@ impl Default for RenderConfig {
 }
 
 /// Render a document with specific configuration
-pub(crate) fn render_with_config(doc: Doc, config: &RenderConfig) -> String {
+pub fn render_with_config(doc: Doc, config: &RenderConfig) -> String {
     layout_greedy(config.width, config.indent_width, doc)
 }
 
 /// Display width of `s`. Haskell `textWidth = Text.length`, i.e. one column
 /// per Unicode scalar; we match that so multi-byte UTF-8 (e.g. `«»`) doesn't
 /// over-count and force spurious line breaks.
-pub(crate) fn text_width(s: &str) -> usize {
+pub fn text_width(s: &str) -> usize {
     s.chars().count()
 }
 
 /// Check if element is hard spacing (always rendered as-is)
-fn is_hard_spacing(elem: &DocE) -> bool {
+const fn is_hard_spacing(elem: &DocE) -> bool {
     matches!(
         elem,
         DocE::Spacing(
@@ -345,8 +345,7 @@ fn is_hard_spacing(elem: &DocE) -> bool {
 /// Check if element is a comment
 fn is_comment(elem: &DocE) -> bool {
     match elem {
-        DocE::Text(_, _, TextAnn::Comment, _) => true,
-        DocE::Text(_, _, TextAnn::TrailingComment, _) => true,
+        DocE::Text(_, _, TextAnn::Comment | TextAnn::TrailingComment, _) => true,
         DocE::Group(_, inner) => inner.iter().all(|x| is_comment(x) || is_hard_spacing(x)),
         _ => false,
     }
@@ -359,8 +358,7 @@ fn merge_spacings(a: Spacing, b: Spacing) -> Spacing {
     let (min_sp, max_sp) = if a <= b { (a, b) } else { (b, a) };
 
     match (min_sp, max_sp) {
-        (Break, Softspace) => Space,
-        (Break, Hardspace) => Space,
+        (Break, Softspace | Hardspace) => Space,
         (Softbreak, Hardspace) => Softspace,
         (Newlines(x), Newlines(y)) => Newlines(x + y),
         (Emptyline, Newlines(x)) => Newlines(x + 2),
@@ -374,7 +372,7 @@ fn merge_spacings(a: Spacing, b: Spacing) -> Spacing {
 /// Recurses into inner groups (flattening them). Returns `None` if the doc
 /// contains hard line breaks or exceeds the optional width limit.
 /// Mirrors Haskell `unexpandSpacing'` (Predoc.hs).
-pub(crate) fn unexpand_spacing_prime(mut limit: Option<i32>, doc: &[DocE]) -> Option<Doc> {
+pub fn unexpand_spacing_prime(mut limit: Option<i32>, doc: &[DocE]) -> Option<Doc> {
     let mut result = Vec::new();
     let mut stack: Vec<std::slice::Iter<'_, DocE>> = vec![doc.iter()];
     while let Some(iter) = stack.last_mut() {
@@ -413,11 +411,10 @@ fn unexpand_spacing(chain: &[&[DocE]]) -> Doc {
     for s in chain {
         for elem in *s {
             match elem {
-                DocE::Spacing(Spacing::Space) => result.push(DocE::Spacing(Spacing::Hardspace)),
-                DocE::Spacing(Spacing::Softspace) => result.push(DocE::Spacing(Spacing::Hardspace)),
-                DocE::Spacing(Spacing::Break) => {}
-                DocE::Spacing(Spacing::Softbreak) => {}
-                DocE::Nest(..) => {}
+                DocE::Spacing(Spacing::Space | Spacing::Softspace) => {
+                    result.push(DocE::Spacing(Spacing::Hardspace));
+                }
+                DocE::Spacing(Spacing::Break | Spacing::Softbreak) | DocE::Nest(..) => {}
                 _ => result.push(elem.clone()),
             }
         }
@@ -439,7 +436,7 @@ fn has_priority_groups(doc: &[DocE]) -> bool {
 /// - Moving hard spacings and comments out of groups
 /// - Merging consecutive spacings
 /// - Removing empty groups
-pub(crate) fn fixup(mut doc: Doc) -> Doc {
+pub fn fixup(mut doc: Doc) -> Doc {
     fixup_mut(&mut doc, 0, 0);
     doc
 }
@@ -642,10 +639,7 @@ fn fits_impl<const WRITE: bool>(
         };
 
         if let Some(DocE::Spacing(s)) = elem {
-            pending = Some(match pending {
-                Some(p) => merge_spacings(p, *s),
-                None => *s,
-            });
+            pending = Some(pending.map_or(*s, |p| merge_spacings(p, *s)));
             continue;
         }
 
@@ -732,10 +726,7 @@ fn first_line_width(chain: Look<'_>) -> usize {
             }
         };
         if let Some(DocE::Spacing(s)) = elem {
-            pending = Some(match pending {
-                Some(p) => merge_spacings(p, *s),
-                None => *s,
-            });
+            pending = Some(pending.map_or(*s, |p| merge_spacings(p, *s)));
             continue;
         }
         if let Some(sp) = pending.take() {
@@ -768,10 +759,7 @@ fn first_line_fits(target_width: usize, max_width: usize, chain: Look<'_>) -> bo
         }
         let elem = it.next();
         if let Some(DocE::Spacing(s)) = elem {
-            pending = Some(match pending {
-                Some(p) => merge_spacings(p, *s),
-                None => *s,
-            });
+            pending = Some(pending.map_or(*s, |p| merge_spacings(p, *s)));
             continue;
         }
         if let Some(sp) = pending.take() {

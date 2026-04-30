@@ -2,8 +2,15 @@
 //!
 //! Implements formatting rules from nixfmt's Pretty.hs
 
-use crate::predoc::*;
-use crate::types::*;
+use crate::predoc::{
+    Doc, GroupAnn, Pretty, emptyline, hardline, hardspace, line, line_prime, push_comment,
+    push_group, push_group_ann, push_hcat, push_nested, push_offset, push_sep_by, push_text,
+    push_trailing_comment, softline, softline_prime,
+};
+use crate::types::{
+    Ann, Binder, Expression, Item, Parameter, Selector, SimpleSelector, Term, Token,
+    TrailingComment, Trivia, Trivium, Whole,
+};
 
 mod absorb;
 mod app;
@@ -36,12 +43,12 @@ impl Pretty for TrailingComment {
 impl Pretty for Trivium {
     fn pretty(&self, doc: &mut Doc) {
         match self {
-            Trivium::EmptyLine() => doc.push(emptyline()),
-            Trivium::LineComment(c) => {
+            Self::EmptyLine() => doc.push(emptyline()),
+            Self::LineComment(c) => {
                 push_comment(doc, format!("#{c}"));
                 doc.push(hardline());
             }
-            Trivium::BlockComment(is_doc, lines) => {
+            Self::BlockComment(is_doc, lines) => {
                 push_comment(doc, if *is_doc { "/**" } else { "/*" });
                 doc.push(hardline());
                 // Indent the comment using offset instead of nest
@@ -58,7 +65,7 @@ impl Pretty for Trivium {
                 push_comment(doc, "*/");
                 doc.push(hardline());
             }
-            Trivium::LanguageAnnotation(lang) => {
+            Self::LanguageAnnotation(lang) => {
                 push_comment(doc, format!("/* {lang} */"));
                 doc.push(hardspace());
             }
@@ -98,8 +105,8 @@ impl<T: Pretty> Pretty for Ann<T> {
 impl<T: Pretty> Pretty for Item<T> {
     fn pretty(&self, doc: &mut Doc) {
         match self {
-            Item::Comments(trivia) => trivia.pretty(doc),
-            Item::Item(x) => push_group(doc, |d| x.pretty(d)),
+            Self::Comments(trivia) => trivia.pretty(doc),
+            Self::Item(x) => push_group(doc, |d| x.pretty(d)),
         }
     }
 }
@@ -107,7 +114,7 @@ impl<T: Pretty> Pretty for Item<T> {
 impl Pretty for Binder {
     fn pretty(&self, doc: &mut Doc) {
         match self {
-            Binder::Inherit(inherit, source, ids, semicolon) => {
+            Self::Inherit(inherit, source, ids, semicolon) => {
                 // Determine spacing strategy based on original layout
                 let same_line = inherit.span.start_line == semicolon.span.start_line;
                 let few_ids = ids.len() < 4;
@@ -147,7 +154,7 @@ impl Pretty for Binder {
                     }
                 });
             }
-            Binder::Assignment(selectors, assign, expr, semicolon) => {
+            Self::Assignment(selectors, assign, expr, semicolon) => {
                 // Only allow a break after `=` when the key is long/dynamic;
                 // for short plain-id keys the extra line buys almost nothing.
                 let simple_lhs = selectors.len() <= 4 && selectors.iter().all(is_simple_selector);
@@ -187,9 +194,7 @@ impl Pretty for Token {
             return;
         }
         let s = match self {
-            Integer(s) => s.as_str(),
-            Float(s) => s.as_str(),
-            Identifier(s) => s.as_str(),
+            Integer(s) | Float(s) | Identifier(s) => s.as_str(),
             EnvPath(_) => unreachable!("EnvPath handled above"),
             KAssert => "assert",
             KElse => "else",
@@ -202,11 +207,10 @@ impl Pretty for Token {
             KThen => "then",
             KWith => "with",
             TBraceOpen => "{",
-            TBraceClose => "}",
+            TBraceClose | TInterClose => "}",
             TBrackOpen => "[",
             TBrackClose => "]",
             TInterOpen => "${",
-            TInterClose => "}",
             TParenOpen => "(",
             TParenClose => ")",
             TAssign => "=",
@@ -220,10 +224,9 @@ impl Pretty for Token {
             TQuestion => "?",
             TSemicolon => ";",
             TConcat => "++",
-            TNegate => "-",
+            TNegate | TMinus => "-",
             TUpdate => "//",
             TPlus => "+",
-            TMinus => "-",
             TMul => "*",
             TDiv => "/",
             TAnd => "&&",
@@ -248,11 +251,11 @@ impl Pretty for Token {
 impl Pretty for SimpleSelector {
     fn pretty(&self, doc: &mut Doc) {
         match self {
-            SimpleSelector::ID(id) => id.pretty(doc),
-            SimpleSelector::String(ann) => {
+            Self::ID(id) => id.pretty(doc),
+            Self::String(ann) => {
                 pretty_ann_with(doc, ann, |d, v| push_pretty_simple_string(d, v));
             }
-            SimpleSelector::Interpol(interp) => interp.pretty(doc),
+            Self::Interpol(interp) => interp.pretty(doc),
         }
     }
 }
@@ -269,28 +272,28 @@ impl Pretty for Selector {
 impl Pretty for Term {
     fn pretty(&self, doc: &mut Doc) {
         match self {
-            Term::Token(t) => t.pretty(doc),
-            Term::SimpleString(s) => {
+            Self::Token(t) => t.pretty(doc),
+            Self::SimpleString(s) => {
                 pretty_ann_with(doc, s, |d, v| push_pretty_simple_string(d, v));
             }
-            Term::IndentedString(s) => {
+            Self::IndentedString(s) => {
                 pretty_ann_with(doc, s, |d, v| push_pretty_indented_string(d, v));
             }
-            Term::Path(p) => pretty_ann_with(doc, p, |d, v| {
+            Self::Path(p) => pretty_ann_with(doc, p, |d, v| {
                 for part in v {
                     part.pretty(d);
                 }
             }),
-            Term::Parenthesized(open, expr, close) => {
+            Self::Parenthesized(open, expr, close) => {
                 push_pretty_parenthesized(doc, open, expr, close);
             }
-            Term::List(open, items, close) => {
+            Self::List(open, items, close) => {
                 push_group(doc, |g| push_pretty_term_list(g, open, items, close));
             }
-            Term::Set(krec, open, binders, close) => {
+            Self::Set(krec, open, binders, close) => {
                 push_pretty_set(doc, Width::Regular, krec.as_ref(), open, binders, close);
             }
-            Term::Selection(term, selectors, default) => {
+            Self::Selection(term, selectors, default) => {
                 term.pretty(doc);
 
                 // Separator strength depends on how likely a break before the
@@ -298,12 +301,12 @@ impl Pretty for Term {
                 match &**term {
                     // `1.a` would re-lex as float `1.` applied to `a`; keep a
                     // space. Diverges from Haskell nixfmt, which has this bug.
-                    Term::Token(Ann {
+                    Self::Token(Ann {
                         value: Token::Integer(_),
                         ..
                     }) if !selectors.is_empty() => doc.push(hardspace()),
-                    Term::Token(_) => {}
-                    Term::Parenthesized(_, _, _) => doc.push(softline_prime()),
+                    Self::Token(_) => {}
+                    Self::Parenthesized(_, _, _) => doc.push(softline_prime()),
                     _ => doc.push(line_prime()),
                 }
 
@@ -325,11 +328,11 @@ impl Pretty for Term {
 impl Pretty for Expression {
     fn pretty(&self, doc: &mut Doc) {
         match self {
-            Expression::Term(t) => t.pretty(doc),
-            Expression::Application(_, _) => {
+            Self::Term(t) => t.pretty(doc),
+            Self::Application(_, _) => {
                 push_pretty_app(doc, false, &[], false, self);
             }
-            Expression::Operation(left, op, right) => {
+            Self::Operation(left, op, right) => {
                 // Non-chainable comparison operators: `softline` lets the op
                 // stay on the LHS's last line whenever the remainder fits.
                 if matches!(
@@ -351,7 +354,7 @@ impl Pretty for Expression {
 
                 // `//`, `++`, `+` with an absorbable RHS get a compact layout
                 // (cf. the corresponding clause in `absorbRHS`).
-                if let Expression::Term(t) = &**right
+                if let Self::Term(t) = &**right
                     && is_absorbable_term(t)
                     && op.value.is_update_concat_plus()
                 {
@@ -369,7 +372,7 @@ impl Pretty for Expression {
 
                 push_pretty_operation(doc, false, self, op);
             }
-            Expression::MemberCheck(expr, question, selectors) => {
+            Self::MemberCheck(expr, question, selectors) => {
                 expr.pretty(doc);
                 doc.push(softline());
                 question.pretty(doc);
@@ -378,15 +381,15 @@ impl Pretty for Expression {
                     sel.pretty(doc);
                 }
             }
-            Expression::Negation(minus, expr) => {
+            Self::Negation(minus, expr) => {
                 minus.pretty(doc);
                 expr.pretty(doc);
             }
-            Expression::Inversion(bang, expr) => {
+            Self::Inversion(bang, expr) => {
                 bang.pretty(doc);
                 expr.pretty(doc);
             }
-            Expression::Let(let_kw, binders, in_kw, expr) => {
+            Self::Let(let_kw, binders, in_kw, expr) => {
                 // Strip trivia/trailing from `in` and move it down to the body,
                 // mirroring the Haskell clause for `Let`.
                 let mut in_kw_clean = in_kw.clone();
@@ -426,12 +429,12 @@ impl Pretty for Expression {
                 doc.push(hardline());
                 in_part(doc);
             }
-            Expression::If(if_kw, _, _, _, _, _) => {
+            Self::If(if_kw, _, _, _, _, _) => {
                 // group' RegularG $ prettyIf line $ mapFirstToken moveTrailingCommentUp expr
                 // The first token of an `If` is always the `if` keyword itself.
                 let if_kw_moved = move_trailing_comment_up(if_kw);
                 let expr_moved = match self {
-                    Expression::If(_, c, t, e0, el, e1) => Expression::If(
+                    Self::If(_, c, t, e0, el, e1) => Self::If(
                         if_kw_moved,
                         c.clone(),
                         t.clone(),
@@ -445,23 +448,23 @@ impl Pretty for Expression {
                     pretty_if(g, line(), &expr_moved);
                 });
             }
-            Expression::Assert(assert_kw, cond, semicolon, expr) => {
+            Self::Assert(assert_kw, cond, semicolon, expr) => {
                 // group $ prettyApp False mempty False (insertIntoApp (Term (Token assert)) cond)
                 //       <> ";" <> hardline <> pretty expr
                 push_group(doc, |g| {
-                    let assert_term = Expression::Term(Term::Token(assert_kw.clone()));
+                    let assert_term = Self::Term(Term::Token(assert_kw.clone()));
                     let (f, a) = insert_into_app(assert_term, (**cond).clone());
-                    let app = Expression::Application(Box::new(f), Box::new(a));
+                    let app = Self::Application(Box::new(f), Box::new(a));
                     push_pretty_app(g, false, &[], false, &app);
                     semicolon.pretty(g);
                     g.push(hardline());
                     expr.pretty(g);
                 });
             }
-            Expression::With(with_kw, env, semicolon, expr) => {
+            Self::With(with_kw, env, semicolon, expr) => {
                 pretty_with(doc, with_kw, env, semicolon, expr);
             }
-            Expression::Abstraction(Parameter::ID(param), colon, body) => {
+            Self::Abstraction(Parameter::ID(param), colon, body) => {
                 push_group(doc, |group_doc| {
                     group_doc.push(line_prime());
                     param.pretty(group_doc);
@@ -469,13 +472,13 @@ impl Pretty for Expression {
                     push_absorb_abs(group_doc, 1, body);
                 });
             }
-            Expression::Abstraction(param, colon, body) => {
+            Self::Abstraction(param, colon, body) => {
                 param.pretty(doc);
                 colon.pretty(doc);
                 doc.push(line());
                 // Haskell `Abstraction` (set-param) clause: absorbable body
                 // gets `group (prettyTermWide t)`.
-                if let Expression::Term(t) = &**body
+                if let Self::Term(t) = &**body
                     && is_absorbable_term(t)
                 {
                     push_group(doc, |g| push_pretty_term_wide(g, t));

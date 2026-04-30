@@ -115,6 +115,7 @@ pub fn render(a: &str, b: &str, opts: DiffOpts) -> String {
     let results = lines(a, b);
 
     // Decide which lines to keep when a context window is requested.
+    #[allow(clippy::option_if_let_else)] // map_or_else with a 14-line closure is worse
     let keep: Vec<bool> = match opts.context {
         None => vec![true; results.len()],
         Some(ctx) => {

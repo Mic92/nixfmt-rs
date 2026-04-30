@@ -2,7 +2,7 @@
 
 use super::{PrettySimple, Writer, format_bracket_list};
 use crate::format_constructor;
-use crate::predoc::*;
+use crate::predoc::{DocE, GroupAnn, IR, Spacing, TextAnn};
 
 impl PrettySimple for IR {
     fn format<W: Writer>(&self, w: &mut W) {
@@ -31,11 +31,11 @@ impl PrettySimple for Spacing {
     }
 
     fn is_simple(&self) -> bool {
-        !matches!(self, Spacing::Newlines(_))
+        !matches!(self, Self::Newlines(_))
     }
 
     fn renders_inline_parens(&self) -> bool {
-        matches!(self, Spacing::Newlines(_))
+        matches!(self, Self::Newlines(_))
     }
 }
 
@@ -81,7 +81,7 @@ impl PrettySimple for DocE {
     fn is_simple(&self) -> bool {
         matches!(
             self,
-            DocE::Spacing(_) | DocE::Text(_, _, _, _) | DocE::Nest(..)
+            Self::Spacing(_) | Self::Text(_, _, _, _) | Self::Nest(..)
         )
     }
 }

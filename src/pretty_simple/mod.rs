@@ -42,9 +42,9 @@ pub trait Writer {
 }
 
 // ANSI color codes
-pub(crate) const NUMBER_COLOR: &str = "\x1b[0;92;1m";
-pub(crate) const STRING_QUOTE_COLOR: &str = "\x1b[0;97;1m";
-pub(crate) const STRING_CONTENT_COLOR: &str = "\x1b[0;94;1m";
+pub const NUMBER_COLOR: &str = "\x1b[0;92;1m";
+pub const STRING_QUOTE_COLOR: &str = "\x1b[0;97;1m";
+pub const STRING_CONTENT_COLOR: &str = "\x1b[0;94;1m";
 
 /// Trait for types that can be formatted as Haskell-style output
 pub trait PrettySimple: Debug {
@@ -102,7 +102,7 @@ pub trait PrettySimple: Debug {
 /// (like ESC 0x1b or zero-width space U+200B) that appear as literal bytes.
 ///
 /// Returns a Cow to avoid allocation when no escaping is needed.
-pub(crate) fn escape_string(s: &str) -> std::borrow::Cow<'_, str> {
+pub fn escape_string(s: &str) -> std::borrow::Cow<'_, str> {
     // Helper: Check if a character is non-printable (matches Haskell's not isPrint)
     // Haskell's isPrint returns False for Unicode categories: Cc, Cf, Cs, Co, Cn, Zl, Zp
     // Source: https://hackage.haskell.org/package/base-4.21.0.0/docs/Data-Char.html#v:isPrint
@@ -173,7 +173,7 @@ pub(crate) fn escape_string(s: &str) -> std::borrow::Cow<'_, str> {
 ///               in if isSimple x
 ///                  then nest 2 doc  -- space before simple
 ///                  else nest indentAmount $ line' <> doc  -- newline before complex
-pub(crate) fn sub_expr<T: PrettySimple, W: Writer>(w: &mut W, arg: &T) {
+pub fn sub_expr<T: PrettySimple, W: Writer>(w: &mut W, arg: &T) {
     if arg.is_simple() {
         w.write_plain(" ");
         arg.format(w);
@@ -203,7 +203,7 @@ pub(crate) fn sub_expr<T: PrettySimple, W: Writer>(w: &mut W, arg: &T) {
 /// open … body … close` sequence that previously appeared open-coded at every
 /// bracket / brace / paren site. `body` receives the writer and the captured
 /// delimiter color so it can emit matching commas.
-pub(crate) fn with_brackets<W: Writer>(
+pub fn with_brackets<W: Writer>(
     w: &mut W,
     open: &str,
     close: &str,
@@ -232,7 +232,7 @@ pub(crate) fn with_brackets<W: Writer>(
 /// - Non-empty, complex delimited values get a newline before them
 /// - Simple delimited values (like [ `EmptyLine` ]) stay inline
 /// - Everything else: space before
-pub(crate) fn format_delimited_value<T: PrettySimple, W: Writer>(w: &mut W, value: &T) {
+pub fn format_delimited_value<T: PrettySimple, W: Writer>(w: &mut W, value: &T) {
     if value.has_delimiters() && !value.is_empty() && !value.is_simple() {
         w.newline();
         value.format(w);
@@ -253,11 +253,7 @@ pub(crate) fn format_delimited_value<T: PrettySimple, W: Writer>(w: &mut W, valu
 /// level. `Vec<T>` does this (matching pretty-simple's `Open` annotation),
 /// whereas the top-level `IR` dump stays at depth 0 so its first column lines
 /// up with the Haskell reference output.
-pub(crate) fn format_bracket_list<T: PrettySimple, W: Writer>(
-    w: &mut W,
-    items: &[T],
-    bump_depth: bool,
-) {
+pub fn format_bracket_list<T: PrettySimple, W: Writer>(w: &mut W, items: &[T], bump_depth: bool) {
     if items.is_empty() {
         with_brackets(w, "[", "]", false, |_, _| {});
         return;
@@ -286,10 +282,11 @@ pub(crate) fn format_bracket_list<T: PrettySimple, W: Writer>(
     });
 }
 
-/// Macro to format constructor applications
-/// Based on pretty-simple's: Parens (`CommaSeparated` [[Other "Constructor", arg1, arg2, ...]])
-/// Uses subExpr logic: simple elements get space before, complex get newline
-/// Usage: `format_constructor!(w`, "`ConstructorName`", [arg1, arg2, arg3])
+/// Macro to format constructor applications.
+///
+/// Based on pretty-simple's `Parens (CommaSeparated [[Other "Constructor", arg1, ...]])`.
+/// Uses `subExpr` logic: simple elements get a leading space, complex ones a newline.
+/// Usage: `format_constructor!(w, "ConstructorName", [arg1, arg2, arg3])`
 #[macro_export]
 macro_rules! format_constructor {
     // Constructor with no arguments

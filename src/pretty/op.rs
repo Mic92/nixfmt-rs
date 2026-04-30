@@ -1,5 +1,5 @@
-use crate::predoc::*;
-use crate::types::*;
+use crate::predoc::{Doc, Pretty, hardspace, line, push_group, push_nested};
+use crate::types::{Expression, Leaf};
 
 use super::absorb::is_absorbable_term;
 use super::app::push_pretty_app;

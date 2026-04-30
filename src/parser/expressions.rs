@@ -7,7 +7,7 @@
 //! - `assert ...; ...` - Assert expressions
 
 use crate::error::Result;
-use crate::types::*;
+use crate::types::{Expression, Leaf, Token};
 
 use super::Parser;
 

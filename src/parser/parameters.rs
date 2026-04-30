@@ -7,7 +7,10 @@
 //! - Context parameters: `args@{x, y}:` or `{x, y}@args:`
 
 use crate::error::{ParseError, Result};
-use crate::types::*;
+use crate::types::{
+    Ann, Binder, Expression, Item, Items, ParamAttr, Parameter, Selector, SimpleSelector, Span,
+    Term, Token,
+};
 
 use super::Parser;
 
@@ -185,14 +188,9 @@ impl Parser {
         second: &Parameter,
     ) -> Result<()> {
         match (first, second) {
-            // Case 1: args@{x, y, z} - pattern name is first, set is second
-            (Parameter::ID(pattern_leaf), Parameter::Set(_, attrs, _)) => {
-                if let Token::Identifier(pattern_name) = &pattern_leaf.value {
-                    self.check_pattern_shadows_formal(pattern_name, attrs)?;
-                }
-            }
-            // Case 2: {x, y, z}@args - set is first, pattern name is second
-            (Parameter::Set(_, attrs, _), Parameter::ID(pattern_leaf)) => {
+            // `args@{x, y, z}` or `{x, y, z}@args`
+            (Parameter::ID(pattern_leaf), Parameter::Set(_, attrs, _))
+            | (Parameter::Set(_, attrs, _), Parameter::ID(pattern_leaf)) => {
                 if let Token::Identifier(pattern_name) = &pattern_leaf.value {
                     self.check_pattern_shadows_formal(pattern_name, attrs)?;
                 }

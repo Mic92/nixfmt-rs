@@ -1,5 +1,8 @@
-use crate::predoc::*;
-use crate::types::*;
+use crate::predoc::{
+    Doc, DocE, GroupAnn, Pretty, hardspace, line, line_prime, push_group, push_group_ann,
+    push_nested,
+};
+use crate::types::{Ann, Binder, Expression, Item, Parameter, Term, Token};
 
 use super::app::push_pretty_app;
 use super::op::push_pretty_operation;
@@ -14,7 +17,6 @@ pub(super) fn is_absorbable_term(term: &Term) -> bool {
     match term {
         // Multi-line indented string
         Term::IndentedString(s) if s.value.len() >= 2 => true,
-        Term::Path(_) => false,
         // Non-empty sets and lists
         Term::Set(_, _, items, _) if !items.0.is_empty() => true,
         Term::List(_, items, _) if !items.0.is_empty() => true,

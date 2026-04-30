@@ -34,11 +34,11 @@ enum Mode {
 }
 
 impl Mode {
-    fn name(self) -> &'static str {
+    const fn name(self) -> &'static str {
         match self {
-            Mode::Format => "format",
-            Mode::Ir => "ir",
-            Mode::Ast => "ast",
+            Self::Format => "format",
+            Self::Ir => "ir",
+            Self::Ast => "ast",
         }
     }
 }
@@ -163,7 +163,7 @@ fn main() {
         .filter(|e| e.file_type().is_file())
         .filter(|e| e.path().extension().is_some_and(|x| x == "nix"))
         .filter(|e| max_bytes == 0 || e.metadata().is_ok_and(|m| m.len() <= max_bytes))
-        .map(|e| e.into_path())
+        .map(walkdir::DirEntry::into_path)
         .collect();
     files.sort();
     if limit > 0 {
