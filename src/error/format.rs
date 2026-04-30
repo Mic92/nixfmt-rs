@@ -43,7 +43,7 @@ impl<'a> ErrorFormatter<'a> {
         write!(out, "Error").unwrap();
 
         if let Some(code) = error.code() {
-            write!(out, "[{}]", code).unwrap();
+            write!(out, "[{code}]").unwrap();
         }
 
         writeln!(out, ": {}", error.message()).unwrap();
@@ -75,14 +75,7 @@ impl<'a> ErrorFormatter<'a> {
             let (actual_line_num, line_text) = self.context.line_at(line_start_offset);
             assert_eq!(line_num, actual_line_num);
 
-            writeln!(
-                out,
-                "{:>width$} │ {}",
-                line_num,
-                line_text,
-                width = line_num_width
-            )
-            .unwrap();
+            writeln!(out, "{line_num:>line_num_width$} │ {line_text}").unwrap();
 
             if line_idx == error_line_idx {
                 let error_col = (error.span.start as usize).saturating_sub(line_start_offset);
@@ -116,53 +109,46 @@ impl<'a> ErrorFormatter<'a> {
         match &error.kind {
             ErrorKind::UnexpectedToken { expected, found } => {
                 if expected.len() == 1 && expected[0] == "';'" {
-                    writeln!(out, "{}= note: missing semicolon after definition", indent).unwrap();
+                    writeln!(out, "{indent}= note: missing semicolon after definition").unwrap();
                     writeln!(
                         out,
-                        "{}= help: add a semicolon at the end of the previous line",
-                        indent
+                        "{indent}= help: add a semicolon at the end of the previous line"
                     )
                     .unwrap();
                 } else if expected.len() == 1 && expected[0] == "'}'" {
                     writeln!(
                         out,
-                        "{}= note: string interpolations must be closed with '}}'",
-                        indent
+                        "{indent}= note: string interpolations must be closed with '}}'"
                     )
                     .unwrap();
-                    writeln!(out, "{}= help: add '}}' to close the interpolation", indent).unwrap();
+                    writeln!(out, "{indent}= help: add '}}' to close the interpolation").unwrap();
                 } else if expected.len() == 1 && expected[0] == "'then'" {
                     writeln!(
                         out,
-                        "{}= note: if expressions require: if <condition> then <expr> else <expr>",
-                        indent
+                        "{indent}= note: if expressions require: if <condition> then <expr> else <expr>"
                     )
                     .unwrap();
-                    writeln!(out, "{}= help: add 'then' after the condition", indent).unwrap();
+                    writeln!(out, "{indent}= help: add 'then' after the condition").unwrap();
                 } else if expected.len() == 1 && expected[0] == "'else'" {
                     writeln!(
                         out,
-                        "{}= note: if expressions require: if <condition> then <expr> else <expr>",
-                        indent
+                        "{indent}= note: if expressions require: if <condition> then <expr> else <expr>"
                     )
                     .unwrap();
                     writeln!(
                         out,
-                        "{}= help: add 'else' followed by the alternative expression",
-                        indent
+                        "{indent}= help: add 'else' followed by the alternative expression"
                     )
                     .unwrap();
                 } else if expected.len() == 1 && expected[0] == "'in'" {
                     writeln!(
                         out,
-                        "{}= note: 'in' is required to complete the let expression",
-                        indent
+                        "{indent}= note: 'in' is required to complete the let expression"
                     )
                     .unwrap();
                     writeln!(
                         out,
-                        "{}= help: add 'in' followed by the expression body",
-                        indent
+                        "{indent}= help: add 'in' followed by the expression body"
                     )
                     .unwrap();
                 } else if !expected.is_empty() {
@@ -173,8 +159,7 @@ impl<'a> ErrorFormatter<'a> {
                     };
                     writeln!(
                         out,
-                        "{}= help: expected {}, but found {}",
-                        indent, expected_str, found
+                        "{indent}= help: expected {expected_str}, but found {found}"
                     )
                     .unwrap();
                 }
@@ -182,7 +167,7 @@ impl<'a> ErrorFormatter<'a> {
             ErrorKind::InvalidSyntax {
                 hint: Some(hint), ..
             } => {
-                writeln!(out, "{}= help: {}", indent, hint).unwrap();
+                writeln!(out, "{indent}= help: {hint}").unwrap();
             }
             ErrorKind::UnclosedDelimiter {
                 delimiter,
@@ -206,19 +191,13 @@ impl<'a> ErrorFormatter<'a> {
             ErrorKind::ChainedComparison { .. } => {
                 writeln!(
                     out,
-                    "{}= note: comparison operators cannot be chained in Nix",
-                    indent
+                    "{indent}= note: comparison operators cannot be chained in Nix"
                 )
                 .unwrap();
-                writeln!(out, "{}= help: use parentheses: (a < b) && (b < c)", indent).unwrap();
+                writeln!(out, "{indent}= help: use parentheses: (a < b) && (b < c)").unwrap();
             }
             ErrorKind::MissingToken { token, after } => {
-                writeln!(
-                    out,
-                    "{}= note: {} is required after {}",
-                    indent, token, after
-                )
-                .unwrap();
+                writeln!(out, "{indent}= note: {token} is required after {after}").unwrap();
             }
             _ => {}
         }

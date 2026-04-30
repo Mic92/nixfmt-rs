@@ -1,14 +1,14 @@
 //! Trivia conversion utilities
 //!
-//! This module handles conversion of intermediate ParseTrivium tokens into
-//! final Trivia and TrailingComment structures. It implements the logic for
+//! This module handles conversion of intermediate `ParseTrivium` tokens into
+//! final Trivia and `TrailingComment` structures. It implements the logic for
 //! splitting trivia into trailing comments (inline comments on the same line)
 //! and leading trivia (comments and empty lines before the next token).
 
 use super::ParseTrivium;
 use crate::types::*;
 
-/// Check if a ParseTrivium should be classified as trailing
+/// Check if a `ParseTrivium` should be classified as trailing
 fn is_trailing(pt: &ParseTrivium) -> bool {
     match pt {
         ParseTrivium::LineComment { .. } => true,
@@ -17,7 +17,7 @@ fn is_trailing(pt: &ParseTrivium) -> bool {
     }
 }
 
-/// Convert trailing trivia to TrailingComment
+/// Convert trailing trivia to `TrailingComment`
 fn convert_trailing(pts: &[ParseTrivium]) -> Option<TrailingComment> {
     let texts: Vec<String> = pts
         .iter()
@@ -82,7 +82,7 @@ pub(super) fn convert_leading(pts: &[ParseTrivium]) -> Trivia {
     result.into()
 }
 
-/// Convert ParseTrivium list to (trailing_comment, leading_trivia)
+/// Convert `ParseTrivium` list to (`trailing_comment`, `leading_trivia`)
 ///
 /// This is the main conversion function that splits trivia into:
 /// - Trailing comments: inline comments on the same line as the previous token

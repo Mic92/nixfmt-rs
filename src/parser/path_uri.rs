@@ -33,7 +33,7 @@ fn is_uri_char(c: char) -> bool {
 
 impl Parser {
     /// Check if current position starts a URI
-    /// Pattern: scheme_chars ":" uri_chars (e.g., http://example.com)
+    /// Pattern: `scheme_chars` ":" `uri_chars` (e.g., <http://example.com>)
     pub(super) fn looks_like_uri(&self) -> bool {
         let Token::Identifier(scheme) = &self.current.value else {
             return false;
@@ -160,7 +160,7 @@ impl Parser {
         Ok(text)
     }
 
-    /// Parse URI as a SimpleString
+    /// Parse URI as a `SimpleString`
     /// Based on nixfmt's uri parser
     pub(super) fn parse_uri(&mut self) -> Result<Term> {
         let ann = self.with_raw_ann(|p| {

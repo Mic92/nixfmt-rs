@@ -175,6 +175,7 @@ fn normalize_parameter(p: &mut Parameter) {
     }
 }
 
+#[allow(clippy::many_single_char_names)] // names mirror Types.hs constructors
 fn normalize_expr(e: &mut Expression) {
     match e {
         Expression::Term(t) => normalize_term(t),

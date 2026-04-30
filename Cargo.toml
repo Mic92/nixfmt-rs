@@ -48,51 +48,29 @@ codegen-units = 1
 [lints.clippy]
 pedantic = { level = "warn", priority = -1 }
 nursery = { level = "warn", priority = -1 }
-# Style churn that would obscure the 1:1 Haskell mapping.
+# Style churn that would obscure the 1:1 Haskell mapping (high hit count).
 use_self = "allow"
 wildcard_imports = "allow"
-enum_glob_use = "allow"
 match_same_arms = "allow"
-single_match_else = "allow"
-if_not_else = "allow"
-redundant_else = "allow"
-manual_let_else = "allow"
 option_if_let_else = "allow"
-map_unwrap_or = "allow"
-unnested_or_patterns = "allow"
-match_wildcard_for_single_variants = "allow"
-comparison_chain = "allow"
 items_after_statements = "allow"
 branches_sharing_code = "allow"
 redundant_closure_for_method_calls = "allow"
-# Naming follows the Haskell identifiers verbatim.
-similar_names = "allow"
-many_single_char_names = "allow"
-doc_markdown = "allow"
 too_long_first_doc_paragraph = "allow"
 # Function shape follows Haskell; size/signature lints are noise here.
 too_many_lines = "allow"
 needless_pass_by_value = "allow"
 unnecessary_wraps = "allow"
 unused_self = "allow"
-ref_option = "allow"
 must_use_candidate = "allow"
 missing_errors_doc = "allow"
-struct_excessive_bools = "allow"
 # Visibility is intentionally explicit on private-module items.
 redundant_pub_crate = "allow"
-# Lexer/layout hot paths: leave casts, inlining and allocation patterns to the
-# perf work; nursery suggestions here are not always correct.
+# Lexer/layout hot paths: nursery suggestions here are not always correct.
 missing_const_for_fn = "allow"
 inline_always = "allow"
 cast_possible_truncation = "allow"
 cast_possible_wrap = "allow"
-cast_precision_loss = "allow"
 format_push_string = "allow"
-uninlined_format_args = "allow"
 needless_collect = "allow"
 redundant_clone = "allow"
-# Test fixtures use r#""# uniformly for Nix snippets and explicit
-# `if .. panic!` for clearer failure messages.
-needless_raw_string_hashes = "allow"
-manual_assert = "allow"

@@ -9,7 +9,7 @@ oracle_tests! {
     regression_string_interpolation_selectors => [
         r#"x."y""#,
         r#"x.${"y"}"#,
-        r#"x.${foo}"#,
+        r"x.${foo}",
     ],
 
     regression_or_as_identifier => ["or"],
@@ -113,7 +113,7 @@ oracle_tests! {
 
     // From nixpkgs/nixos/modules/config/resolvconf.nix lines 18-37
     regression_chained_string_concatenation => [
-        r#"''
+        r"''
   line1
 ''
 + lib.optionalString cond1 ''
@@ -125,7 +125,7 @@ oracle_tests! {
 + lib.optionalString cond3 ''
   line4
 ''
-+ cfg.extra"#,
++ cfg.extra",
     ],
 
     // Comments inside otherwise-empty sets / lists / let-bindings should be
@@ -145,10 +145,10 @@ oracle_tests! {
 
     // From nixpkgs/nixos/release.nix line 262-267
     regression_dot_selector_on_newline => [
-        r#"{
+        r"{
   armv6l-linux = ./foo.nix;
 }
-.${system}"#,
+.${system}",
     ],
 
     // From nixpkgs/lib/generators.nix line 729
@@ -403,5 +403,5 @@ fn regression_non_utf8_input() {
 #[test]
 fn regression_inherit_interpolation_restricted() {
     assert!(crate::parse(r#"{ inherit ${"ok"}; }"#).is_ok());
-    assert_parse_rejected(r#"{ inherit ${bar}; }"#);
+    assert_parse_rejected(r"{ inherit ${bar}; }");
 }

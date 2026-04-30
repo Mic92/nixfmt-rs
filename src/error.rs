@@ -86,7 +86,7 @@ impl ParseError {
         match &self.kind {
             ErrorKind::UnexpectedToken { expected, found } => {
                 if expected.is_empty() {
-                    format!("unexpected token: {}", found)
+                    format!("unexpected token: {found}")
                 } else if expected.len() == 1 {
                     format!("expected {}, found {}", expected[0], found)
                 } else {
@@ -94,10 +94,10 @@ impl ParseError {
                 }
             }
             ErrorKind::UnclosedDelimiter { delimiter, .. } => {
-                format!("unclosed delimiter '{}'", delimiter)
+                format!("unclosed delimiter '{delimiter}'")
             }
             ErrorKind::MissingToken { token, after } => {
-                format!("missing {} after {}", token, after)
+                format!("missing {token} after {after}")
             }
             ErrorKind::InvalidSyntax { description, .. } => description.clone(),
             ErrorKind::ChainedComparison {
@@ -105,8 +105,7 @@ impl ParseError {
                 second_op,
             } => {
                 format!(
-                    "chained comparison operators '{}' and '{}' are not allowed",
-                    first_op, second_op
+                    "chained comparison operators '{first_op}' and '{second_op}' are not allowed"
                 )
             }
             ErrorKind::Message(msg) => msg.clone(),

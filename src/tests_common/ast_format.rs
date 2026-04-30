@@ -65,17 +65,17 @@ fn run_reference_nixfmt(input: &str, mode: RefMode) -> String {
 /// Print the standard "TEST FAILED" block (input, expected, got, colored diff)
 /// and panic.
 fn fail_with_diff(kind: &str, input: &str, expected: &str, got: &str) -> ! {
-    eprintln!("TEST FAILED: {}", kind);
-    eprintln!("INPUT:\n{}", input);
+    eprintln!("TEST FAILED: {kind}");
+    eprintln!("INPUT:\n{input}");
     eprintln!("\n=== EXPECTED (nixfmt) ===");
-    eprintln!("{}", expected);
+    eprintln!("{expected}");
     eprintln!("\n=== GOT (ours) ===");
-    eprintln!("{}", got);
+    eprintln!("{got}");
     eprintln!("\n=== DIFF ===");
 
     diff::print_colored_diff(expected, got);
 
-    panic!("{} output mismatch", kind);
+    panic!("{kind} output mismatch");
 }
 
 /// Test helper: run nixfmt --ast and compare with our output

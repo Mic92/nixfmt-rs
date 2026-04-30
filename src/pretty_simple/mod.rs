@@ -1,4 +1,4 @@
-//! PrettySimple trait for formatting AST and IR nodes to match nixfmt Haskell's output
+//! `PrettySimple` trait for formatting AST and IR nodes to match nixfmt Haskell's output
 //!
 //! This implementation is based on the pretty-simple Haskell library:
 //! <https://github.com/cdepillabout/pretty-simple>
@@ -75,12 +75,14 @@ pub trait PrettySimple: Debug {
     }
 
     /// Check if this represents a single atomic element in Haskell's parsed form
-    /// True for: primitives (String/usize/bool), nullary constructors (EmptyLine)
+    /// True for: primitives (String/usize/bool), nullary constructors (`EmptyLine`)
     /// False for: constructor applications (TextPart/LineComment), delimited types (Vec/Ann)
     ///
-    /// This is used by Vec::is_simple() to determine if a single-element Vec is structurally simple.
-    /// In Haskell, "TextPart \"hello\"" parses to [Other "TextPart ", StringLit "hello"] (2 elements),
-    /// so Vec<StringPart> with [TextPart] is NOT structurally simple, even though TextPart is simple for rendering.
+    /// This is used by `Vec::is_simple()` to determine if a single-element Vec is structurally simple.
+    /// In Haskell, the show string `TextPart "hello"` parses to two atoms
+    /// (`Other "TextPart "` then `StringLit "hello"`), so a `Vec<StringPart>`
+    /// containing one `TextPart` is NOT structurally simple even though
+    /// `TextPart` itself renders as a simple atom.
     fn is_atomic(&self) -> bool {
         false
     }
@@ -165,7 +167,7 @@ pub(crate) fn escape_string(s: &str) -> std::borrow::Cow<'_, str> {
     std::borrow::Cow::Owned(result)
 }
 
-/// sub_expr from pretty-simple's subExpr - formats a single expression with appropriate spacing
+/// `sub_expr` from pretty-simple's subExpr - formats a single expression with appropriate spacing
 /// From Haskell:
 ///   subExpr x = let doc = prettyExpr opts x
 ///               in if isSimple x
@@ -226,9 +228,9 @@ pub(crate) fn with_brackets<W: Writer>(
 /// Helper for formatting delimited values in lists and records
 /// Handles spacing for simple vs delimited entries
 ///
-/// Logic (unified from list_elem and format_record_value):
+/// Logic (unified from `list_elem` and `format_record_value)`:
 /// - Non-empty, complex delimited values get a newline before them
-/// - Simple delimited values (like [ EmptyLine ]) stay inline
+/// - Simple delimited values (like [ `EmptyLine` ]) stay inline
 /// - Everything else: space before
 pub(crate) fn format_delimited_value<T: PrettySimple, W: Writer>(w: &mut W, value: &T) {
     if value.has_delimiters() && !value.is_empty() && !value.is_simple() {
@@ -285,9 +287,9 @@ pub(crate) fn format_bracket_list<T: PrettySimple, W: Writer>(
 }
 
 /// Macro to format constructor applications
-/// Based on pretty-simple's: Parens (CommaSeparated [[Other "Constructor", arg1, arg2, ...]])
+/// Based on pretty-simple's: Parens (`CommaSeparated` [[Other "Constructor", arg1, arg2, ...]])
 /// Uses subExpr logic: simple elements get space before, complex get newline
-/// Usage: format_constructor!(w, "ConstructorName", [arg1, arg2, arg3])
+/// Usage: `format_constructor!(w`, "`ConstructorName`", [arg1, arg2, arg3])
 #[macro_export]
 macro_rules! format_constructor {
     // Constructor with no arguments
@@ -308,7 +310,7 @@ macro_rules! format_constructor {
 /// Based on pretty-simple's list function for Braces
 /// From Haskell: Braces xss -> list "{" "}" xss
 ///
-/// Usage: format_record!(w, [("field1", &value1), ("field2", &value2), ...])
+/// Usage: `format_record!(w`, [("field1", &value1), ("field2", &value2), ...])
 #[macro_export]
 macro_rules! format_record {
     ($w:expr, [ $(($name:expr, $value:expr)),+ $(,)? ]) => {{
@@ -342,7 +344,7 @@ macro_rules! format_record {
 }
 
 /// Macro to format enum match arms
-/// Automatically generates match arms that call format_constructor! for each variant
+/// Automatically generates match arms that call `format_constructor`! for each variant
 ///
 /// Usage without wildcard:
 /// ```ignore

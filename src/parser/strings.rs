@@ -216,10 +216,7 @@ impl Parser {
             match self.lexer.peek() {
                 Some('\'') if self.lexer.at("''") => {
                     // Could be end or escape
-                    if matches!(
-                        self.lexer.peek_ahead(2),
-                        Some('$') | Some('\'') | Some('\\')
-                    ) {
+                    if matches!(self.lexer.peek_ahead(2), Some('$' | '\'' | '\\')) {
                         let text = self.parse_indented_string_part()?;
                         if !text.is_empty() {
                             parts.push(StringPart::TextPart(text));
@@ -456,7 +453,7 @@ fn split_on_newlines(parts: Vec<StringPart>) -> Vec<Vec<StringPart>> {
                     }
                 }
             }
-            other => current.push(other),
+            other @ StringPart::Interpolation(_) => current.push(other),
         }
     }
 
@@ -464,7 +461,7 @@ fn split_on_newlines(parts: Vec<StringPart>) -> Vec<Vec<StringPart>> {
     result
 }
 
-/// Merge adjacent TextPart elements into a single TextPart
+/// Merge adjacent `TextPart` elements into a single `TextPart`
 fn merge_adjacent_text(line: Vec<StringPart>) -> Vec<StringPart> {
     let mut result: Vec<StringPart> = Vec::new();
     for part in line {
@@ -479,7 +476,7 @@ fn merge_adjacent_text(line: Vec<StringPart>) -> Vec<StringPart> {
                     result.push(StringPart::TextPart(text));
                 }
             }
-            other => result.push(other),
+            other @ StringPart::Interpolation(_) => result.push(other),
         }
     }
     result

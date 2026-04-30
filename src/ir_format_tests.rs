@@ -13,7 +13,7 @@ oracle_tests! {
     ///
     /// Issue: nixfmt-rs was missing the outer `Group RegularG` wrapper that the
     /// reference implementation adds when pretty-printing a Whole Expression (File).
-    /// This has been fixed by wrapping Whole<T>::pretty in push_group().
+    /// This has been fixed by wrapping `Whole<T>::pretty` in `push_group()`.
     test_simple_parameter_pattern => ["{ a, b }: x"],
 
     // Member selection with default exercises selector spacing and "or" clause layout

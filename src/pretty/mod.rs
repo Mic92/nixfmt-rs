@@ -38,7 +38,7 @@ impl Pretty for Trivium {
         match self {
             Trivium::EmptyLine() => doc.push(emptyline()),
             Trivium::LineComment(c) => {
-                push_comment(doc, format!("#{}", c));
+                push_comment(doc, format!("#{c}"));
                 doc.push(hardline());
             }
             Trivium::BlockComment(is_doc, lines) => {
@@ -59,7 +59,7 @@ impl Pretty for Trivium {
                 doc.push(hardline());
             }
             Trivium::LanguageAnnotation(lang) => {
-                push_comment(doc, format!("/* {} */", lang));
+                push_comment(doc, format!("/* {lang} */"));
                 doc.push(hardspace());
             }
         }
@@ -174,9 +174,16 @@ impl Pretty for Binder {
 
 impl Pretty for Token {
     fn pretty(&self, doc: &mut Doc) {
-        use Token::*;
+        use Token::{
+            EnvPath, Float, Identifier, Integer, KAssert, KElse, KIf, KIn, KInherit, KLet, KOr,
+            KRec, KThen, KWith, Sof, TAnd, TAssign, TAt, TBraceClose, TBraceOpen, TBrackClose,
+            TBrackOpen, TColon, TComma, TConcat, TDiv, TDot, TDoubleQuote, TDoubleSingleQuote,
+            TEllipsis, TEqual, TGreater, TGreaterEqual, TImplies, TInterClose, TInterOpen, TLess,
+            TLessEqual, TMinus, TMul, TNegate, TNot, TOr, TParenClose, TParenOpen, TPipeBackward,
+            TPipeForward, TPlus, TQuestion, TSemicolon, TTilde, TUnequal, TUpdate,
+        };
         if let EnvPath(s) = self {
-            push_text(doc, format!("<{}>", s));
+            push_text(doc, format!("<{s}>"));
             return;
         }
         let s = match self {
@@ -281,7 +288,7 @@ impl Pretty for Term {
                 push_group(doc, |g| push_pretty_term_list(g, open, items, close));
             }
             Term::Set(krec, open, binders, close) => {
-                push_pretty_set(doc, Width::Regular, krec, open, binders, close);
+                push_pretty_set(doc, Width::Regular, krec.as_ref(), open, binders, close);
             }
             Term::Selection(term, selectors, default) => {
                 term.pretty(doc);

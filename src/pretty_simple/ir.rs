@@ -1,4 +1,4 @@
-//! PrettySimple implementations for IR (intermediate representation) nodes
+//! `PrettySimple` implementations for IR (intermediate representation) nodes
 
 use super::{PrettySimple, Writer, format_bracket_list};
 use crate::format_constructor;

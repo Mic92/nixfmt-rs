@@ -63,7 +63,7 @@ pub(crate) enum TextAnn {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) enum DocE {
     /// Text element
-    /// (nesting_depth, offset, annotation, text)
+    /// (`nesting_depth`, offset, annotation, text)
     Text(usize, usize, TextAnn, String),
     /// Spacing element
     Spacing(Spacing),
@@ -336,10 +336,9 @@ pub(crate) fn text_width(s: &str) -> usize {
 fn is_hard_spacing(elem: &DocE) -> bool {
     matches!(
         elem,
-        DocE::Spacing(Spacing::Hardspace)
-            | DocE::Spacing(Spacing::Hardline)
-            | DocE::Spacing(Spacing::Emptyline)
-            | DocE::Spacing(Spacing::Newlines(_))
+        DocE::Spacing(
+            Spacing::Hardspace | Spacing::Hardline | Spacing::Emptyline | Spacing::Newlines(_)
+        )
     )
 }
 
@@ -355,7 +354,7 @@ fn is_comment(elem: &DocE) -> bool {
 
 /// Merge two spacing elements (take maximum in ordering)
 fn merge_spacings(a: Spacing, b: Spacing) -> Spacing {
-    use Spacing::*;
+    use Spacing::{Break, Emptyline, Hardspace, Newlines, Softbreak, Softspace, Space};
 
     let (min_sp, max_sp) = if a <= b { (a, b) } else { (b, a) };
 
@@ -390,15 +389,13 @@ pub(crate) fn unexpand_spacing_prime(mut limit: Option<i32>, doc: &[DocE]) -> Op
                 }
                 result.push(elem.clone());
             }
-            DocE::Spacing(Spacing::Hardspace)
-            | DocE::Spacing(Spacing::Space)
-            | DocE::Spacing(Spacing::Softspace) => {
+            DocE::Spacing(Spacing::Hardspace | Spacing::Space | Spacing::Softspace) => {
                 if let Some(n) = limit.as_mut() {
                     *n -= 1;
                 }
                 result.push(DocE::Spacing(Spacing::Hardspace));
             }
-            DocE::Spacing(Spacing::Break) | DocE::Spacing(Spacing::Softbreak) => {}
+            DocE::Spacing(Spacing::Break | Spacing::Softbreak) => {}
             DocE::Spacing(_) => return None,
             DocE::Nest(..) => result.push(elem.clone()),
             DocE::Group(_, inner) => stack.push(inner.iter()),
@@ -428,7 +425,7 @@ fn unexpand_spacing(chain: &[&[DocE]]) -> Doc {
     result
 }
 
-/// Cheap pre-check so render_group can skip the clone-heavy `priority_groups`
+/// Cheap pre-check so `render_group` can skip the clone-heavy `priority_groups`
 /// machinery for groups that contain no Priority children.
 fn has_priority_groups(doc: &[DocE]) -> bool {
     doc.iter().any(|e| match e {
@@ -519,8 +516,7 @@ fn fixup_mut(doc: &mut Vec<DocE>, mut nacc: isize, mut oacc: isize) {
                 let post_start = body
                     .iter()
                     .rposition(|e| !is_hard_spacing(e))
-                    .map(|p| p + 1)
-                    .unwrap_or(0)
+                    .map_or(0, |p| p + 1)
                     .max(pre_end);
 
                 if pre_end == 0 && post_start == body.len() && !body.is_empty() {
@@ -791,7 +787,7 @@ fn first_line_fits(target_width: usize, max_width: usize, chain: Look<'_>) -> bo
         match elem {
             None => return max - c <= target,
             Some(DocE::Text(_, _, TextAnn::RegularT, t)) => c -= text_width(t) as isize,
-            Some(DocE::Text(..)) | Some(DocE::Nest(..)) => {}
+            Some(DocE::Text(..) | DocE::Nest(..)) => {}
             Some(DocE::Group(_, ys)) => {
                 rest.clear();
                 rest.extend(it.stack.iter().rev().map(|(s, i)| &s[*i..]));
@@ -870,8 +866,8 @@ fn priority_groups(doc: &[DocE]) -> Vec<(Chain<'_>, Chain<'_>, Chain<'_>)> {
 }
 
 /// State for layout algorithm
-/// (current_column, indent_stack)
-/// indent_stack: Vec<(current_indent, nesting_level)>
+/// (`current_column`, `indent_stack`)
+/// `indent_stack`: Vec<(`current_indent`, `nesting_level`)>
 type LayoutState = (usize, Vec<(usize, usize)>);
 
 /// Main layout algorithm
@@ -946,7 +942,7 @@ fn render_elem(
         // re-parser associates it with the same opener token (idempotency).
         DocE::Text(_, _, TextAnn::TrailingComment, t)
             if *cc == 2 && {
-                let line_nl = state.1.last().map(|(_, l)| *l).unwrap_or(0);
+                let line_nl = state.1.last().map_or(0, |(_, l)| *l);
                 next_indent(lookahead).0 > line_nl
             } =>
         {
@@ -1022,15 +1018,16 @@ fn indent_for(text_nl: usize, indents: &[(usize, usize)], iw: usize) -> usize {
 /// at the start of a line (cc == 0).
 fn apply_indent(text_nl: usize, state: &mut LayoutState, iw: usize) {
     let indents = &mut state.1;
-    while let Some(&(_, nl)) = indents.last() {
-        if text_nl > nl {
-            let ci = indents.last().unwrap().0 + iw;
-            indents.push((ci, text_nl));
-            return;
-        } else if text_nl < nl {
-            indents.pop();
-        } else {
-            return;
+    while let Some(&(ci, nl)) = indents.last() {
+        match text_nl.cmp(&nl) {
+            std::cmp::Ordering::Greater => {
+                indents.push((ci + iw, text_nl));
+                return;
+            }
+            std::cmp::Ordering::Less => {
+                indents.pop();
+            }
+            std::cmp::Ordering::Equal => return,
         }
     }
 }
@@ -1047,20 +1044,17 @@ fn render_text(
     let (cc, indents) = state;
 
     // Manage indentation stack
-    while !indents.is_empty() {
-        let (_, nl) = indents.last().unwrap();
-        if text_nl > *nl {
-            let new_indent = if *cc == 0 {
-                indents.last().unwrap().0 + iw
-            } else {
-                indents.last().unwrap().0
-            };
-            indents.push((new_indent, text_nl));
-            break;
-        } else if text_nl < *nl {
-            indents.pop();
-        } else {
-            break;
+    while let Some(&(ci, nl)) = indents.last() {
+        match text_nl.cmp(&nl) {
+            std::cmp::Ordering::Greater => {
+                let new_indent = if *cc == 0 { ci + iw } else { ci };
+                indents.push((new_indent, text_nl));
+                break;
+            }
+            std::cmp::Ordering::Less => {
+                indents.pop();
+            }
+            std::cmp::Ordering::Equal => break,
         }
     }
 
@@ -1146,7 +1140,7 @@ fn try_render_group(
         // the pending indentation is *not* subtracted here, so a compact group
         // at the start of a line may overshoot by its indent. This matches the
         // reference layout engine exactly.
-        let last_line_nl = indents.last().map(|(_, l)| *l).unwrap_or(0);
+        let last_line_nl = indents.last().map_or(0, |(_, l)| *l);
         let line_nl = last_line_nl + if nl > last_line_nl { iw } else { 0 };
         let will_increase = if next_indent(lookahead).0 > line_nl {
             iw
@@ -1160,19 +1154,16 @@ fn try_render_group(
         for _ in 0..total_indent {
             out.push(' ');
         }
-        match fits(will_increase as isize, budget, grp, out) {
-            Some(w) => {
-                apply_indent(nl, state, iw);
-                state.0 += w;
-                true
-            }
-            None => {
-                out.truncate(mark);
-                false
-            }
+        if let Some(w) = fits(will_increase as isize, budget, grp, out) {
+            apply_indent(nl, state, iw);
+            state.0 += w;
+            true
+        } else {
+            out.truncate(mark);
+            false
         }
     } else {
-        let line_nl = indents.last().map(|(_, l)| *l).unwrap_or(0);
+        let line_nl = indents.last().map_or(0, |(_, l)| *l);
         let will_increase = if next_indent(lookahead).0 > line_nl {
             iw as isize
         } else {

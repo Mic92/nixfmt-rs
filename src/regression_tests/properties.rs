@@ -3,7 +3,7 @@
 //!
 //! Asserts two invariants the formatter must always uphold:
 //!   1. Idempotency:      format(format(x)) == format(x)
-//!   2. AST preservation: parse(format(x)) ==_strip_trivia parse(x)
+//!   2. AST preservation: parse(format(x)) ==_`strip_trivia` parse(x)
 //!
 //! The corpus is checked into this repo so the tests are hermetic. Files our
 //! parser cannot parse yet are skipped (those are tracked by the parser
@@ -25,7 +25,7 @@ fn collect_fixture_nix_files(dir: &FsPath, out: &mut Vec<PathBuf>) {
         let p = e.path();
         if p.is_dir() {
             collect_fixture_nix_files(&p, out);
-        } else if p.extension().map(|e| e == "nix").unwrap_or(false) {
+        } else if p.extension().is_some_and(|e| e == "nix") {
             out.push(p);
         }
     }
@@ -90,9 +90,7 @@ fn for_each_parsed_fixture(
         }
     }
     eprintln!("[{tag}] checked {checked} files, {failures} failures");
-    if failures > 0 {
-        panic!("[{tag}] {failures} file(s) failed");
-    }
+    assert_eq!(failures, 0, "[{tag}] {failures} file(s) failed");
 }
 
 // ---------------------------------------------------------------------------
@@ -163,13 +161,10 @@ fn formats_to_golden_on_fixture_corpus() {
         ) else {
             continue;
         };
-        let got = match crate::format(&input) {
-            Ok(s) => s,
-            Err(_) => {
-                // Parser gaps are tracked by the parser regression suite.
-                skipped_parse += 1;
-                continue;
-            }
+        let Ok(got) = crate::format(&input) else {
+            // Parser gaps are tracked by the parser regression suite.
+            skipped_parse += 1;
+            continue;
         };
         checked += 1;
         if got == expected {

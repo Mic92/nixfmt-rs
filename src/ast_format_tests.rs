@@ -94,11 +94,11 @@ oracle_tests! {
     // Inside multi-line strings, # starts literal text, not a comment.
     // The hash and text should be a TextPart, not LineComment trivia.
     test_string_hash_not_comment => [
-        r#"''
+        r"''
 foo ${bar}
 
 # TODO: comment
 badFiles=$(find ${filteredHead})
-''"#,
+''",
     ],
 }

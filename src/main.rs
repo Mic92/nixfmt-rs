@@ -35,6 +35,7 @@ Common flags:
 ";
 
 #[derive(Default)]
+#[allow(clippy::struct_excessive_bools)] // flat CLI flag bag
 struct Opts {
     width: usize,
     indent: usize,

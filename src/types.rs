@@ -56,8 +56,8 @@ impl Span {
 pub enum Trivium {
     EmptyLine(),
     LineComment(String),
-    /// BlockComment(is_doc, lines)
-    /// is_doc = true for /** */ comments
+    /// `BlockComment(is_doc`, lines)
+    /// `is_doc` = true for /** */ comments
     BlockComment(bool, Vec<String>),
     LanguageAnnotation(String),
 }
@@ -176,10 +176,10 @@ impl<'a> IntoIterator for &'a Trivia {
 pub struct TrailingComment(pub Box<str>);
 
 /// Annotated wrapper - every AST node has:
-/// - pre_trivia: Comments/whitespace before the token
+/// - `pre_trivia`: Comments/whitespace before the token
 /// - span: Byte range in source
 /// - value: The actual value
-/// - trail_comment: Optional trailing comment on same line
+/// - `trail_comment`: Optional trailing comment on same line
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Ann<T> {
     pub pre_trivia: Trivia,

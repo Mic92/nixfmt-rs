@@ -63,7 +63,7 @@ oracle_tests! {
     /// must not be force-expanded.
     test_absorb_rhs_single_inherit => ["{ x = { inherit a; }; }"],
 
-    /// Regression test: middle arguments in application should use absorbLast logic (RegularG if not absorbable)
+    /// Regression test: middle arguments in application should use `absorbLast` logic (`RegularG` if not absorbable)
     test_middle_arg_grouping => ["lib.pipe pkgs.lixPackageSets [ ]"],
 
     /// Regression test: With expression in assignment RHS should be grouped with the leading space
@@ -87,7 +87,7 @@ oracle_tests! {
 
     /// Regression test: empty lists/sets containing only a comment must be
     /// absorbable and rendered with hardlines so formatting is idempotent.
-    /// https://github.com/NixOS/nixfmt/issues/362
+    /// <https://github.com/NixOS/nixfmt/issues/362>
     test_empty_container_with_comment_idempotent => [
         "{ x = [ /* foo */ ]; }",
         "{ x = { /* foo */ }; }",

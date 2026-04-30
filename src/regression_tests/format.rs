@@ -306,7 +306,7 @@ fn format_text_width_counts_chars_not_bytes() {
     );
 }
 
-/// An empty set whose `{` carries pre-trivia (so the LoneAnn fast path is
+/// An empty set whose `{` carries pre-trivia (so the `LoneAnn` fast path is
 /// skipped) must still honour the source line break between `{` and `}`.
 /// Haskell: `Nixfmt.Pretty.prettySet` second clause, `sep` condition.
 /// Reproduces: nixpkgs `nixos/modules/system/service/systemd/user.nix`.
