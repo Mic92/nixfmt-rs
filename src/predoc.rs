@@ -152,36 +152,32 @@ impl<T: Pretty, U: Pretty> Pretty for (T, U) {
     }
 }
 
-/// Push a text element
-pub(crate) fn push_text(doc: &mut Doc, s: impl Into<String>) {
+/// Push a text element with the given annotation, dropping empty strings.
+pub(crate) fn push_text_ann(doc: &mut Doc, ann: TextAnn, s: impl Into<String>) {
     let s = s.into();
     if !s.is_empty() {
-        doc.push(DocE::Text(0, 0, TextAnn::RegularT, s));
+        doc.push(DocE::Text(0, 0, ann, s));
     }
+}
+
+/// Push a text element
+pub(crate) fn push_text(doc: &mut Doc, s: impl Into<String>) {
+    push_text_ann(doc, TextAnn::RegularT, s);
 }
 
 /// Push a comment element
 pub(crate) fn push_comment(doc: &mut Doc, s: impl Into<String>) {
-    let s = s.into();
-    if !s.is_empty() {
-        doc.push(DocE::Text(0, 0, TextAnn::Comment, s));
-    }
+    push_text_ann(doc, TextAnn::Comment, s);
 }
 
 /// Push a trailing comment element
 pub(crate) fn push_trailing_comment(doc: &mut Doc, s: impl Into<String>) {
-    let s = s.into();
-    if !s.is_empty() {
-        doc.push(DocE::Text(0, 0, TextAnn::TrailingComment, s));
-    }
+    push_text_ann(doc, TextAnn::TrailingComment, s);
 }
 
 /// Push a trailing text element (only rendered in expanded groups)
 pub(crate) fn push_trailing(doc: &mut Doc, s: impl Into<String>) {
-    let s = s.into();
-    if !s.is_empty() {
-        doc.push(DocE::Text(0, 0, TextAnn::Trailing, s));
-    }
+    push_text_ann(doc, TextAnn::Trailing, s);
 }
 
 /// Push a grouped document using a closure
