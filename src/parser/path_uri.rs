@@ -151,11 +151,8 @@ impl Parser {
             if ch.is_alphanumeric() || matches!(ch, '.' | '_' | '-' | '+' | '~') {
                 text.push(ch);
                 self.lexer.advance();
-            } else if ch == '$' && self.lexer.at("${") {
-                break;
-            } else if ch == '/' {
-                break;
             } else {
+                // `/`, `${`, or any other char terminates this path segment.
                 break;
             }
         }

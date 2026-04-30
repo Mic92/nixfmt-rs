@@ -40,14 +40,14 @@ struct Opts {
     indent: usize,
     check: bool,
     quiet: bool,
-    // Accepted for CLI parity; the formatter currently has no strict mode hook.
-    _strict: bool,
+    #[allow(dead_code)] // accepted for CLI parity; no strict-mode hook yet
+    strict: bool,
     verify: bool,
     ast: bool,
     ir: bool,
     parse_only: bool,
-    // Accepted for CLI parity; mergetool mode is not implemented.
-    _mergetool: bool,
+    #[allow(dead_code)] // accepted for CLI parity; mergetool mode unimplemented
+    mergetool: bool,
     filename: Option<String>,
     files: Vec<String>,
 }
@@ -93,12 +93,12 @@ fn parse_args() -> Result<Opts, String> {
             "--indent" => o.indent = int("--indent")?,
             "-c" | "--check" => o.check = true,
             "-q" | "--quiet" => o.quiet = true,
-            "-s" | "--strict" => o._strict = true,
+            "-s" | "--strict" => o.strict = true,
             "-v" | "--verify" => o.verify = true,
             "-a" | "--ast" => o.ast = true,
             "--ir" => o.ir = true,
             "--parse-only" => o.parse_only = true,
-            "-m" | "--mergetool" => o._mergetool = true,
+            "-m" | "--mergetool" => o.mergetool = true,
             "-f" | "--filename" => o.filename = Some(value("--filename")?),
             "--" => {
                 o.files.extend(args.by_ref());
@@ -246,7 +246,7 @@ fn main() {
         };
     }
 
-    exit(if ok { 0 } else { 1 });
+    exit(i32::from(!ok));
 }
 
 /// Expand argument paths lazily: directories are walked for `*.nix` files,
@@ -260,7 +260,7 @@ fn expand_paths(args: &[String]) -> impl Iterator<Item = PathBuf> + '_ {
             either::Left(
                 WalkDir::new(p)
                     .into_iter()
-                    .filter_map(|e| e.ok())
+                    .filter_map(Result::ok)
                     .filter(|e| e.file_type().is_file())
                     .filter(|e| e.path().extension().is_some_and(|x| x == "nix"))
                     .map(|e| e.into_path()),

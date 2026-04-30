@@ -114,14 +114,14 @@ pub(super) fn push_absorb_rhs(doc: &mut Doc, expr: &Expression) {
             ) =>
         {
             push_nested_rhs(doc, hardspace(), |inner| {
-                push_absorb_expr(inner, Width::Regular, expr)
+                push_absorb_expr(inner, Width::Regular, expr);
             });
         }
 
         // Absorbable expression. Always start on the same line, force-expand attrsets.
         _ if is_absorbable_expr(expr) => {
             push_nested_rhs(doc, hardspace(), |inner| {
-                push_absorb_expr(inner, Width::Wide, expr)
+                push_absorb_expr(inner, Width::Wide, expr);
             });
         }
 
