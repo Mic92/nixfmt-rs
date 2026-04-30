@@ -23,7 +23,7 @@ use term::{
     push_pretty_items, push_pretty_parenthesized, push_pretty_set, push_pretty_term_list,
     push_pretty_term_wide,
 };
-use util::{Width, is_simple_selector, move_trailing_comment_up};
+use util::{Width, is_simple_selector, move_trailing_comment_up, pretty_ann_with};
 
 impl Pretty for TrailingComment {
     fn pretty(&self, doc: &mut Doc) {
@@ -243,9 +243,7 @@ impl Pretty for SimpleSelector {
         match self {
             SimpleSelector::ID(id) => id.pretty(doc),
             SimpleSelector::String(ann) => {
-                ann.pre_trivia.pretty(doc);
-                push_pretty_simple_string(doc, &ann.value);
-                ann.trail_comment.pretty(doc);
+                pretty_ann_with(doc, ann, |d, v| push_pretty_simple_string(d, v));
             }
             SimpleSelector::Interpol(interp) => interp.pretty(doc),
         }
@@ -266,22 +264,16 @@ impl Pretty for Term {
         match self {
             Term::Token(t) => t.pretty(doc),
             Term::SimpleString(s) => {
-                s.pre_trivia.pretty(doc);
-                push_pretty_simple_string(doc, &s.value);
-                s.trail_comment.pretty(doc);
+                pretty_ann_with(doc, s, |d, v| push_pretty_simple_string(d, v));
             }
             Term::IndentedString(s) => {
-                s.pre_trivia.pretty(doc);
-                push_pretty_indented_string(doc, &s.value);
-                s.trail_comment.pretty(doc);
+                pretty_ann_with(doc, s, |d, v| push_pretty_indented_string(d, v));
             }
-            Term::Path(p) => {
-                p.pre_trivia.pretty(doc);
-                for part in &p.value {
-                    part.pretty(doc);
+            Term::Path(p) => pretty_ann_with(doc, p, |d, v| {
+                for part in v {
+                    part.pretty(d);
                 }
-                p.trail_comment.pretty(doc);
-            }
+            }),
             Term::Parenthesized(open, expr, close) => {
                 push_pretty_parenthesized(doc, open, expr, close);
             }
@@ -396,7 +388,7 @@ impl Pretty for Expression {
                 // convertTrailing
                 let mut moved_trivia_vec: Vec<Trivium> = in_kw.pre_trivia.clone().into();
                 if let Some(trailing) = &in_kw.trail_comment {
-                    moved_trivia_vec.push(Trivium::LineComment(format!(" {}", trailing.0)));
+                    moved_trivia_vec.push(trailing.into());
                 }
                 let moved_trivia: Trivia = moved_trivia_vec.into();
 

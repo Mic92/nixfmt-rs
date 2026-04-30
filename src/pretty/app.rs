@@ -29,7 +29,7 @@ fn first_token_comment(expr: &Expression) -> Trivia {
     fn ann<T>(a: &Ann<T>) -> Trivia {
         let mut t = a.pre_trivia.clone();
         if let Some(tc) = &a.trail_comment {
-            t.push(Trivium::LineComment(format!(" {}", tc.0)));
+            t.push(tc.into());
         }
         t
     }
@@ -72,11 +72,7 @@ fn first_token_comment(expr: &Expression) -> Trivia {
 /// chain, which is almost always a small `Term`, so the deep clone is cheap.
 fn strip_first_comment(expr: &Expression) -> Expression {
     fn ann<T: Clone>(a: &Ann<T>) -> Ann<T> {
-        Ann {
-            pre_trivia: Trivia::new(),
-            trail_comment: None,
-            ..a.clone()
-        }
+        a.bare()
     }
     fn param(p: &Parameter) -> Parameter {
         match p {

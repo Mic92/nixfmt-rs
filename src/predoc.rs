@@ -326,7 +326,7 @@ pub(crate) fn render_with_config(doc: Doc, config: &RenderConfig) -> String {
 /// Display width of `s`. Haskell `textWidth = Text.length`, i.e. one column
 /// per Unicode scalar; we match that so multi-byte UTF-8 (e.g. `«»`) doesn't
 /// over-count and force spurious line breaks.
-fn text_width(s: &str) -> usize {
+pub(crate) fn text_width(s: &str) -> usize {
     s.chars().count()
 }
 

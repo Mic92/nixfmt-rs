@@ -200,6 +200,37 @@ impl<T> Ann<T> {
     }
 }
 
+impl<T: Clone> Ann<T> {
+    pub fn without_trail(&self) -> Self {
+        Ann {
+            trail_comment: None,
+            ..self.clone()
+        }
+    }
+
+    pub fn without_pre(&self) -> Self {
+        Ann {
+            pre_trivia: Trivia::new(),
+            ..self.clone()
+        }
+    }
+
+    pub fn bare(&self) -> Self {
+        Ann {
+            pre_trivia: Trivia::new(),
+            trail_comment: None,
+            ..self.clone()
+        }
+    }
+}
+
+/// Haskell `convertTrailing`.
+impl From<&TrailingComment> for Trivium {
+    fn from(tc: &TrailingComment) -> Self {
+        Trivium::LineComment(format!(" {}", tc.0))
+    }
+}
+
 /// Items with interleaved comments (for lists, sets, let bindings)
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Item<T> {

@@ -1,3 +1,4 @@
+use crate::predoc::{Doc, Pretty, hardline, hardspace};
 use crate::types::*;
 
 /// Whether a set/absorbed term should prefer its expanded (multi-line)
@@ -49,10 +50,6 @@ pub(super) fn term_first_token_has_pre_trivia(term: &Term) -> bool {
 /// Haskell `hasOnlyComments` (Pretty.hs): non-empty `Items` containing only comment items.
 pub(super) fn items_has_only_comments<T>(items: &Items<T>) -> bool {
     !items.0.is_empty() && items.0.iter().all(|i| matches!(i, Item::Comments(_)))
-}
-
-pub(super) fn text_width(s: &str) -> usize {
-    s.chars().count()
 }
 
 pub(super) fn is_spaces(s: &str) -> bool {
@@ -108,13 +105,30 @@ pub(super) fn is_simple_expression(expr: &Expression) -> bool {
 
 // ---------------------------------------------------------------------------
 
+/// Render an empty bracketed container (`[]`, `{}`), preserving a user-inserted
+/// line break between the delimiters. Shared by empty list / set / param-set.
+pub(super) fn push_empty_brackets(doc: &mut Doc, open: &Leaf, close: &Leaf) {
+    open.pretty(doc);
+    if open.span.start_line != close.span.start_line {
+        doc.push(hardline());
+    } else {
+        doc.push(hardspace());
+    }
+    close.pretty(doc);
+}
+
+pub(super) fn pretty_ann_with<T>(doc: &mut Doc, ann: &Ann<T>, f: impl FnOnce(&mut Doc, &T)) {
+    ann.pre_trivia.pretty(doc);
+    f(doc, &ann.value);
+    ann.trail_comment.pretty(doc);
+}
+
 /// Move a trailing comment on a token into its leading trivia.
 /// Mirrors Haskell `moveTrailingCommentUp` (Pretty.hs).
 pub(super) fn move_trailing_comment_up<T: Clone>(ann: &Ann<T>) -> Ann<T> {
     let mut out = ann.clone();
     if let Some(tc) = out.trail_comment.take() {
-        out.pre_trivia
-            .push(Trivium::LineComment(format!(" {}", tc.0)));
+        out.pre_trivia.push(Trivium::from(&tc));
     }
     out
 }
@@ -130,7 +144,7 @@ pub(super) fn split_paren_trivia(
     let trail: Trivia = open
         .trail_comment
         .take()
-        .map(|tc| vec![Trivium::LineComment(format!(" {}", tc.0))])
+        .map(|tc| vec![Trivium::from(&tc)])
         .unwrap_or_default()
         .into();
     let mut close = close.clone();
