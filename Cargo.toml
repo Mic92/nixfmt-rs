@@ -50,6 +50,3 @@ pedantic = { level = "warn", priority = -1 }
 nursery = { level = "warn", priority = -1 }
 # Large match-based dispatchers mirror the Haskell structure 1:1.
 too_many_lines = "allow"
-# Parser/lexer helpers uniformly return Result for call-site `?` chaining,
-# even when the current implementation cannot fail.
-unnecessary_wraps = "allow"

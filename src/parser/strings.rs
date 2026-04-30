@@ -44,7 +44,7 @@ impl Parser {
                         parts.push(interp);
                     }
                     _ => {
-                        let text = p.parse_simple_string_part()?;
+                        let text = p.parse_simple_string_part();
                         if !text.is_empty() {
                             parts.push(StringPart::TextPart(text));
                         }
@@ -67,7 +67,7 @@ impl Parser {
 
     /// Parse a text part in a simple string (handles escapes)
     /// Based on Haskell's simpleStringPart
-    fn parse_simple_string_part(&mut self) -> Result<String> {
+    fn parse_simple_string_part(&mut self) -> String {
         let mut text = String::new();
 
         loop {
@@ -116,7 +116,7 @@ impl Parser {
             }
         }
 
-        Ok(text)
+        text
     }
 
     /// Parse string interpolation: ${expr}
@@ -217,7 +217,7 @@ impl Parser {
                 Some('\'') if self.lexer.at("''") => {
                     // Could be end or escape
                     if matches!(self.lexer.peek_ahead(2), Some('$' | '\'' | '\\')) {
-                        let text = self.parse_indented_string_part()?;
+                        let text = self.parse_indented_string_part();
                         if !text.is_empty() {
                             parts.push(StringPart::TextPart(text));
                         }
@@ -231,7 +231,7 @@ impl Parser {
                 }
                 Some('\n') | None => break,
                 _ => {
-                    let text = self.parse_indented_string_part()?;
+                    let text = self.parse_indented_string_part();
                     if !text.is_empty() {
                         parts.push(StringPart::TextPart(text));
                     }
@@ -244,7 +244,7 @@ impl Parser {
 
     /// Parse text part in indented string
     /// Based on Haskell's indentedStringPart
-    fn parse_indented_string_part(&mut self) -> Result<String> {
+    fn parse_indented_string_part(&mut self) -> String {
         let mut text = String::new();
 
         loop {
@@ -307,7 +307,7 @@ impl Parser {
             }
         }
 
-        Ok(text)
+        text
     }
 
     /// Parse selector interpolation: ${expr} within attribute paths

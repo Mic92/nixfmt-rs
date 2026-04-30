@@ -101,7 +101,7 @@ impl Parser {
                         parts.push(interp);
                     }
                     Some(ch) if ch.is_alphanumeric() || matches!(ch, '.' | '_' | '-' | '+') => {
-                        let text = p.parse_path_part()?;
+                        let text = p.parse_path_part();
                         if !text.is_empty() {
                             if let Some(StringPart::TextPart(last_text)) = parts.last_mut() {
                                 last_text.push_str(&text);
@@ -144,7 +144,7 @@ impl Parser {
 
     /// Parse path text component (without /)
     /// Based on Haskell's pathText
-    fn parse_path_part(&mut self) -> Result<String> {
+    fn parse_path_part(&mut self) -> String {
         let mut text = String::new();
 
         while let Some(ch) = self.lexer.peek() {
@@ -157,7 +157,7 @@ impl Parser {
             }
         }
 
-        Ok(text)
+        text
     }
 
     /// Parse URI as a `SimpleString`

@@ -15,7 +15,7 @@ use crate::types::Token;
 
 impl Lexer {
     /// Parse a number literal (integer or float)
-    pub(super) fn parse_number(&mut self) -> crate::error::Result<Token> {
+    pub(super) fn parse_number(&mut self) -> Token {
         let mut num = self.consume_digits();
         let mut is_float = false;
 
@@ -41,10 +41,10 @@ impl Lexer {
             if let Some(exp) = self.parse_exponent() {
                 num.push_str(&exp);
             }
-            return Ok(Token::Float(num.into()));
+            return Token::Float(num.into());
         }
 
-        Ok(Token::Integer(num.into()))
+        Token::Integer(num.into())
     }
 
     /// Parse scientific notation exponent (e.g., `e10`, `E-5`, `e+3`)

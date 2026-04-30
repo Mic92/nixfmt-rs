@@ -47,7 +47,7 @@ const fn is_comparison_operator(token: &Token) -> bool {
 impl Parser {
     pub(crate) fn new(source: &str) -> Result<Self> {
         let mut lexer = Lexer::new(source);
-        lexer.start_parse()?;
+        lexer.start_parse();
         let current = lexer.lexeme()?;
         Ok(Self { lexer, current })
     }
