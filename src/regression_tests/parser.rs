@@ -1,6 +1,6 @@
 //! Consolidated regression tests
 
-use crate::tests_common::test_ast_format;
+use crate::tests_common::{assert_parse_error_contains, assert_parse_rejected, test_ast_format};
 
 #[test]
 fn regression_string_interpolation_selectors() {
@@ -92,10 +92,7 @@ fn regression_let_string_interpolated_key() {
 
 #[test]
 fn regression_comparison_chain_should_fail() {
-    assert!(
-        crate::parse("a == b == c").is_err(),
-        "expected chained comparisons to be rejected"
-    );
+    assert_parse_rejected("a == b == c");
 }
 
 #[test]
@@ -198,10 +195,7 @@ fn regression_empty_container_with_comment() {
 
 #[test]
 fn regression_path_trailing_slash_current() {
-    assert!(
-        crate::parse("./").is_err(),
-        "expected path with trailing slash to be rejected"
-    );
+    assert_parse_rejected("./");
 }
 
 #[test]
@@ -335,10 +329,7 @@ fn regression_chained_comparison_operators() {
 fn regression_utf8_identifier() {
     // Nix identifiers are ASCII-only: [a-zA-Z_][a-zA-Z0-9_'-]*
     // From nix/tests/functional/lang/parse-fail-utf8.nix
-    assert!(
-        crate::parse("123 é 4").is_err(),
-        "expected non-ASCII character to be rejected"
-    );
+    assert_parse_rejected("123 é 4");
 }
 
 #[test]
@@ -358,19 +349,13 @@ fn regression_multiline_string_unicode_line_numbers() {
 #[test]
 fn regression_duplicate_function_formals() {
     // From nix/tests/functional/lang/parse-fail-dup-formals.nix
-    assert!(
-        crate::parse("{x, y, x}: x").is_err(),
-        "expected duplicate formal parameters to be rejected"
-    );
+    assert_parse_rejected("{x, y, x}: x");
 }
 
 #[test]
 fn regression_pattern_shadows_formal() {
     // From nix/tests/functional/lang/parse-fail-patterns-1.nix
-    assert!(
-        crate::parse("args@{args, x, y, z}: x").is_err(),
-        "expected pattern name shadowing formal parameter to be rejected"
-    );
+    assert_parse_rejected("args@{args, x, y, z}: x");
 }
 
 #[test]
@@ -488,40 +473,27 @@ fn regression_crlf_between_tokens() {
 
 #[test]
 fn regression_at_without_colon_error() {
-    let err = crate::parse("x @ y").unwrap_err();
-    assert!(
-        err.to_string()
-            .contains("@ is only valid in lambda parameters")
-    );
+    assert_parse_error_contains("x @ y", "@ is only valid in lambda parameters");
 }
 
 #[test]
 fn regression_single_ampersand_error() {
-    let err = crate::parse("a & b").unwrap_err();
-    assert!(err.to_string().contains("expected '&&', found '&'"));
+    assert_parse_error_contains("a & b", "expected '&&', found '&'");
 }
 
 #[test]
 fn regression_single_pipe_error() {
-    let err = crate::parse("a | b").unwrap_err();
-    assert!(
-        err.to_string()
-            .contains("expected one of '||', '|>', found '|'")
-    );
+    assert_parse_error_contains("a | b", "expected one of '||', '|>', found '|'");
 }
 
 #[test]
 fn regression_ellipsis_without_colon_error() {
-    let err = crate::parse("{ ... }").unwrap_err();
-    assert!(
-        err.to_string()
-            .contains("{ ... } must be followed by ':' or '@'")
-    );
+    assert_parse_error_contains("{ ... }", "{ ... } must be followed by ':' or '@'");
 }
 
 #[test]
 fn regression_set_parameter_without_colon_error() {
-    assert!(crate::parse("{ x, y }").is_err());
+    assert_parse_rejected("{ x, y }");
 }
 
 #[test]
@@ -554,5 +526,5 @@ fn regression_non_utf8_input() {
 #[test]
 fn regression_inherit_interpolation_restricted() {
     assert!(crate::parse(r#"{ inherit ${"ok"}; }"#).is_ok());
-    assert!(crate::parse(r#"{ inherit ${bar}; }"#).is_err());
+    assert_parse_rejected(r#"{ inherit ${bar}; }"#);
 }
