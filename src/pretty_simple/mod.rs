@@ -175,34 +175,52 @@ pub(crate) fn sub_expr<T: PrettySimple, W: Writer>(w: &mut W, arg: &T) {
     if arg.is_simple() {
         w.write_plain(" ");
         arg.format(w);
-    } else if arg.renders_inline_parens() {
-        w.newline();
-        w.with_color(|w_colored| {
-            let paren_color = w_colored.current_color();
-            w_colored.with_depth(|w_inner| {
-                w_inner.write_colored("(", paren_color);
-                w_inner.write_plain(" ");
-                arg.format(w_inner);
-                w_inner.write_plain(" ");
-                w_inner.write_colored(")", paren_color);
-            });
-        });
     } else if arg.has_delimiters() {
         w.newline();
         arg.format(w);
     } else {
+        // Complex argument: wrap in parens. `renders_inline_parens` only controls
+        // whether the closing paren stays on the same line or drops to the next.
+        let inline = arg.renders_inline_parens();
         w.newline();
-        w.with_color(|w_colored| {
-            let paren_color = w_colored.current_color();
-            w_colored.with_depth(|w_inner| {
-                w_inner.write_colored("(", paren_color);
-                w_inner.write_plain(" ");
-                arg.format(w_inner);
-                w_inner.newline();
-                w_inner.write_colored(")", paren_color);
-            });
+        with_brackets(w, "(", ")", true, |w, _| {
+            w.write_plain(" ");
+            arg.format(w);
+            if inline {
+                w.write_plain(" ")
+            } else {
+                w.newline()
+            }
         });
     }
+}
+
+/// Common scaffold for delimiter-wrapped output.
+///
+/// Performs the exact `with_color → current_color → (optional with_depth) →
+/// open … body … close` sequence that previously appeared open-coded at every
+/// bracket / brace / paren site. `body` receives the writer and the captured
+/// delimiter color so it can emit matching commas.
+pub(crate) fn with_brackets<W: Writer>(
+    w: &mut W,
+    open: &str,
+    close: &str,
+    bump_depth: bool,
+    body: impl FnOnce(&mut W, &'static str),
+) {
+    w.with_color(|w| {
+        let delim_color = w.current_color();
+        let inner = |w: &mut W| {
+            w.write_colored(open, delim_color);
+            body(w, delim_color);
+            w.write_colored(close, delim_color);
+        };
+        if bump_depth {
+            w.with_depth(inner);
+        } else {
+            inner(w);
+        }
+    });
 }
 
 /// Helper for formatting delimited values in lists and records
@@ -239,61 +257,31 @@ pub(crate) fn format_bracket_list<T: PrettySimple, W: Writer>(
     bump_depth: bool,
 ) {
     if items.is_empty() {
-        w.with_color(|w_color| {
-            let bracket_color = w_color.current_color();
-            w_color.write_colored("[", bracket_color);
-            w_color.write_colored("]", bracket_color);
-        });
+        with_brackets(w, "[", "]", false, |_, _| {});
         return;
     }
 
-    w.with_color(|w_color| {
-        let bracket_color = w_color.current_color();
-        let body = |w_inner: &mut W| {
-            if items.len() == 1 && items[0].is_simple() {
-                w_inner.write_colored("[", bracket_color);
-                w_inner.write_plain(" ");
-                for (i, item) in items.iter().enumerate() {
-                    if i > 0 {
-                        w_inner.write_plain(" ");
-                    }
-                    item.format(w_inner);
+    with_brackets(w, "[", "]", bump_depth, |w, bracket_color| {
+        if items.len() == 1 && items[0].is_simple() {
+            w.write_plain(" ");
+            for (i, item) in items.iter().enumerate() {
+                if i > 0 {
+                    w.write_plain(" ");
                 }
-                w_inner.write_plain(" ");
-                w_inner.write_colored("]", bracket_color);
-            } else {
-                w_inner.write_colored("[", bracket_color);
-                for (i, item) in items.iter().enumerate() {
-                    if i > 0 {
-                        w_inner.newline();
-                        w_inner.write_colored(",", bracket_color);
-                    }
-                    format_delimited_value(w_inner, item);
-                }
-                w_inner.newline();
-                w_inner.write_colored("]", bracket_color);
+                item.format(w);
             }
-        };
-        if bump_depth {
-            w_color.with_depth(body);
+            w.write_plain(" ");
         } else {
-            body(w_color);
+            for (i, item) in items.iter().enumerate() {
+                if i > 0 {
+                    w.newline();
+                    w.write_colored(",", bracket_color);
+                }
+                format_delimited_value(w, item);
+            }
+            w.newline();
         }
     });
-}
-
-/// Helper for inline delimiters - writes colored delimiters with content on single line
-/// Format: <open> <content> <close>
-/// Caller is responsible for color/depth context
-pub(crate) fn write_delimited<W: Writer, F>(w: &mut W, color: &str, open: &str, close: &str, f: F)
-where
-    F: FnOnce(&mut W),
-{
-    w.write_colored(open, color);
-    w.write_plain(" ");
-    f(w);
-    w.write_plain(" ");
-    w.write_colored(close, color);
 }
 
 /// Macro to format constructor applications
@@ -325,14 +313,9 @@ macro_rules! format_constructor {
 macro_rules! format_record {
     ($w:expr, [ $(($name:expr, $value:expr)),+ $(,)? ]) => {{
         $w.newline();
-        $w.with_color(|w_color| {
-            let brace_color = w_color.current_color();
-            w_color.with_depth(|w| {
-                w.write_colored("{", brace_color);
-                format_record!(@fields w, brace_color; ; $( ($name, $value) ),+);
-                w.newline();
-                w.write_colored("}", brace_color);
-            });
+        $crate::pretty_simple::with_brackets($w, "{", "}", true, |w, brace_color| {
+            format_record!(@fields w, brace_color; ; $( ($name, $value) ),+);
+            w.newline();
         });
     }};
 
