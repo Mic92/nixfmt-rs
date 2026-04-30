@@ -1,5 +1,8 @@
-use crate::predoc::*;
-use crate::types::*;
+use crate::predoc::{
+    Doc, DocE, Pretty, TextAnn, line_prime, newline, push_group, push_nested, push_offset,
+    push_sep_by, push_text, text_width, unexpand_spacing_prime,
+};
+use crate::types::{Expression, StringPart};
 
 use super::absorb::is_absorbable_term;
 use super::term::push_parenthesized_inner;
@@ -8,8 +11,8 @@ use super::util::{is_simple_expression, is_spaces};
 impl Pretty for StringPart {
     fn pretty(&self, doc: &mut Doc) {
         match self {
-            StringPart::TextPart(s) => push_text(doc, s),
-            StringPart::Interpolation(whole) => {
+            Self::TextPart(s) => push_text(doc, s),
+            Self::Interpolation(whole) => {
                 let trailing_empty = whole.trailing_trivia.is_empty();
                 let value = &whole.value;
 

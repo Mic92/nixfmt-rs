@@ -1,5 +1,11 @@
-use crate::predoc::*;
-use crate::types::*;
+use crate::predoc::{
+    Doc, DocE, Pretty, hardline, hardspace, line, push_group, push_nested, push_sep_by,
+    push_trailing,
+};
+use crate::types::{
+    Ann, Expression, Leaf, ParamAttr, Parameter, Selector, SimpleSelector, Term, Token,
+    TrailingComment, Trivia,
+};
 
 use super::absorb::push_absorb_rhs;
 use super::util::{is_lone_ann, move_trailing_comment_up, push_empty_brackets};
@@ -7,7 +13,7 @@ use super::util::{is_lone_ann, move_trailing_comment_up, push_empty_brackets};
 impl Pretty for ParamAttr {
     fn pretty(&self, doc: &mut Doc) {
         match self {
-            ParamAttr::ParamAttr(name, default, maybe_comma) => {
+            Self::ParamAttr(name, default, maybe_comma) => {
                 let has_default = default.is_some();
                 let make_pretty = |d: &mut Doc| {
                     name.pretty(d);
@@ -31,7 +37,7 @@ impl Pretty for ParamAttr {
                     make_pretty(doc);
                 }
             }
-            ParamAttr::ParamEllipsis(ellipsis) => ellipsis.pretty(doc),
+            Self::ParamEllipsis(ellipsis) => ellipsis.pretty(doc),
         }
     }
 }
@@ -39,7 +45,7 @@ impl Pretty for ParamAttr {
 /// Mirrors `mapLastToken'` in Nixfmt/Types.hs, specialised to taking the
 /// trailing comment off the last leaf of an expression.
 fn take_last_trail_comment_expr(expr: &mut Expression) -> Option<TrailingComment> {
-    fn sel(s: &mut Selector) -> Option<TrailingComment> {
+    const fn sel(s: &mut Selector) -> Option<TrailingComment> {
         match &mut s.selector {
             SimpleSelector::ID(l) => l.trail_comment.take(),
             SimpleSelector::Interpol(l) => l.trail_comment.take(),
@@ -49,17 +55,17 @@ fn take_last_trail_comment_expr(expr: &mut Expression) -> Option<TrailingComment
     fn term(t: &mut Term) -> Option<TrailingComment> {
         match t {
             Term::Token(l) => l.trail_comment.take(),
-            Term::SimpleString(l) => l.trail_comment.take(),
-            Term::IndentedString(l) => l.trail_comment.take(),
+            Term::SimpleString(l) | Term::IndentedString(l) => l.trail_comment.take(),
             Term::Path(l) => l.trail_comment.take(),
-            Term::List(_, _, close) => close.trail_comment.take(),
-            Term::Set(_, _, _, close) => close.trail_comment.take(),
+            Term::List(_, _, close)
+            | Term::Set(_, _, _, close)
+            | Term::Parenthesized(_, _, close) => close.trail_comment.take(),
             Term::Selection(_, _, Some((_, def))) => term(def),
+            #[allow(clippy::option_if_let_else)] // map_or_else fights the borrow checker here
             Term::Selection(inner, sels, None) => match sels.last_mut() {
                 Some(last) => sel(last),
                 None => term(inner),
             },
-            Term::Parenthesized(_, _, close) => close.trail_comment.take(),
         }
     }
     match expr {
@@ -143,7 +149,7 @@ fn param_attr_without_default(attr: &ParamAttr) -> bool {
     matches!(attr, ParamAttr::ParamAttr(_, default, _) if default.is_none())
 }
 
-fn param_attr_is_ellipsis(attr: &ParamAttr) -> bool {
+const fn param_attr_is_ellipsis(attr: &ParamAttr) -> bool {
     matches!(attr, ParamAttr::ParamEllipsis(_))
 }
 
@@ -200,8 +206,8 @@ fn render_param_attrs(attrs: &[ParamAttr]) -> Vec<Doc> {
 impl Pretty for Parameter {
     fn pretty(&self, doc: &mut Doc) {
         match self {
-            Parameter::ID(id) => id.pretty(doc),
-            Parameter::Set(open, attrs, close) => {
+            Self::ID(id) => id.pretty(doc),
+            Self::Set(open, attrs, close) => {
                 let open = move_trailing_comment_up(open);
                 if attrs.is_empty() {
                     push_group(doc, |doc| push_empty_brackets(doc, &open, close));
@@ -224,7 +230,7 @@ impl Pretty for Parameter {
                     close.without_pre().pretty(doc);
                 });
             }
-            Parameter::Context(left, at, right) => {
+            Self::Context(left, at, right) => {
                 left.pretty(doc);
                 at.pretty(doc);
                 right.pretty(doc);

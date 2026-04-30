@@ -12,11 +12,13 @@ pub struct ErrorFormatter<'a> {
 
 impl<'a> ErrorFormatter<'a> {
     /// Create a formatter that resolves spans against `context`.
-    pub fn new(context: &'a ErrorContext<'a>) -> Self {
+    #[must_use]
+    pub const fn new(context: &'a ErrorContext<'a>) -> Self {
         Self { context }
     }
 
     /// Format a single error
+    #[must_use]
     pub fn format(&self, error: &ParseError) -> String {
         let mut output = String::new();
 
@@ -218,7 +220,7 @@ impl<'a> ErrorFormatter<'a> {
         }
     }
 
-    fn closing_delimiter(opening: char) -> char {
+    const fn closing_delimiter(opening: char) -> char {
         match opening {
             '{' => '}',
             '[' => ']',

@@ -22,7 +22,7 @@ use predoc::{Pretty, RenderConfig, render_with_config};
 
 // Internal-only Result type and AST types
 pub(crate) use error::Result;
-pub(crate) use types::*;
+pub(crate) use types::File;
 
 /// Parse a Nix expression from source code
 pub fn parse(source: &str) -> Result<File> {
@@ -61,6 +61,7 @@ pub fn format_with(source: &str, width: usize, indent: usize) -> Result<String> 
 
 /// Convert AST to IR (intermediate representation) for debugging
 /// Returns an opaque IR that can be formatted for display
+#[must_use]
 pub fn ast_to_ir(ast: &File) -> predoc::IR {
     let mut doc = predoc::Doc::new();
     ast.pretty(&mut doc);
@@ -88,6 +89,7 @@ pub fn format_ir(source: &str) -> Result<String> {
 }
 
 /// Format a parse error as a user-friendly colored error message
+#[must_use]
 pub fn format_error(source: &str, filename: Option<&str>, error: &ParseError) -> String {
     let context = error::context::ErrorContext::new(source, filename);
     let formatter = error::format::ErrorFormatter::new(&context);

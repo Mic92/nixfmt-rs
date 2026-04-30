@@ -31,7 +31,7 @@ pub struct ColoredWriter<'a> {
 }
 
 impl<'a> ColoredWriter<'a> {
-    pub fn new(source: &'a str) -> Self {
+    pub const fn new(source: &'a str) -> Self {
         Self {
             depth: 0,
             color_depth: 0,

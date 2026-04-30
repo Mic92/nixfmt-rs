@@ -41,7 +41,7 @@ fn bump_line_col(line: &mut usize, column: &mut usize, slice: &str) {
 
 /// Intermediate trivia representation during parsing
 #[derive(Debug, Clone)]
-pub(crate) enum ParseTrivium {
+pub enum ParseTrivium {
     /// Multiple newlines
     Newlines(usize),
     /// Line comment with text and column position
@@ -54,7 +54,7 @@ pub(crate) enum ParseTrivium {
 
 /// Cursor-only snapshot of the lexer (no heap state).
 #[derive(Clone, Copy)]
-pub(super) struct LexerPos {
+pub struct LexerPos {
     byte_pos: usize,
     line: usize,
     column: usize,
@@ -62,7 +62,7 @@ pub(super) struct LexerPos {
 
 /// Saved lexer state for backtracking
 #[derive(Clone)]
-pub(crate) struct LexerState {
+pub struct LexerState {
     byte_pos: usize,
     line: usize,
     column: usize,
@@ -71,7 +71,7 @@ pub(crate) struct LexerState {
     recent_hspace: usize,
 }
 
-pub(crate) struct Lexer {
+pub struct Lexer {
     /// Original source. The lexer scans it byte-wise for ASCII tokens and
     /// only decodes UTF-8 at the cursor when a multi-byte char is observed,
     /// avoiding the up-front `Vec<char>` materialisation.
@@ -95,7 +95,7 @@ pub(crate) struct Lexer {
 
 impl Lexer {
     pub(crate) fn new(source: &str) -> Self {
-        Lexer {
+        Self {
             source: source.into(),
             byte_pos: 0,
             line: 1,
@@ -205,7 +205,7 @@ impl Lexer {
     }
 
     /// Get current position as a zero-length span (in byte offsets)
-    pub(crate) fn current_pos(&self) -> crate::types::Span {
+    pub(crate) const fn current_pos(&self) -> crate::types::Span {
         crate::types::Span::point(self.byte_pos)
     }
 
@@ -266,7 +266,7 @@ impl Lexer {
             '/' => Ok(self.try_two_char('/', Token::TUpdate, Token::TDiv)),
             '!' => Ok(self.try_two_char('=', Token::TUnequal, Token::TNot)),
             '<' => {
-                if self.peek_ahead(1).is_some_and(|c| c.is_alphanumeric()) {
+                if self.peek_ahead(1).is_some_and(char::is_alphanumeric) {
                     self.parse_env_path()
                 } else {
                     self.advance();
@@ -408,7 +408,10 @@ impl Lexer {
         Err(Box::new(crate::error::ParseError {
             span: self.current_pos(),
             kind: crate::error::ErrorKind::UnexpectedToken {
-                expected: expected.iter().map(|s| s.to_string()).collect(),
+                expected: expected
+                    .iter()
+                    .map(std::string::ToString::to_string)
+                    .collect(),
                 found: found.to_string(),
             },
             labels: vec![],
@@ -475,7 +478,7 @@ impl Lexer {
 
     /// Snapshot the cursor (position only, no trivia).
     #[inline]
-    pub(super) fn mark(&self) -> LexerPos {
+    pub(super) const fn mark(&self) -> LexerPos {
         LexerPos {
             byte_pos: self.byte_pos,
             line: self.line,
@@ -485,7 +488,7 @@ impl Lexer {
 
     /// Restore the cursor from a snapshot taken by `mark()`.
     #[inline]
-    pub(super) fn reset(&mut self, mark: LexerPos) {
+    pub(super) const fn reset(&mut self, mark: LexerPos) {
         self.byte_pos = mark.byte_pos;
         self.line = mark.line;
         self.column = mark.column;

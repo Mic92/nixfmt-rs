@@ -21,7 +21,7 @@ pub struct Span {
 
 impl Span {
     /// Create a span from byte offsets, with line numbers defaulting to 1.
-    pub fn new(start: usize, end: usize) -> Self {
+    pub const fn new(start: usize, end: usize) -> Self {
         Self {
             start: start as u32,
             end: end as u32,
@@ -31,7 +31,7 @@ impl Span {
     }
 
     /// Create a new span with line information
-    pub fn with_lines(start: usize, end: usize, start_line: usize, end_line: usize) -> Self {
+    pub const fn with_lines(start: usize, end: usize, start_line: usize, end_line: usize) -> Self {
         Self {
             start: start as u32,
             end: end as u32,
@@ -41,7 +41,7 @@ impl Span {
     }
 
     /// Create a zero-length span at the given offset
-    pub fn point(offset: usize) -> Self {
+    pub const fn point(offset: usize) -> Self {
         Self {
             start: offset as u32,
             end: offset as u32,
@@ -75,7 +75,7 @@ pub struct Trivia(Option<Box<Vec<Trivium>>>);
 impl Trivia {
     /// Empty trivia list (no allocation).
     #[inline]
-    pub fn new() -> Self {
+    pub const fn new() -> Self {
         Self(None)
     }
 
@@ -190,8 +190,8 @@ pub struct Ann<T> {
 
 impl<T> Ann<T> {
     /// Wrap a value with a span and no surrounding trivia.
-    pub fn new(value: T, span: Span) -> Self {
-        Ann {
+    pub const fn new(value: T, span: Span) -> Self {
+        Self {
             pre_trivia: Trivia::new(),
             span,
             value,
@@ -202,21 +202,21 @@ impl<T> Ann<T> {
 
 impl<T: Clone> Ann<T> {
     pub fn without_trail(&self) -> Self {
-        Ann {
+        Self {
             trail_comment: None,
             ..self.clone()
         }
     }
 
     pub fn without_pre(&self) -> Self {
-        Ann {
+        Self {
             pre_trivia: Trivia::new(),
             ..self.clone()
         }
     }
 
     pub fn bare(&self) -> Self {
-        Ann {
+        Self {
             pre_trivia: Trivia::new(),
             trail_comment: None,
             ..self.clone()
@@ -268,26 +268,26 @@ pub trait FirstToken {
 impl FirstToken for Term {
     fn first_token(&self) -> AnnSlot<'_> {
         match self {
-            Term::Token(l) => l.into(),
-            Term::SimpleString(s) | Term::IndentedString(s) => s.into(),
-            Term::Path(p) => p.into(),
-            Term::List(open, _, _)
-            | Term::Set(None, open, _, _)
-            | Term::Parenthesized(open, _, _) => open.into(),
-            Term::Set(Some(rec), _, _, _) => rec.into(),
-            Term::Selection(inner, _, _) => inner.first_token(),
+            Self::Token(l) => l.into(),
+            Self::SimpleString(s) | Self::IndentedString(s) => s.into(),
+            Self::Path(p) => p.into(),
+            Self::List(open, _, _)
+            | Self::Set(None, open, _, _)
+            | Self::Parenthesized(open, _, _) => open.into(),
+            Self::Set(Some(rec), _, _, _) => rec.into(),
+            Self::Selection(inner, _, _) => inner.first_token(),
         }
     }
     fn first_token_mut(&mut self) -> AnnSlotMut<'_> {
         match self {
-            Term::Token(l) => l.into(),
-            Term::SimpleString(s) | Term::IndentedString(s) => s.into(),
-            Term::Path(p) => p.into(),
-            Term::List(open, _, _)
-            | Term::Set(None, open, _, _)
-            | Term::Parenthesized(open, _, _) => open.into(),
-            Term::Set(Some(rec), _, _, _) => rec.into(),
-            Term::Selection(inner, _, _) => inner.first_token_mut(),
+            Self::Token(l) => l.into(),
+            Self::SimpleString(s) | Self::IndentedString(s) => s.into(),
+            Self::Path(p) => p.into(),
+            Self::List(open, _, _)
+            | Self::Set(None, open, _, _)
+            | Self::Parenthesized(open, _, _) => open.into(),
+            Self::Set(Some(rec), _, _, _) => rec.into(),
+            Self::Selection(inner, _, _) => inner.first_token_mut(),
         }
     }
 }
@@ -295,16 +295,16 @@ impl FirstToken for Term {
 impl FirstToken for Parameter {
     fn first_token(&self) -> AnnSlot<'_> {
         match self {
-            Parameter::ID(n) => n.into(),
-            Parameter::Set(open, _, _) => open.into(),
-            Parameter::Context(first, _, _) => first.first_token(),
+            Self::ID(n) => n.into(),
+            Self::Set(open, _, _) => open.into(),
+            Self::Context(first, _, _) => first.first_token(),
         }
     }
     fn first_token_mut(&mut self) -> AnnSlotMut<'_> {
         match self {
-            Parameter::ID(n) => n.into(),
-            Parameter::Set(open, _, _) => open.into(),
-            Parameter::Context(first, _, _) => first.first_token_mut(),
+            Self::ID(n) => n.into(),
+            Self::Set(open, _, _) => open.into(),
+            Self::Context(first, _, _) => first.first_token_mut(),
         }
     }
 }
@@ -312,32 +312,32 @@ impl FirstToken for Parameter {
 impl FirstToken for Expression {
     fn first_token(&self) -> AnnSlot<'_> {
         match self {
-            Expression::Term(t) => t.first_token(),
-            Expression::With(kw, ..)
-            | Expression::Let(kw, ..)
-            | Expression::Assert(kw, ..)
-            | Expression::If(kw, ..)
-            | Expression::Negation(kw, _)
-            | Expression::Inversion(kw, _) => kw.into(),
-            Expression::Abstraction(p, _, _) => p.first_token(),
-            Expression::Application(g, _)
-            | Expression::Operation(g, _, _)
-            | Expression::MemberCheck(g, _, _) => g.first_token(),
+            Self::Term(t) => t.first_token(),
+            Self::With(kw, ..)
+            | Self::Let(kw, ..)
+            | Self::Assert(kw, ..)
+            | Self::If(kw, ..)
+            | Self::Negation(kw, _)
+            | Self::Inversion(kw, _) => kw.into(),
+            Self::Abstraction(p, _, _) => p.first_token(),
+            Self::Application(g, _) | Self::Operation(g, _, _) | Self::MemberCheck(g, _, _) => {
+                g.first_token()
+            }
         }
     }
     fn first_token_mut(&mut self) -> AnnSlotMut<'_> {
         match self {
-            Expression::Term(t) => t.first_token_mut(),
-            Expression::With(kw, ..)
-            | Expression::Let(kw, ..)
-            | Expression::Assert(kw, ..)
-            | Expression::If(kw, ..)
-            | Expression::Negation(kw, _)
-            | Expression::Inversion(kw, _) => kw.into(),
-            Expression::Abstraction(p, _, _) => p.first_token_mut(),
-            Expression::Application(g, _)
-            | Expression::Operation(g, _, _)
-            | Expression::MemberCheck(g, _, _) => g.first_token_mut(),
+            Self::Term(t) => t.first_token_mut(),
+            Self::With(kw, ..)
+            | Self::Let(kw, ..)
+            | Self::Assert(kw, ..)
+            | Self::If(kw, ..)
+            | Self::Negation(kw, _)
+            | Self::Inversion(kw, _) => kw.into(),
+            Self::Abstraction(p, _, _) => p.first_token_mut(),
+            Self::Application(g, _) | Self::Operation(g, _, _) | Self::MemberCheck(g, _, _) => {
+                g.first_token_mut()
+            }
         }
     }
 }
@@ -345,7 +345,7 @@ impl FirstToken for Expression {
 /// Haskell `convertTrailing`.
 impl From<&TrailingComment> for Trivium {
     fn from(tc: &TrailingComment) -> Self {
-        Trivium::LineComment(format!(" {}", tc.0))
+        Self::LineComment(format!(" {}", tc.0))
     }
 }
 
@@ -410,11 +410,11 @@ pub enum Term {
     IndentedString(NixString),
     Path(Path),
     /// [ items ]
-    List(Leaf, Items<Term>, Leaf),
+    List(Leaf, Items<Self>, Leaf),
     /// { items } or rec { items } or let { items }
     Set(Option<Leaf>, Leaf, Items<Binder>, Leaf),
     /// term.selector1.selector2 or term.selector or term
-    Selection(Box<Term>, Vec<Selector>, Option<(Leaf, Box<Term>)>),
+    Selection(Box<Self>, Vec<Selector>, Option<(Leaf, Box<Self>)>),
     /// ( expr )
     Parenthesized(Leaf, Box<Expression>, Leaf),
 }
@@ -433,7 +433,7 @@ pub enum Parameter {
     ID(Leaf),
     Set(Leaf, Vec<ParamAttr>, Leaf),
     /// a @ b or a @ { b }
-    Context(Box<Parameter>, Leaf, Box<Parameter>),
+    Context(Box<Self>, Leaf, Box<Self>),
 }
 
 /// Expressions
@@ -441,32 +441,25 @@ pub enum Parameter {
 pub enum Expression {
     Term(Term),
     /// with expr ; expr
-    With(Leaf, Box<Expression>, Leaf, Box<Expression>),
+    With(Leaf, Box<Self>, Leaf, Box<Self>),
     /// let bindings in expr
-    Let(Leaf, Items<Binder>, Leaf, Box<Expression>),
+    Let(Leaf, Items<Binder>, Leaf, Box<Self>),
     /// assert expr ; expr
-    Assert(Leaf, Box<Expression>, Leaf, Box<Expression>),
+    Assert(Leaf, Box<Self>, Leaf, Box<Self>),
     /// if expr then expr else expr
-    If(
-        Leaf,
-        Box<Expression>,
-        Leaf,
-        Box<Expression>,
-        Leaf,
-        Box<Expression>,
-    ),
+    If(Leaf, Box<Self>, Leaf, Box<Self>, Leaf, Box<Self>),
     /// param : body
-    Abstraction(Parameter, Leaf, Box<Expression>),
+    Abstraction(Parameter, Leaf, Box<Self>),
     /// function application
-    Application(Box<Expression>, Box<Expression>),
+    Application(Box<Self>, Box<Self>),
     /// Binary operation
-    Operation(Box<Expression>, Leaf, Box<Expression>),
+    Operation(Box<Self>, Leaf, Box<Self>),
     /// expr ? selector
-    MemberCheck(Box<Expression>, Leaf, Vec<Selector>),
+    MemberCheck(Box<Self>, Leaf, Vec<Selector>),
     /// - expr (negation)
-    Negation(Leaf, Box<Expression>),
+    Negation(Leaf, Box<Self>),
     /// ! expr (boolean inversion)
-    Inversion(Leaf, Box<Expression>),
+    Inversion(Leaf, Box<Self>),
 }
 
 /// Whole - an expression including final trivia
@@ -546,56 +539,54 @@ pub enum Token {
 
 impl Token {
     /// Source text for keyword / operator tokens (Haskell: `tokenText`).
-    pub fn text(&self) -> &str {
+    pub const fn text(&self) -> &str {
         match self {
-            Token::KAssert => "assert",
-            Token::KElse => "else",
-            Token::KIf => "if",
-            Token::KIn => "in",
-            Token::KInherit => "inherit",
-            Token::KLet => "let",
-            Token::KOr => "or",
-            Token::KRec => "rec",
-            Token::KThen => "then",
-            Token::KWith => "with",
-            Token::TBraceOpen => "{",
-            Token::TBraceClose => "}",
-            Token::TBrackOpen => "[",
-            Token::TBrackClose => "]",
-            Token::TInterOpen => "${",
-            Token::TInterClose => "}",
-            Token::TParenOpen => "(",
-            Token::TParenClose => ")",
-            Token::TAssign => "=",
-            Token::TAt => "@",
-            Token::TColon => ":",
-            Token::TComma => ",",
-            Token::TDot => ".",
-            Token::TDoubleQuote => "\"",
-            Token::TDoubleSingleQuote => "''",
-            Token::TEllipsis => "...",
-            Token::TQuestion => "?",
-            Token::TSemicolon => ";",
-            Token::TPlus => "+",
-            Token::TMinus => "-",
-            Token::TMul => "*",
-            Token::TDiv => "/",
-            Token::TConcat => "++",
-            Token::TNegate => "-",
-            Token::TUpdate => "//",
-            Token::TAnd => "&&",
-            Token::TOr => "||",
-            Token::TEqual => "==",
-            Token::TGreater => ">",
-            Token::TGreaterEqual => ">=",
-            Token::TImplies => "->",
-            Token::TLess => "<",
-            Token::TLessEqual => "<=",
-            Token::TNot => "!",
-            Token::TUnequal => "!=",
-            Token::TPipeForward => "|>",
-            Token::TPipeBackward => "<|",
-            Token::Sof => "end of file",
+            Self::KAssert => "assert",
+            Self::KElse => "else",
+            Self::KIf => "if",
+            Self::KIn => "in",
+            Self::KInherit => "inherit",
+            Self::KLet => "let",
+            Self::KOr => "or",
+            Self::KRec => "rec",
+            Self::KThen => "then",
+            Self::KWith => "with",
+            Self::TBraceOpen => "{",
+            Self::TBraceClose | Self::TInterClose => "}",
+            Self::TBrackOpen => "[",
+            Self::TBrackClose => "]",
+            Self::TInterOpen => "${",
+            Self::TParenOpen => "(",
+            Self::TParenClose => ")",
+            Self::TAssign => "=",
+            Self::TAt => "@",
+            Self::TColon => ":",
+            Self::TComma => ",",
+            Self::TDot => ".",
+            Self::TDoubleQuote => "\"",
+            Self::TDoubleSingleQuote => "''",
+            Self::TEllipsis => "...",
+            Self::TQuestion => "?",
+            Self::TSemicolon => ";",
+            Self::TPlus => "+",
+            Self::TMinus | Self::TNegate => "-",
+            Self::TMul => "*",
+            Self::TDiv => "/",
+            Self::TConcat => "++",
+            Self::TUpdate => "//",
+            Self::TAnd => "&&",
+            Self::TOr => "||",
+            Self::TEqual => "==",
+            Self::TGreater => ">",
+            Self::TGreaterEqual => ">=",
+            Self::TImplies => "->",
+            Self::TLess => "<",
+            Self::TLessEqual => "<=",
+            Self::TNot => "!",
+            Self::TUnequal => "!=",
+            Self::TPipeForward => "|>",
+            Self::TPipeBackward => "<|",
+            Self::Sof => "end of file",
             _ => "",
         }
     }
@@ -603,7 +594,7 @@ impl Token {
 
 impl Token {
     /// Check if this is an update, concat, or plus operator (for special formatting)
-    pub fn is_update_concat_plus(&self) -> bool {
-        matches!(self, Token::TUpdate | Token::TConcat | Token::TPlus)
+    pub const fn is_update_concat_plus(&self) -> bool {
+        matches!(self, Self::TUpdate | Self::TConcat | Self::TPlus)
     }
 }

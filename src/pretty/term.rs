@@ -1,5 +1,8 @@
-use crate::predoc::*;
-use crate::types::*;
+use crate::predoc::{
+    Doc, DocE, Pretty, hardline, hardspace, line, line_prime, push_group, push_nested,
+    push_surrounded,
+};
+use crate::types::{Ann, Binder, Expression, Item, Items, Leaf, Term, Token, Trivium};
 
 use super::absorb::{is_absorbable_expr, is_absorbable_term, push_absorb_expr};
 use super::app::push_pretty_app;

@@ -7,7 +7,10 @@ use super::{
 use crate::format_constructor;
 use crate::format_enum;
 use crate::format_record;
-use crate::types::*;
+use crate::types::{
+    Ann, Binder, Expression, Item, ParamAttr, Parameter, Selector, SimpleSelector, Span,
+    StringPart, Term, Token, TrailingComment, Trivia, Trivium, Whole,
+};
 
 /// Generate a `PrettySimple` impl for a primitive/atomic type:
 /// `is_simple` and `is_atomic` are always `true`; only `format` varies.
@@ -90,10 +93,10 @@ impl PrettySimple for Term {
 impl<T: PrettySimple> PrettySimple for Item<T> {
     fn format<W: Writer>(&self, w: &mut W) {
         match self {
-            Item::Item(inner) => {
+            Self::Item(inner) => {
                 format_constructor!(w, "Item", [inner]);
             }
-            Item::Comments(trivia) => {
+            Self::Comments(trivia) => {
                 w.write_plain("Comments");
                 sub_expr(w, trivia);
             }
@@ -102,8 +105,8 @@ impl<T: PrettySimple> PrettySimple for Item<T> {
 
     fn is_simple(&self) -> bool {
         match self {
-            Item::Item(_) => false,
-            Item::Comments(trivia) => trivia.is_simple(),
+            Self::Item(_) => false,
+            Self::Comments(trivia) => trivia.is_simple(),
         }
     }
 }
@@ -155,10 +158,9 @@ impl PrettySimple for Trivium {
         // BlockComment True ["doc"] → all arguments simple → renders inline
         // BlockComment True ["a","b","c"] → Vec with 3 elements NOT simple → renders multiline
         match self {
-            Trivium::EmptyLine() => true,    // Nullary constructor
-            Trivium::LineComment(_) => true, // String arg is simple
-            Trivium::BlockComment(_is_doc, lines) => lines.is_simple(),
-            Trivium::LanguageAnnotation(_) => true, // String arg is simple
+            // Nullary constructor / single string arg are simple.
+            Self::EmptyLine() | Self::LineComment(_) | Self::LanguageAnnotation(_) => true,
+            Self::BlockComment(_is_doc, lines) => lines.is_simple(),
         }
     }
 
@@ -166,7 +168,7 @@ impl PrettySimple for Trivium {
         // Only nullary constructors are atomic (single element in parsed form)
         // EmptyLine → Other "EmptyLine" → atomic
         // LineComment "x" → Other "LineComment " + StringLit → not atomic
-        matches!(self, Trivium::EmptyLine())
+        matches!(self, Self::EmptyLine())
     }
 }
 
@@ -212,10 +214,10 @@ impl PrettySimple for ParamAttr {
 impl PrettySimple for StringPart {
     fn format<W: Writer>(&self, w: &mut W) {
         match self {
-            StringPart::TextPart(text) => {
+            Self::TextPart(text) => {
                 format_constructor!(w, "TextPart", [text]);
             }
-            StringPart::Interpolation(whole) => {
+            Self::Interpolation(whole) => {
                 w.write_plain("Interpolation");
                 w.write_plain(" ");
                 whole.value.format(w);
@@ -231,8 +233,8 @@ impl PrettySimple for StringPart {
         // However, for structural simplicity (Vec::is_simple), this creates a multi-element row,
         // so the Brackets itself is NOT simple. That's handled by Vec::is_simple logic.
         match self {
-            StringPart::TextPart(_) => true,
-            StringPart::Interpolation(_) => false,
+            Self::TextPart(_) => true,
+            Self::Interpolation(_) => false,
         }
     }
 }
@@ -346,7 +348,7 @@ impl<T: PrettySimple> PrettySimple for Vec<T> {
     }
 
     fn is_empty(&self) -> bool {
-        <Vec<T>>::is_empty(self)
+        <Self>::is_empty(self)
     }
 }
 

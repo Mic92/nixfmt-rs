@@ -1,5 +1,8 @@
 use crate::predoc::{Doc, Pretty, hardline, hardspace};
-use crate::types::*;
+use crate::types::{
+    Ann, Expression, FirstToken, Item, Items, Leaf, Selector, SimpleSelector, Term, Token, Trivia,
+    Trivium,
+};
 
 /// Whether a set/absorbed term should prefer its expanded (multi-line)
 /// layout. Replaces the unlabelled `Bool` argument of Haskell `prettySet`
@@ -39,11 +42,11 @@ pub(super) fn items_has_only_comments<T>(items: &Items<T>) -> bool {
 }
 
 pub(super) fn is_spaces(s: &str) -> bool {
-    s.chars().all(|c| c.is_whitespace())
+    s.chars().all(char::is_whitespace)
 }
 
 /// Haskell `isSimpleSelector` (Pretty.hs).
-pub(super) fn is_simple_selector(selector: &Selector) -> bool {
+pub(super) const fn is_simple_selector(selector: &Selector) -> bool {
     matches!(selector.selector, SimpleSelector::ID(_))
 }
 

@@ -14,9 +14,12 @@ use std::ops::ControlFlow::{self, Break, Continue};
 
 use crate::error::{ParseError, Result};
 use crate::lexer::Lexer;
-use crate::types::*;
+use crate::types::{
+    Ann, Binder, Expression, File, Item, Items, Leaf, Parameter, Selector, Span, Term, Token,
+    Trivia, Whole,
+};
 
-pub(crate) struct Parser {
+pub struct Parser {
     lexer: Lexer,
     /// Current token
     current: Ann<Token>,
@@ -29,7 +32,7 @@ struct ParserState {
 }
 
 /// Check if a token is a comparison operator
-fn is_comparison_operator(token: &Token) -> bool {
+const fn is_comparison_operator(token: &Token) -> bool {
     matches!(
         token,
         Token::TEqual
@@ -46,7 +49,7 @@ impl Parser {
         let mut lexer = Lexer::new(source);
         lexer.start_parse()?;
         let current = lexer.lexeme()?;
-        Ok(Parser { lexer, current })
+        Ok(Self { lexer, current })
     }
 
     /// Parse a complete Nix file
@@ -370,7 +373,7 @@ impl Parser {
     }
 
     /// Check if we're at the end of an expression
-    fn is_expression_end(&self) -> bool {
+    const fn is_expression_end(&self) -> bool {
         matches!(
             self.current.value,
             Token::TSemicolon
@@ -478,14 +481,14 @@ impl Parser {
     }
 
     /// Get precedence of current operator
-    fn get_precedence(&self) -> u8 {
+    const fn get_precedence(&self) -> u8 {
         self.get_precedence_for(&self.current.value)
     }
 
     /// Get precedence for a token (higher = tighter binding)
     /// Precedence follows nixfmt's operator table (Types.hs:570-597)
     /// Note: Operators later in nixfmt's list have LOWER precedence
-    fn get_precedence_for(&self, token: &Token) -> u8 {
+    const fn get_precedence_for(&self, token: &Token) -> u8 {
         match token {
             // Highest precedence (tightest binding)
             Token::TConcat => 14,               // ++ (line 575 in nixfmt)
@@ -514,7 +517,7 @@ impl Parser {
     /// Note: `TPlus` (+) is `InfixL` in the spec and is parsed as left-associative,
     /// but nixfmt uses a HACK to restructure it to right-associative in the AST.
     /// This is handled separately in the `parse_binary_operation` function.
-    fn is_right_associative(&self, token: &Token) -> bool {
+    const fn is_right_associative(&self, token: &Token) -> bool {
         matches!(
             token,
             Token::TConcat | Token::TUpdate | Token::TPipeBackward
@@ -653,7 +656,7 @@ impl Parser {
     }
 
     /// Take current token (consumes it)
-    fn take_current(&mut self) -> Ann<Token> {
+    const fn take_current(&mut self) -> Ann<Token> {
         let dummy = Ann {
             pre_trivia: Trivia::new(),
             span: Span::point(0),

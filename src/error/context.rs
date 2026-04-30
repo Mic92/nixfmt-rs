@@ -14,6 +14,7 @@ pub struct ErrorContext<'a> {
 
 impl<'a> ErrorContext<'a> {
     /// Create context from source
+    #[must_use]
     pub fn new(source: &'a str, filename: Option<&'a str>) -> Self {
         let line_starts = compute_line_starts(source);
         Self {
@@ -24,6 +25,7 @@ impl<'a> ErrorContext<'a> {
     }
 
     /// Convert byte offset to (line, column)
+    #[must_use]
     pub fn position(&self, offset: u32) -> Position {
         let offset = offset as usize;
         let line_idx = line_number(&self.line_starts, offset);
@@ -38,6 +40,7 @@ impl<'a> ErrorContext<'a> {
     }
 
     /// Get line containing offset
+    #[must_use]
     pub fn line_at(&self, offset: usize) -> (usize, &str) {
         let line_idx = line_number(&self.line_starts, offset);
         let line_num = line_idx + 1; // 1-based
@@ -67,6 +70,7 @@ impl<'a> ErrorContext<'a> {
     }
 
     /// Get the line start offset for a given line index
+    #[must_use]
     pub fn line_start(&self, line_idx: usize) -> usize {
         self.line_starts.get(line_idx).copied().unwrap_or(0)
     }

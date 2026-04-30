@@ -6,10 +6,10 @@
 //! and leading trivia (comments and empty lines before the next token).
 
 use super::ParseTrivium;
-use crate::types::*;
+use crate::types::{TrailingComment, Trivia, Trivium};
 
 /// Check if a `ParseTrivium` should be classified as trailing
-fn is_trailing(pt: &ParseTrivium) -> bool {
+const fn is_trailing(pt: &ParseTrivium) -> bool {
     match pt {
         ParseTrivium::LineComment { .. } => true,
         ParseTrivium::BlockComment(false, lines) => lines.len() <= 1,
@@ -91,10 +91,7 @@ pub(super) fn convert_leading(pts: &[ParseTrivium]) -> Trivia {
 /// Special handling for comment blocks:
 /// - If a trailing comment visually forms a block with the following line,
 ///   treat it as leading instead to preserve formatting intent
-pub(crate) fn convert_trivia(
-    pts: &[ParseTrivium],
-    next_col: usize,
-) -> (Option<TrailingComment>, Trivia) {
+pub fn convert_trivia(pts: &[ParseTrivium], next_col: usize) -> (Option<TrailingComment>, Trivia) {
     // Fast path: the overwhelmingly common case between two tokens is a single
     // run of newlines (or nothing at all) with no comments.
     match pts {

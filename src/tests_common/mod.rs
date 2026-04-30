@@ -5,8 +5,9 @@ pub mod diff;
 
 pub use ast_format::{test_ast_format, test_format, test_ir_format};
 
-/// Declare a batch of `#[test]` functions that each call `$helper` on one or
-/// more input strings. Used to collapse the repetitive four-line
+/// Declare a batch of `#[test]` functions that each call `$helper`.
+///
+/// Used to collapse the repetitive four-line
 /// `#[test] fn name() { test_X_format("..."); }` wrappers in the oracle/
 /// regression test suites while keeping one test name per case.
 #[macro_export]

@@ -49,6 +49,7 @@ impl ParseError {
     }
 
     /// Build a boxed [`ErrorKind::UnclosedDelimiter`] error with no labels.
+    #[must_use]
     pub fn unclosed(span: Span, delimiter: char, opening_span: Span) -> Box<Self> {
         Box::new(Self {
             span,
@@ -61,6 +62,7 @@ impl ParseError {
     }
 
     /// Build a boxed [`ErrorKind::MissingToken`] error with no labels.
+    #[must_use]
     pub fn missing(span: Span, token: &str, after: &str) -> Box<Self> {
         Box::new(Self {
             span,
@@ -82,6 +84,7 @@ impl ParseError {
     }
 
     /// Get the primary message for this error
+    #[must_use]
     pub fn message(&self) -> String {
         match &self.kind {
             ErrorKind::UnexpectedToken { expected, found } => {
@@ -113,7 +116,8 @@ impl ParseError {
     }
 
     /// Get error code if available
-    pub fn code(&self) -> Option<&str> {
+    #[must_use]
+    pub const fn code(&self) -> Option<&str> {
         match &self.kind {
             ErrorKind::UnexpectedToken { .. } => Some("E001"),
             ErrorKind::UnclosedDelimiter { .. } => Some("E002"),
@@ -208,6 +212,7 @@ pub enum LabelStyle {
 }
 
 /// Convenience alias for `Result<T, ParseError>`.
+///
 /// Boxed so the error variant stays pointer-sized; parse functions return
 /// large `Ok` payloads and a wide error would otherwise bloat every `Result`
 /// (and the `memmove`s threading them through the recursive descent).
