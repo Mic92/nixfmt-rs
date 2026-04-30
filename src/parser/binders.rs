@@ -87,16 +87,7 @@ impl Parser {
 
         let first_sel = self.parse_selector()?;
         selectors.push(first_sel);
-
-        while matches!(self.current.value, Token::TDot) {
-            let dot = self.take_and_advance()?;
-
-            let simple_sel = self.parse_simple_selector()?;
-            selectors.push(Selector {
-                dot: Some(dot),
-                selector: simple_sel,
-            });
-        }
+        self.parse_dotted_tail(&mut selectors)?;
 
         // Check for common mistake: attribute path followed by semicolon (forgot = and value)
         if matches!(self.current.value, Token::TSemicolon) {
@@ -188,18 +179,26 @@ impl Parser {
             dot: None,
             selector: first_sel,
         });
+        self.parse_dotted_tail(&mut selectors)?;
 
+        Ok(selectors)
+    }
+
+    /// Consume zero or more `.selector` segments and append them to `selectors`.
+    ///
+    /// Shared by attribute-path parsing in assignments and `?` member checks.
+    /// `parse_postfix_selection` has its own backtracking variant and does not
+    /// use this.
+    fn parse_dotted_tail(&mut self, selectors: &mut Vec<Selector>) -> Result<()> {
         while matches!(self.current.value, Token::TDot) {
             let dot = self.take_and_advance()?;
-
             let simple_sel = self.parse_simple_selector()?;
             selectors.push(Selector {
                 dot: Some(dot),
                 selector: simple_sel,
             });
         }
-
-        Ok(selectors)
+        Ok(())
     }
 
     /// Check if current token can start a simple selector
