@@ -52,10 +52,11 @@ impl<'a> ErrorFormatter<'a> {
 
         // Align the ┌─ with the │ from line numbers.
         write!(out, "{:>width$} ", "", width = line_num_width).unwrap();
+        let col = pos.column + 1; // 0-based -> 1-based for editors
         if let Some(filename) = self.context.filename {
-            writeln!(out, "┌─ {}:{}:{}", filename, pos.line, pos.column).unwrap();
+            writeln!(out, "┌─ {}:{}:{}", filename, pos.line, col).unwrap();
         } else {
-            writeln!(out, "┌─ line {}:{}", pos.line, pos.column).unwrap();
+            writeln!(out, "┌─ line {}:{}", pos.line, col).unwrap();
         }
     }
 
@@ -111,22 +112,12 @@ impl<'a> ErrorFormatter<'a> {
         match &error.kind {
             ErrorKind::UnexpectedToken { expected, found } => {
                 if let [single] = expected.as_slice()
-                    && let Some((note, help)) = unexpected_token_hint(single)
+                    && let Some((note, help)) = unexpected_token_hint(single, found)
                 {
                     writeln!(out, "{indent}= note: {note}").unwrap();
                     writeln!(out, "{indent}= help: {help}").unwrap();
-                } else if !expected.is_empty() {
-                    let expected_str = if expected.len() == 1 {
-                        expected[0].clone()
-                    } else {
-                        format!("one of {}", expected.join(", "))
-                    };
-                    writeln!(
-                        out,
-                        "{indent}= help: expected {expected_str}, but found {found}"
-                    )
-                    .unwrap();
                 }
+                // No fallback: header already states "expected X, found Y".
             }
             ErrorKind::InvalidSyntax {
                 hint: Some(hint), ..
@@ -138,17 +129,19 @@ impl<'a> ErrorFormatter<'a> {
                 opening_span,
             } => {
                 let open_pos = self.context.position(opening_span.start);
+                let (open_tok, close_tok) = Self::delimiter_pair(*delimiter);
                 writeln!(
                     out,
-                    "{}= note: '{}' opened at line {}:{}",
-                    indent, delimiter, open_pos.line, open_pos.column
+                    "{}= note: {} opened at line {}:{}",
+                    indent,
+                    open_tok,
+                    open_pos.line,
+                    open_pos.column + 1
                 )
                 .unwrap();
                 writeln!(
                     out,
-                    "{}= help: add closing '{}' to match the opening delimiter",
-                    indent,
-                    Self::closing_delimiter(*delimiter)
+                    "{indent}= help: add closing {close_tok} to match the opening delimiter",
                 )
                 .unwrap();
             }
@@ -176,7 +169,11 @@ impl<'a> ErrorFormatter<'a> {
             writeln!(
                 out,
                 "{}= {}: {} at line {}:{}",
-                indent, prefix, label.message, pos.line, pos.column
+                indent,
+                prefix,
+                label.message,
+                pos.line,
+                pos.column + 1
             )
             .unwrap();
         }
@@ -184,15 +181,28 @@ impl<'a> ErrorFormatter<'a> {
 }
 
 /// Canned `(note, help)` text for the common single-expected-token errors.
-fn unexpected_token_hint(expected: &str) -> Option<(&'static str, &'static str)> {
+///
+/// Keyed on the *expected* token; `found` lets us special-case a few
+/// confusable pairs without guessing about parser context we don't have here.
+fn unexpected_token_hint(expected: &str, found: &str) -> Option<(&'static str, &'static str)> {
     Some(match expected {
         "';'" => (
             "missing semicolon after definition",
             "add a semicolon at the end of the previous line",
         ),
-        "'}'" => (
-            "string interpolations must be closed with '}'",
-            "add '}' to close the interpolation",
+        // `'}'` closes both attrsets and interpolations; only hint when the
+        // found token disambiguates.
+        "'}'" if found == "'in'" => (
+            "'in' is only valid inside 'let ... in ...' expressions",
+            "did you mean to start with 'let' instead of '{'?",
+        ),
+        "'}'" if found == "':'" => (
+            "':' is not used for attribute assignment in Nix",
+            "use '=' to assign a value: name = ...;",
+        ),
+        "'&&'" => (
+            "single '&' is not a valid operator in Nix",
+            "did you mean '&&' (logical and)?",
         ),
         "'then'" => (
             "if expressions require: if <condition> then <expr> else <expr>",
@@ -211,12 +221,16 @@ fn unexpected_token_hint(expected: &str) -> Option<(&'static str, &'static str)>
 }
 
 impl ErrorFormatter<'_> {
-    const fn closing_delimiter(opening: char) -> char {
+    /// The lexer encodes the `''` opener as a single `'`; expand it back so we
+    /// don't render `'''`.
+    const fn delimiter_pair(opening: char) -> (&'static str, &'static str) {
         match opening {
-            '{' => '}',
-            '[' => ']',
-            '(' => ')',
-            _ => opening,
+            '{' => ("'{'", "'}'"),
+            '[' => ("'['", "']'"),
+            '(' => ("'('", "')'"),
+            '\'' => ("''", "''"),
+            '"' => ("'\"'", "'\"'"),
+            _ => ("delimiter", "delimiter"),
         }
     }
 }

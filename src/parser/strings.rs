@@ -146,10 +146,10 @@ impl Parser {
                     opening_span,
                 } = &err.kind
                 {
-                    return Err(ParseError::unexpected(
+                    return Err(ParseError::invalid(
                         *opening_span,
-                        vec!["'}'".to_string()],
-                        "'\"'",
+                        "unclosed interpolation: expected '}', found '\"'",
+                        Some("add '}' before the closing quote".to_string()),
                     ));
                 }
                 return Err(err);
@@ -157,10 +157,13 @@ impl Parser {
         };
 
         if !matches!(self.current.value, Token::TBraceClose) {
-            return Err(ParseError::unexpected(
+            return Err(ParseError::invalid(
                 self.current.span,
-                vec!["'}'".to_string()],
-                format!("'{}'", self.current.value.text()),
+                format!(
+                    "unclosed interpolation: expected '}}', found '{}'",
+                    self.current.value.text()
+                ),
+                Some("add '}' to close the interpolation".to_string()),
             ));
         }
 

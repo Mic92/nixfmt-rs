@@ -753,6 +753,25 @@ impl Parser {
                 ));
             }
 
+            if matches!(
+                self.current.value,
+                Token::TBraceClose | Token::TBrackClose | Token::TParenClose | Token::TInterClose
+            ) {
+                return Err(ParseError::invalid(
+                    self.current.span,
+                    format!(
+                        "mismatched delimiter: expected '{}', found '{}'",
+                        closing_token.text(),
+                        self.current.value.text()
+                    ),
+                    Some(format!(
+                        "change '{}' to '{}' to match the opening '{opening_char}'",
+                        self.current.value.text(),
+                        closing_token.text(),
+                    )),
+                ));
+            }
+
             Err(ParseError::unexpected(
                 self.current.span,
                 vec![format!("'{}'", closing_token.text())],
