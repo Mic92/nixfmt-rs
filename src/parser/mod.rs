@@ -640,12 +640,7 @@ impl Parser {
             let saved_state = self.save_state();
 
             self.advance()?;
-            let is_selector_start = matches!(
-                self.current.value,
-                Token::Identifier(_) | Token::TDoubleQuote | Token::TInterOpen
-            );
-
-            if !is_selector_start {
+            if !self.is_simple_selector_start() {
                 self.restore_state(saved_state);
                 break;
             }
