@@ -61,26 +61,25 @@ impl Lexer {
 
     /// Try to parse a language annotation like /* lua */
     pub(super) fn try_parse_language_annotation(&mut self) -> Option<ParseTrivium> {
-        let saved_state = self.save_state();
+        self.try_with_cursor(|this| {
+            let pt = this.parse_block_comment();
 
-        let pt = self.parse_block_comment();
-
-        if let ParseTrivium::BlockComment(false, lines) = &pt {
-            if lines.len() == 1 {
-                let content = lines[0].trim();
-                if is_valid_language_identifier(content) && self.is_next_string_delimiter() {
-                    return Some(ParseTrivium::LanguageAnnotation(content.to_string()));
+            if let ParseTrivium::BlockComment(false, lines) = &pt {
+                if lines.len() == 1 {
+                    let content = lines[0].trim();
+                    if is_valid_language_identifier(content) && this.is_next_string_delimiter() {
+                        return Some(ParseTrivium::LanguageAnnotation(content.to_string()));
+                    }
                 }
             }
-        }
 
-        self.restore_state(saved_state);
-        None
+            None
+        })
     }
 
     /// Check if next non-whitespace token is " or ''
     fn is_next_string_delimiter(&mut self) -> bool {
-        let saved_state = self.save_state();
+        let mark = self.mark();
 
         let _ = self.skip_hspace();
 
@@ -91,7 +90,7 @@ impl Lexer {
 
         let result = self.peek() == Some('"') || self.at("''");
 
-        self.restore_state(saved_state);
+        self.reset(mark);
         result
     }
 }

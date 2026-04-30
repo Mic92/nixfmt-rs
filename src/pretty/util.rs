@@ -28,23 +28,9 @@ pub(super) fn is_lone_ann<T>(ann: &Ann<T>) -> bool {
     !has_trivia(ann)
 }
 
-/// Haskell `hasPreTrivia` (Types.hs).
-pub(super) fn has_pre_trivia<T>(ann: &Ann<T>) -> bool {
-    !ann.pre_trivia.is_empty()
-}
-
 /// Haskell `matchFirstToken hasPreTrivia` (Types.hs), specialised to `Term`.
 pub(super) fn term_first_token_has_pre_trivia(term: &Term) -> bool {
-    match term {
-        Term::Token(l) => has_pre_trivia(l),
-        Term::SimpleString(s) | Term::IndentedString(s) => has_pre_trivia(s),
-        Term::Path(p) => has_pre_trivia(p),
-        Term::List(open, _, _) => has_pre_trivia(open),
-        Term::Set(Some(rec), _, _, _) => has_pre_trivia(rec),
-        Term::Set(None, open, _, _) => has_pre_trivia(open),
-        Term::Selection(inner, _, _) => term_first_token_has_pre_trivia(inner),
-        Term::Parenthesized(open, _, _) => has_pre_trivia(open),
-    }
+    !term.first_token().pre_trivia.is_empty()
 }
 
 /// Haskell `hasOnlyComments` (Pretty.hs): non-empty `Items` containing only comment items.

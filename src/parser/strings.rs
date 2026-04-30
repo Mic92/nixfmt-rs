@@ -12,56 +12,49 @@ use super::Parser;
 impl Parser {
     /// Parse simple string literal and return annotated string structure
     pub(super) fn parse_simple_string_literal(&mut self) -> Result<Ann<Vec<Vec<StringPart>>>> {
-        let open_quote_pos = self.current.span;
-        let pre_trivia = std::mem::take(&mut self.current.pre_trivia);
+        self.with_raw_ann(|p| {
+            let open_quote_pos = p.current.span;
 
-        // DON'T advance - just verify we're at a quote
-        if !matches!(self.current.value, Token::TDoubleQuote) {
-            return Err(ParseError::unexpected(
-                open_quote_pos,
-                vec!["'\"'".to_string()],
-                format!("'{}'", self.current.value.text()),
-            ));
-        }
+            // DON'T advance - just verify we're at a quote
+            if !matches!(p.current.value, Token::TDoubleQuote) {
+                return Err(ParseError::unexpected(
+                    open_quote_pos,
+                    vec!["'\"'".to_string()],
+                    format!("'{}'", p.current.value.text()),
+                ));
+            }
 
-        let _opening_quote = self.take_current();
-        // DON'T call advance() - parse raw characters directly
+            let _opening_quote = p.take_current();
+            // DON'T call advance() - parse raw characters directly
 
-        let mut parts = Vec::new();
+            let mut parts = Vec::new();
 
-        loop {
-            match self.lexer.peek() {
-                Some('"') => break,
-                None => {
-                    return Err(ParseError::unclosed(
-                        self.lexer.current_pos(),
-                        '"',
-                        open_quote_pos,
-                    ));
-                }
-                Some('$') if self.lexer.at("${") => {
-                    let interp = self.parse_string_interpolation()?;
-                    parts.push(interp);
-                }
-                _ => {
-                    let text = self.parse_simple_string_part()?;
-                    if !text.is_empty() {
-                        parts.push(StringPart::TextPart(text));
+            loop {
+                match p.lexer.peek() {
+                    Some('"') => break,
+                    None => {
+                        return Err(ParseError::unclosed(
+                            p.lexer.current_pos(),
+                            '"',
+                            open_quote_pos,
+                        ));
+                    }
+                    Some('$') if p.lexer.at("${") => {
+                        let interp = p.parse_string_interpolation()?;
+                        parts.push(interp);
+                    }
+                    _ => {
+                        let text = p.parse_simple_string_part()?;
+                        if !text.is_empty() {
+                            parts.push(StringPart::TextPart(text));
+                        }
                     }
                 }
             }
-        }
 
-        self.lexer.advance();
+            p.lexer.advance();
 
-        let trail_comment = self.parse_trailing_trivia_and_advance()?;
-        let lines = process_simple(parts);
-
-        Ok(Ann {
-            pre_trivia,
-            span: open_quote_pos,
-            value: lines,
-            trail_comment,
+            Ok(process_simple(parts))
         })
     }
 
@@ -184,39 +177,32 @@ impl Parser {
     /// Parse indented string: ''...''
     /// Based on Haskell's indentedString parser
     pub(super) fn parse_indented_string(&mut self) -> Result<Term> {
-        let open_quote_pos = self.current.span;
-        let pre_trivia = std::mem::take(&mut self.current.pre_trivia);
+        let ann = self.with_raw_ann(|p| {
+            let open_quote_pos = p.current.span;
 
-        // Take the opening '' token (don't advance - just take it)
-        let _opening = self.take_current();
+            // Take the opening '' token (don't advance - just take it)
+            let _opening = p.take_current();
 
-        let mut lines = Vec::new();
-        lines.push(self.parse_indented_string_line()?);
+            let mut lines = Vec::new();
+            lines.push(p.parse_indented_string_line()?);
 
-        while self.lexer.peek() == Some('\n') {
-            self.lexer.advance();
-            lines.push(self.parse_indented_string_line()?);
-        }
+            while p.lexer.peek() == Some('\n') {
+                p.lexer.advance();
+                lines.push(p.parse_indented_string_line()?);
+            }
 
-        if !self.lexer.at("''") {
-            // delimiter `'` represents the opening `''`
-            return Err(ParseError::unclosed(
-                self.lexer.current_pos(),
-                '\'',
-                open_quote_pos,
-            ));
-        }
-        self.lexer.advance_by(2);
+            if !p.lexer.at("''") {
+                // delimiter `'` represents the opening `''`
+                return Err(ParseError::unclosed(
+                    p.lexer.current_pos(),
+                    '\'',
+                    open_quote_pos,
+                ));
+            }
+            p.lexer.advance_by(2);
 
-        let trail_comment = self.parse_trailing_trivia_and_advance()?;
-        let lines = process_indented(lines);
-
-        let ann = Ann {
-            pre_trivia,
-            span: open_quote_pos,
-            value: lines,
-            trail_comment,
-        };
+            Ok(process_indented(lines))
+        })?;
 
         Ok(classify_indented_string(ann))
     }

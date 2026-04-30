@@ -2,7 +2,7 @@
 
 use super::{
     NUMBER_COLOR, PrettySimple, STRING_CONTENT_COLOR, STRING_QUOTE_COLOR, Writer, escape_string,
-    format_bracket_list, sub_expr, write_delimited,
+    format_bracket_list, sub_expr, with_brackets,
 };
 use crate::format_constructor;
 use crate::format_enum;
@@ -281,13 +281,10 @@ impl PrettySimple for SpanWrapper {
 /// so it formats inline as: ( TrailingComment "text" )
 impl PrettySimple for TrailingComment {
     fn format<W: Writer>(&self, w: &mut W) {
-        w.with_color(|w_color| {
-            let paren_color = w_color.current_color();
-            w_color.with_depth(|w| {
-                write_delimited(w, paren_color, "(", ")", |w| {
-                    format_constructor!(w, "TrailingComment", [&&*self.0]);
-                });
-            });
+        with_brackets(w, "(", ")", true, |w, _| {
+            w.write_plain(" ");
+            format_constructor!(w, "TrailingComment", [&&*self.0]);
+            w.write_plain(" ");
         });
     }
 
@@ -376,19 +373,14 @@ impl<T: PrettySimple> PrettySimple for Option<T> {
 /// Based on Haskell's Show instance for tuples
 impl<A: PrettySimple, B: PrettySimple> PrettySimple for (A, B) {
     fn format<W: Writer>(&self, w: &mut W) {
-        w.with_color(|w_color| {
-            let paren_color = w_color.current_color();
-            w_color.with_depth(|w_inner| {
-                w_inner.write_colored("(", paren_color);
-                w_inner.write_plain(" ");
-                self.0.format(w_inner);
-                w_inner.newline();
-                w_inner.write_colored(",", paren_color);
-                w_inner.write_plain(" ");
-                self.1.format(w_inner);
-                w_inner.newline();
-                w_inner.write_colored(")", paren_color);
-            });
+        with_brackets(w, "(", ")", true, |w, paren_color| {
+            w.write_plain(" ");
+            self.0.format(w);
+            w.newline();
+            w.write_colored(",", paren_color);
+            w.write_plain(" ");
+            self.1.format(w);
+            w.newline();
         });
     }
 

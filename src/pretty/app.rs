@@ -26,120 +26,23 @@ fn push_absorb_inner(doc: &mut Doc, arg: &Expression) {
 /// This is the projection half of Haskell's
 /// `mapFirstToken' ((\a -> (a{preTrivia=[]}, preTrivia)) . moveTrailingCommentUp)`.
 fn first_token_comment(expr: &Expression) -> Trivia {
-    fn ann<T>(a: &Ann<T>) -> Trivia {
-        let mut t = a.pre_trivia.clone();
-        if let Some(tc) = &a.trail_comment {
-            t.push(tc.into());
-        }
-        t
+    let slot = expr.first_token();
+    let mut t = slot.pre_trivia.clone();
+    if let Some(tc) = slot.trail_comment {
+        t.push(tc.into());
     }
-    fn term(t: &Term) -> Trivia {
-        match t {
-            Term::Token(l) => ann(l),
-            Term::SimpleString(s) | Term::IndentedString(s) => ann(s),
-            Term::Path(p) => ann(p),
-            Term::List(open, _, _) => ann(open),
-            Term::Set(Some(rec), _, _, _) => ann(rec),
-            Term::Set(None, open, _, _) => ann(open),
-            Term::Selection(inner, _, _) => term(inner),
-            Term::Parenthesized(open, _, _) => ann(open),
-        }
-    }
-    fn param(p: &Parameter) -> Trivia {
-        match p {
-            Parameter::ID(n) => ann(n),
-            Parameter::Set(open, _, _) => ann(open),
-            Parameter::Context(first, _, _) => param(first),
-        }
-    }
-    match expr {
-        Expression::Term(t) => term(t),
-        Expression::With(kw, ..)
-        | Expression::Let(kw, ..)
-        | Expression::Assert(kw, ..)
-        | Expression::If(kw, ..)
-        | Expression::Negation(kw, _)
-        | Expression::Inversion(kw, _) => ann(kw),
-        Expression::Abstraction(p, _, _) => param(p),
-        Expression::Application(g, _)
-        | Expression::Operation(g, _, _)
-        | Expression::MemberCheck(g, _, _) => first_token_comment(g),
-    }
+    t
 }
 
 /// Rebuild `expr` with the first token's `pre_trivia` and `trail_comment`
 /// cleared. Only invoked on the leftmost (non-`Application`) head of a call
 /// chain, which is almost always a small `Term`, so the deep clone is cheap.
 fn strip_first_comment(expr: &Expression) -> Expression {
-    fn ann<T: Clone>(a: &Ann<T>) -> Ann<T> {
-        a.bare()
-    }
-    fn param(p: &Parameter) -> Parameter {
-        match p {
-            Parameter::ID(n) => Parameter::ID(ann(n)),
-            Parameter::Set(open, attrs, close) => {
-                Parameter::Set(ann(open), attrs.clone(), close.clone())
-            }
-            Parameter::Context(first, at, second) => {
-                Parameter::Context(Box::new(param(first)), at.clone(), second.clone())
-            }
-        }
-    }
-    fn term(t: &Term) -> Term {
-        match t {
-            Term::Token(l) => Term::Token(ann(l)),
-            Term::SimpleString(s) => Term::SimpleString(ann(s)),
-            Term::IndentedString(s) => Term::IndentedString(ann(s)),
-            Term::Path(p) => Term::Path(ann(p)),
-            Term::List(open, items, close) => Term::List(ann(open), items.clone(), close.clone()),
-            Term::Set(Some(rec), open, items, close) => {
-                Term::Set(Some(ann(rec)), open.clone(), items.clone(), close.clone())
-            }
-            Term::Set(None, open, items, close) => {
-                Term::Set(None, ann(open), items.clone(), close.clone())
-            }
-            Term::Selection(inner, sels, def) => {
-                Term::Selection(Box::new(term(inner)), sels.clone(), def.clone())
-            }
-            Term::Parenthesized(open, expr, close) => {
-                Term::Parenthesized(ann(open), expr.clone(), close.clone())
-            }
-        }
-    }
-    match expr {
-        Expression::Term(t) => Expression::Term(term(t)),
-        Expression::With(kw, e0, semi, e1) => {
-            Expression::With(ann(kw), e0.clone(), semi.clone(), e1.clone())
-        }
-        Expression::Let(kw, items, in_, body) => {
-            Expression::Let(ann(kw), items.clone(), in_.clone(), body.clone())
-        }
-        Expression::Assert(kw, cond, semi, body) => {
-            Expression::Assert(ann(kw), cond.clone(), semi.clone(), body.clone())
-        }
-        Expression::If(kw, e0, t, e1, el, e2) => Expression::If(
-            ann(kw),
-            e0.clone(),
-            t.clone(),
-            e1.clone(),
-            el.clone(),
-            e2.clone(),
-        ),
-        Expression::Abstraction(p, colon, body) => {
-            Expression::Abstraction(param(p), colon.clone(), body.clone())
-        }
-        Expression::Application(g, a) => {
-            Expression::Application(Box::new(strip_first_comment(g)), a.clone())
-        }
-        Expression::Operation(l, op, r) => {
-            Expression::Operation(Box::new(strip_first_comment(l)), op.clone(), r.clone())
-        }
-        Expression::MemberCheck(e, dot, sels) => {
-            Expression::MemberCheck(Box::new(strip_first_comment(e)), dot.clone(), sels.clone())
-        }
-        Expression::Negation(tok, e) => Expression::Negation(ann(tok), e.clone()),
-        Expression::Inversion(tok, e) => Expression::Inversion(ann(tok), e.clone()),
-    }
+    let mut e = expr.clone();
+    let slot = e.first_token_mut();
+    *slot.pre_trivia = Trivia::new();
+    *slot.trail_comment = None;
+    e
 }
 
 /// Walk the function-call chain. Mirrors Haskell `absorbApp` (Pretty.hs).

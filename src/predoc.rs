@@ -584,14 +584,24 @@ fn fixup_mut(doc: &mut Vec<DocE>, mut nacc: isize, mut oacc: isize) {
     doc.truncate(w);
 }
 
-/// Mirrors `fits` in Nixfmt/Predoc.hs.
+/// Shared engine for `fits` / `fits_width`. Mirrors `fits` in Nixfmt/Predoc.hs.
 ///
 /// `ni` is the next-line indentation delta used only by the trailing-comment
 /// rule; `c` is the remaining width budget. Groups are flattened in place so
 /// adjacent spacings across a group boundary merge exactly as in the Haskell
 /// `ys ++ xs` recursion, and so comment text inside a group never gets
 /// double-counted against `c`.
-fn fits(mut ni: isize, mut c: isize, chain: &[&[DocE]], out: &mut String) -> Option<usize> {
+///
+/// `WRITE` selects whether the compact rendering is appended to `out` (and
+/// rolled back on failure). Monomorphised so the width-only path carries no
+/// branch or `&mut String` overhead.
+#[inline(always)]
+fn fits_impl<const WRITE: bool>(
+    mut ni: isize,
+    mut c: isize,
+    chain: &[&[DocE]],
+    out: &mut String,
+) -> Option<usize> {
     let mark = out.len();
     let mut width = 0usize;
     if c < 0 {
@@ -606,6 +616,15 @@ fn fits(mut ni: isize, mut c: isize, chain: &[&[DocE]], out: &mut String) -> Opt
     }
     let mut pending: Option<Spacing> = None;
 
+    macro_rules! fail {
+        () => {{
+            if WRITE {
+                out.truncate(mark);
+            }
+            return None;
+        }};
+    }
+
     loop {
         let elem = loop {
             let Some(it) = stack.last_mut() else {
@@ -632,19 +651,17 @@ fn fits(mut ni: isize, mut c: isize, chain: &[&[DocE]], out: &mut String) -> Opt
             match sp {
                 Spacing::Softbreak | Spacing::Break => {}
                 Spacing::Softspace | Spacing::Space | Spacing::Hardspace => {
-                    out.push(' ');
+                    if WRITE {
+                        out.push(' ');
+                    }
                     width += 1;
                     c -= 1;
                     ni -= 1;
                     if c < 0 {
-                        out.truncate(mark);
-                        return None;
+                        fail!();
                     }
                 }
-                Spacing::Hardline | Spacing::Emptyline | Spacing::Newlines(_) => {
-                    out.truncate(mark);
-                    return None;
-                }
+                Spacing::Hardline | Spacing::Emptyline | Spacing::Newlines(_) => fail!(),
             }
         }
 
@@ -652,25 +669,32 @@ fn fits(mut ni: isize, mut c: isize, chain: &[&[DocE]], out: &mut String) -> Opt
             None => return Some(width),
             Some(DocE::Text(_, _, TextAnn::RegularT, t)) => {
                 let w = text_width(t);
-                out.push_str(t);
+                if WRITE {
+                    out.push_str(t);
+                }
                 width += w;
                 c -= w as isize;
                 ni -= w as isize;
                 if c < 0 {
-                    out.truncate(mark);
-                    return None;
+                    fail!();
                 }
             }
             Some(DocE::Text(_, _, TextAnn::Comment, t)) => {
-                out.push_str(t);
+                if WRITE {
+                    out.push_str(t);
+                }
                 width += text_width(t);
             }
             Some(DocE::Text(_, _, TextAnn::TrailingComment, t)) => {
                 if ni == 0 {
-                    out.push(' ');
+                    if WRITE {
+                        out.push(' ');
+                    }
                     width += 1;
                 }
-                out.push_str(t);
+                if WRITE {
+                    out.push_str(t);
+                }
                 width += text_width(t);
             }
             Some(DocE::Text(_, _, TextAnn::Trailing, _)) => {}
@@ -679,72 +703,17 @@ fn fits(mut ni: isize, mut c: isize, chain: &[&[DocE]], out: &mut String) -> Opt
     }
 }
 
-/// Like `fits`, but only computes the rendered width instead of allocating the
-/// rendered string. Used by `first_line_fits` where only the width matters.
-fn fits_width(mut c: isize, doc: &[DocE]) -> Option<usize> {
-    if c < 0 {
-        return None;
-    }
-    let mut w = 0usize;
-    let mut ni: isize = 0;
-    let mut stack: Vec<std::slice::Iter<'_, DocE>> = vec![doc.iter()];
-    let mut pending: Option<Spacing> = None;
-    loop {
-        let elem = loop {
-            let Some(it) = stack.last_mut() else {
-                break None;
-            };
-            match it.next() {
-                Some(DocE::Group(_, ys)) => stack.push(ys.iter()),
-                Some(e) => break Some(e),
-                None => {
-                    stack.pop();
-                }
-            }
-        };
-        if let Some(DocE::Spacing(s)) = elem {
-            pending = Some(match pending {
-                Some(p) => merge_spacings(p, *s),
-                None => *s,
-            });
-            continue;
-        }
-        if let Some(sp) = pending.take() {
-            match sp {
-                Spacing::Softbreak | Spacing::Break => {}
-                Spacing::Softspace | Spacing::Space | Spacing::Hardspace => {
-                    w += 1;
-                    c -= 1;
-                    ni -= 1;
-                    if c < 0 {
-                        return None;
-                    }
-                }
-                Spacing::Hardline | Spacing::Emptyline | Spacing::Newlines(_) => return None,
-            }
-        }
-        match elem {
-            None => return Some(w),
-            Some(DocE::Text(_, _, TextAnn::RegularT, t)) => {
-                let tw = text_width(t);
-                w += tw;
-                c -= tw as isize;
-                ni -= tw as isize;
-                if c < 0 {
-                    return None;
-                }
-            }
-            Some(DocE::Text(_, _, TextAnn::Comment, t)) => w += text_width(t),
-            Some(DocE::Text(_, _, TextAnn::TrailingComment, t)) => {
-                if ni == 0 {
-                    w += 1;
-                }
-                w += text_width(t);
-            }
-            Some(DocE::Text(_, _, TextAnn::Trailing, _)) => {}
-            Some(DocE::Spacing(_) | DocE::Group(_, _) | DocE::Nest(..)) => unreachable!(),
-        }
-    }
+/// Try to render `chain` compactly into `out`; on failure `out` is restored.
+#[inline]
+fn fits(ni: isize, c: isize, chain: &[&[DocE]], out: &mut String) -> Option<usize> {
+    fits_impl::<true>(ni, c, chain, out)
+}
+
+/// Width-only variant used by `first_line_fits`.
+#[inline]
+fn fits_width(c: isize, doc: &[DocE]) -> Option<usize> {
+    let mut sink = String::new();
+    fits_impl::<false>(0, c, &[doc], &mut sink)
 }
 
 /// Find the width of the first line in a document

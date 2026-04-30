@@ -53,21 +53,21 @@ impl Lexer {
             return None;
         }
 
-        let saved_state = self.save_state();
-        let mut exponent = String::new();
-        exponent.push(self.advance().unwrap());
+        self.try_with_cursor(|this| {
+            let mut exponent = String::new();
+            exponent.push(this.advance().unwrap());
 
-        if matches!(self.peek(), Some('+' | '-')) {
-            exponent.push(self.advance().unwrap());
-        }
+            if matches!(this.peek(), Some('+' | '-')) {
+                exponent.push(this.advance().unwrap());
+            }
 
-        if self.peek().is_some_and(|c| c.is_ascii_digit()) {
-            exponent.push_str(&self.consume_digits());
-            Some(exponent)
-        } else {
-            self.restore_state(saved_state);
-            None
-        }
+            if this.peek().is_some_and(|c| c.is_ascii_digit()) {
+                exponent.push_str(&this.consume_digits());
+                Some(exponent)
+            } else {
+                None
+            }
+        })
     }
 
     /// Consume consecutive ASCII digits and return as String

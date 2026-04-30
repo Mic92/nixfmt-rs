@@ -11,23 +11,10 @@ use super::{Parser, spans};
 impl Parser {
     /// Parse a list of binders (for let expressions and attribute sets)
     pub(super) fn parse_binders(&mut self) -> Result<Items<Binder>> {
-        let mut items = Vec::new();
-
-        while !matches!(
-            self.current.value,
-            Token::KIn | Token::TBraceClose | Token::Sof
-        ) {
-            self.collect_trivia_as_comments(&mut items);
-
-            let binder = self.parse_binder()?;
-            items.push(Item::Item(binder));
-        }
-
-        if matches!(self.current.value, Token::KIn | Token::TBraceClose) {
-            self.collect_trivia_as_comments(&mut items);
-        }
-
-        Ok(Items(items))
+        self.parse_items(
+            |t| matches!(t, Token::KIn | Token::TBraceClose | Token::Sof),
+            |p| p.parse_binder(),
+        )
     }
 
     /// Parse a single binder (inherit or assignment)
@@ -87,16 +74,7 @@ impl Parser {
 
         let first_sel = self.parse_selector()?;
         selectors.push(first_sel);
-
-        while matches!(self.current.value, Token::TDot) {
-            let dot = self.take_and_advance()?;
-
-            let simple_sel = self.parse_simple_selector()?;
-            selectors.push(Selector {
-                dot: Some(dot),
-                selector: simple_sel,
-            });
-        }
+        self.parse_dotted_tail(&mut selectors)?;
 
         // Check for common mistake: attribute path followed by semicolon (forgot = and value)
         if matches!(self.current.value, Token::TSemicolon) {
@@ -188,18 +166,26 @@ impl Parser {
             dot: None,
             selector: first_sel,
         });
+        self.parse_dotted_tail(&mut selectors)?;
 
+        Ok(selectors)
+    }
+
+    /// Consume zero or more `.selector` segments and append them to `selectors`.
+    ///
+    /// Shared by attribute-path parsing in assignments and `?` member checks.
+    /// `parse_postfix_selection` has its own backtracking variant and does not
+    /// use this.
+    fn parse_dotted_tail(&mut self, selectors: &mut Vec<Selector>) -> Result<()> {
         while matches!(self.current.value, Token::TDot) {
             let dot = self.take_and_advance()?;
-
             let simple_sel = self.parse_simple_selector()?;
             selectors.push(Selector {
                 dot: Some(dot),
                 selector: simple_sel,
             });
         }
-
-        Ok(selectors)
+        Ok(())
     }
 
     /// Check if current token can start a simple selector

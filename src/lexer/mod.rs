@@ -54,7 +54,7 @@ pub(crate) enum ParseTrivium {
 
 /// Cursor-only snapshot of the lexer (no heap state).
 #[derive(Clone, Copy)]
-struct LexerPos {
+pub(super) struct LexerPos {
     byte_pos: usize,
     line: usize,
     column: usize,
@@ -229,51 +229,18 @@ impl Lexer {
         }
 
         match ch {
-            '{' => {
-                self.advance();
-                Ok(Token::TBraceOpen)
-            }
-            '}' => {
-                self.advance();
-                Ok(Token::TBraceClose)
-            }
-            '[' => {
-                self.advance();
-                Ok(Token::TBrackOpen)
-            }
-            ']' => {
-                self.advance();
-                Ok(Token::TBrackClose)
-            }
-            '(' => {
-                self.advance();
-                Ok(Token::TParenOpen)
-            }
-            ')' => {
-                self.advance();
-                Ok(Token::TParenClose)
-            }
+            '{' => self.single(Token::TBraceOpen),
+            '}' => self.single(Token::TBraceClose),
+            '[' => self.single(Token::TBrackOpen),
+            ']' => self.single(Token::TBrackClose),
+            '(' => self.single(Token::TParenOpen),
+            ')' => self.single(Token::TParenClose),
             '=' => Ok(self.try_two_char('=', Token::TEqual, Token::TAssign)),
-            '@' => {
-                self.advance();
-                Ok(Token::TAt)
-            }
-            ':' => {
-                self.advance();
-                Ok(Token::TColon)
-            }
-            ',' => {
-                self.advance();
-                Ok(Token::TComma)
-            }
-            ';' => {
-                self.advance();
-                Ok(Token::TSemicolon)
-            }
-            '?' => {
-                self.advance();
-                Ok(Token::TQuestion)
-            }
+            '@' => self.single(Token::TAt),
+            ':' => self.single(Token::TColon),
+            ',' => self.single(Token::TComma),
+            ';' => self.single(Token::TSemicolon),
+            '?' => self.single(Token::TQuestion),
             '.' => {
                 if self.at("...") {
                     self.advance_by(3);
@@ -295,10 +262,7 @@ impl Lexer {
             }
             '+' => Ok(self.try_two_char('+', Token::TConcat, Token::TPlus)),
             '-' => Ok(self.try_two_char('>', Token::TImplies, Token::TMinus)),
-            '*' => {
-                self.advance();
-                Ok(Token::TMul)
-            }
+            '*' => self.single(Token::TMul),
             '/' => Ok(self.try_two_char('/', Token::TUpdate, Token::TDiv)),
             '!' => Ok(self.try_two_char('=', Token::TUnequal, Token::TNot)),
             '<' => {
@@ -343,10 +307,7 @@ impl Lexer {
                     _ => self.err_unexpected(&["'||'", "'|>'"], "'|'"),
                 }
             }
-            '"' => {
-                self.advance();
-                Ok(Token::TDoubleQuote)
-            }
+            '"' => self.single(Token::TDoubleQuote),
             '\'' => {
                 if self.at("''") {
                     self.advance_by(2);
@@ -364,10 +325,7 @@ impl Lexer {
                 }
             }
             '0'..='9' => self.parse_number(),
-            '~' => {
-                self.advance();
-                Ok(Token::TTilde)
-            }
+            '~' => self.single(Token::TTilde),
             _ => {
                 // `ch` was derived from a single byte; for the error message
                 // decode the actual codepoint so multi-byte input is reported
@@ -517,7 +475,7 @@ impl Lexer {
 
     /// Snapshot the cursor (position only, no trivia).
     #[inline]
-    fn mark(&self) -> LexerPos {
+    pub(super) fn mark(&self) -> LexerPos {
         LexerPos {
             byte_pos: self.byte_pos,
             line: self.line,
@@ -527,10 +485,34 @@ impl Lexer {
 
     /// Restore the cursor from a snapshot taken by `mark()`.
     #[inline]
-    fn reset(&mut self, mark: LexerPos) {
+    pub(super) fn reset(&mut self, mark: LexerPos) {
         self.byte_pos = mark.byte_pos;
         self.line = mark.line;
         self.column = mark.column;
+    }
+
+    /// Run `f`; on `None`, rewind cursor (byte_pos/line/column) only.
+    /// Does NOT restore `trivia_buffer`/`recent_*` — callers must not mutate
+    /// those inside `f`.
+    #[inline]
+    pub(super) fn try_with_cursor<T>(
+        &mut self,
+        f: impl FnOnce(&mut Self) -> Option<T>,
+    ) -> Option<T> {
+        let mark = self.mark();
+        let r = f(self);
+        if r.is_none() {
+            self.reset(mark);
+        }
+        r
+    }
+
+    /// Advance one char and return `Ok(tok)`; for trivial single-char arms in
+    /// `next_token`.
+    #[inline(always)]
+    fn single(&mut self, tok: Token) -> crate::error::Result<Token> {
+        self.advance();
+        Ok(tok)
     }
 
     /// Consume and return current character
