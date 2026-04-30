@@ -6,7 +6,7 @@
 //! - Set patterns with defaults: `{x, y ? 1, z ? 2}:`
 //! - Context parameters: `args@{x, y}:` or `{x, y}@args:`
 
-use crate::error::{ErrorKind, ParseError, Result};
+use crate::error::{ParseError, Result};
 use crate::types::*;
 
 use super::Parser;
@@ -36,14 +36,11 @@ impl Parser {
                 Ok(Parameter::ID(ident))
             }
         } else {
-            Err(Box::new(ParseError {
-                span: self.current.span,
-                kind: ErrorKind::UnexpectedToken {
-                    expected: vec!["identifier".to_string(), "set pattern".to_string()],
-                    found: format!("'{}'", self.current.value.text()),
-                },
-                labels: vec![],
-            }))
+            Err(ParseError::unexpected(
+                self.current.span,
+                vec!["identifier".to_string(), "set pattern".to_string()],
+                format!("'{}'", self.current.value.text()),
+            ))
         }
     }
 
@@ -76,14 +73,11 @@ impl Parser {
     pub(super) fn parse_param_attrs(&mut self) -> Result<Vec<ParamAttr>> {
         match self.try_parse_param_attrs()? {
             Some(attrs) => Ok(attrs),
-            None => Err(Box::new(ParseError {
-                span: self.current.span,
-                kind: ErrorKind::InvalidSyntax {
-                    description: "not a parameter - looks like binding".to_string(),
-                    hint: Some("parameters cannot have '=' or '.'".to_string()),
-                },
-                labels: vec![],
-            })),
+            None => Err(ParseError::invalid(
+                self.current.span,
+                "not a parameter - looks like binding",
+                Some("parameters cannot have '=' or '.'".to_string()),
+            )),
         }
     }
 
@@ -146,17 +140,11 @@ impl Parser {
             if let ParamAttr::ParamAttr(name_leaf, _, _) = attr {
                 if let Token::Identifier(name) = &name_leaf.value {
                     if !seen.insert(name.as_str()) {
-                        return Err(Box::new(ParseError {
-                            span: name_leaf.span,
-                            kind: ErrorKind::InvalidSyntax {
-                                description: format!(
-                                    "duplicate formal function argument '{}'",
-                                    name
-                                ),
-                                hint: None,
-                            },
-                            labels: vec![],
-                        }));
+                        return Err(ParseError::invalid(
+                            name_leaf.span,
+                            format!("duplicate formal function argument '{}'", name),
+                            None,
+                        ));
                     }
                 }
             }
@@ -172,17 +160,11 @@ impl Parser {
             if let ParamAttr::ParamAttr(name_leaf, _, _) = attr {
                 if let Token::Identifier(name) = &name_leaf.value {
                     if name == pattern_name {
-                        return Err(Box::new(ParseError {
-                            span: name_leaf.span,
-                            kind: ErrorKind::InvalidSyntax {
-                                description: format!(
-                                    "duplicate formal function argument '{}'",
-                                    name
-                                ),
-                                hint: None,
-                            },
-                            labels: vec![],
-                        }));
+                        return Err(ParseError::invalid(
+                            name_leaf.span,
+                            format!("duplicate formal function argument '{}'", name),
+                            None,
+                        ));
                     }
                 }
             }
@@ -224,14 +206,11 @@ impl Parser {
                 if matches!(ann.value, Token::Identifier(_)) {
                     Ok(Parameter::ID(ann))
                 } else {
-                    Err(Box::new(ParseError {
-                        span: ann.span,
-                        kind: ErrorKind::UnexpectedToken {
-                            expected: vec!["identifier".to_string()],
-                            found: format!("'{}'", ann.value.text()),
-                        },
-                        labels: vec![],
-                    }))
+                    Err(ParseError::unexpected(
+                        ann.span,
+                        vec!["identifier".to_string()],
+                        format!("'{}'", ann.value.text()),
+                    ))
                 }
             }
             Expression::Term(Term::Set(None, open, items, close)) => {
@@ -240,14 +219,11 @@ impl Parser {
                 let attrs = self.items_to_param_attrs(items)?;
                 Ok(Parameter::Set(open, attrs, close))
             }
-            _ => Err(Box::new(ParseError {
-                span: Span::point(0),
-                kind: ErrorKind::InvalidSyntax {
-                    description: "complex parameters not yet supported".to_string(),
-                    hint: Some("use simple identifiers or set patterns as parameters".to_string()),
-                },
-                labels: vec![],
-            })),
+            _ => Err(ParseError::invalid(
+                Span::point(0),
+                "complex parameters not yet supported",
+                Some("use simple identifiers or set patterns as parameters".to_string()),
+            )),
         }
     }
 
@@ -278,28 +254,18 @@ impl Parser {
                                         comma,
                                     ));
                                 } else {
-                                    return Err(Box::new(ParseError {
-                                        span: Span::point(0),
-                                        kind: ErrorKind::InvalidSyntax {
-                                            description: "invalid parameter attribute".to_string(),
-                                            hint: Some(
-                                                "expected 'name' or 'name ? default'".to_string(),
-                                            ),
-                                        },
-                                        labels: vec![],
-                                    }));
+                                    return Err(ParseError::invalid(
+                                        Span::point(0),
+                                        "invalid parameter attribute",
+                                        Some("expected 'name' or 'name ? default'".to_string()),
+                                    ));
                                 }
                             } else {
-                                return Err(Box::new(ParseError {
-                                    span: Span::point(0),
-                                    kind: ErrorKind::InvalidSyntax {
-                                        description: "invalid parameter selector".to_string(),
-                                        hint: Some(
-                                            "expected identifier in parameter pattern".to_string(),
-                                        ),
-                                    },
-                                    labels: vec![],
-                                }));
+                                return Err(ParseError::invalid(
+                                    Span::point(0),
+                                    "invalid parameter selector",
+                                    Some("expected identifier in parameter pattern".to_string()),
+                                ));
                             }
                         }
                         Binder::Inherit(_, _, _, dots) => {

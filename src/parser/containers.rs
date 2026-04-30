@@ -5,7 +5,7 @@
 //! - Lists: `[ ]`
 //! - Parenthesized expressions: `( )`
 
-use crate::error::{ErrorKind, ParseError, Result};
+use crate::error::{ParseError, Result};
 use crate::types::*;
 
 use super::Parser;
@@ -47,15 +47,11 @@ impl Parser {
         while !matches!(self.current.value, Token::TBrackClose | Token::Sof) {
             // Check for commas (not valid in Nix lists)
             if matches!(self.current.value, Token::TComma) {
-                return Err(Box::new(ParseError {
-                    span: self.current.span,
-                    kind: ErrorKind::InvalidSyntax {
-                        description: "commas are not used to separate list elements in Nix"
-                            .to_string(),
-                        hint: Some("use spaces to separate list elements: [1 2 3]".to_string()),
-                    },
-                    labels: vec![],
-                }));
+                return Err(ParseError::invalid(
+                    self.current.span,
+                    "commas are not used to separate list elements in Nix",
+                    Some("use spaces to separate list elements: [1 2 3]".to_string()),
+                ));
             }
 
             // Check for mismatched closing delimiters before trying to parse
@@ -63,20 +59,17 @@ impl Parser {
                 self.current.value,
                 Token::TBraceClose | Token::TParenClose | Token::TInterClose
             ) {
-                return Err(Box::new(ParseError {
-                    span: self.current.span,
-                    kind: ErrorKind::InvalidSyntax {
-                        description: format!(
-                            "mismatched delimiter: expected ']', found '{}'",
-                            self.current.value.text()
-                        ),
-                        hint: Some(format!(
-                            "change '{}' to ']' to match the opening bracket",
-                            self.current.value.text()
-                        )),
-                    },
-                    labels: vec![],
-                }));
+                return Err(ParseError::invalid(
+                    self.current.span,
+                    format!(
+                        "mismatched delimiter: expected ']', found '{}'",
+                        self.current.value.text()
+                    ),
+                    Some(format!(
+                        "change '{}' to ']' to match the opening bracket",
+                        self.current.value.text()
+                    )),
+                ));
             }
 
             self.collect_trivia_as_comments(&mut items);

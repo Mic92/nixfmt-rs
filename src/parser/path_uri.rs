@@ -4,7 +4,7 @@
 //! and URIs (e.g., `https://example.com`). Paths in Nix can contain interpolations
 //! and have specific validation rules (e.g., no trailing slashes).
 
-use crate::error::{ErrorKind, ParseError, Result};
+use crate::error::{ParseError, Result};
 use crate::types::*;
 
 use super::Parser;
@@ -129,16 +129,11 @@ impl Parser {
                 // Point to the trailing slash, not the start of the path
                 let current_pos = self.lexer.current_pos().start as usize;
                 let slash_pos = Span::new(current_pos.saturating_sub(1), current_pos);
-                return Err(Box::new(ParseError {
-                    span: slash_pos,
-                    kind: ErrorKind::InvalidSyntax {
-                        description: "path cannot end with a trailing slash".to_string(),
-                        hint: Some(
-                            "remove the trailing '/' or add more path components".to_string(),
-                        ),
-                    },
-                    labels: vec![],
-                }));
+                return Err(ParseError::invalid(
+                    slash_pos,
+                    "path cannot end with a trailing slash",
+                    Some("remove the trailing '/' or add more path components".to_string()),
+                ));
             }
         }
 
@@ -182,27 +177,21 @@ impl Parser {
         let pre_trivia = std::mem::take(&mut self.current.pre_trivia);
 
         let Token::Identifier(scheme) = &self.current.value else {
-            return Err(Box::new(ParseError {
-                span: start_pos,
-                kind: ErrorKind::UnexpectedToken {
-                    expected: vec!["identifier".to_string()],
-                    found: format!("'{}'", self.current.value.text()),
-                },
-                labels: vec![],
-            }));
+            return Err(ParseError::unexpected(
+                start_pos,
+                vec!["identifier".to_string()],
+                format!("'{}'", self.current.value.text()),
+            ));
         };
 
         let mut uri_text = scheme.clone();
 
         if self.lexer.peek() != Some(':') {
-            return Err(Box::new(ParseError {
-                span: self.lexer.current_pos(),
-                kind: ErrorKind::MissingToken {
-                    token: "':'".to_string(),
-                    after: "URI scheme".to_string(),
-                },
-                labels: vec![],
-            }));
+            return Err(ParseError::missing(
+                self.lexer.current_pos(),
+                "':'",
+                "URI scheme",
+            ));
         }
         self.lexer.advance();
         uri_text.push(':');

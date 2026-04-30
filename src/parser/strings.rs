@@ -17,14 +17,11 @@ impl Parser {
 
         // DON'T advance - just verify we're at a quote
         if !matches!(self.current.value, Token::TDoubleQuote) {
-            return Err(Box::new(ParseError {
-                span: open_quote_pos,
-                kind: ErrorKind::UnexpectedToken {
-                    expected: vec!["'\"'".to_string()],
-                    found: format!("'{}'", self.current.value.text()),
-                },
-                labels: vec![],
-            }));
+            return Err(ParseError::unexpected(
+                open_quote_pos,
+                vec!["'\"'".to_string()],
+                format!("'{}'", self.current.value.text()),
+            ));
         }
 
         let _opening_quote = self.take_current();
@@ -36,14 +33,11 @@ impl Parser {
             match self.lexer.peek() {
                 Some('"') => break,
                 None => {
-                    return Err(Box::new(ParseError {
-                        span: self.lexer.current_pos(),
-                        kind: ErrorKind::UnclosedDelimiter {
-                            delimiter: '"',
-                            opening_span: open_quote_pos,
-                        },
-                        labels: vec![],
-                    }));
+                    return Err(ParseError::unclosed(
+                        self.lexer.current_pos(),
+                        '"',
+                        open_quote_pos,
+                    ));
                 }
                 Some('$') if self.lexer.at("${") => {
                     let interp = self.parse_string_interpolation()?;
@@ -140,16 +134,11 @@ impl Parser {
         self.current = self.lexer.lexeme()?;
 
         if matches!(self.current.value, Token::TBraceClose) {
-            return Err(Box::new(ParseError {
-                span: self.current.span,
-                kind: ErrorKind::InvalidSyntax {
-                    description: "empty interpolation expression".to_string(),
-                    hint: Some(
-                        "string interpolations require an expression inside ${...}".to_string(),
-                    ),
-                },
-                labels: vec![],
-            }));
+            return Err(ParseError::invalid(
+                self.current.span,
+                "empty interpolation expression",
+                Some("string interpolations require an expression inside ${...}".to_string()),
+            ));
         }
 
         // Parse expression, catching errors to provide better messages for common mistakes
@@ -164,28 +153,22 @@ impl Parser {
                     opening_span,
                 } = &err.kind
                 {
-                    return Err(Box::new(ParseError {
-                        span: *opening_span,
-                        kind: ErrorKind::UnexpectedToken {
-                            expected: vec!["'}'".to_string()],
-                            found: "'\"'".to_string(),
-                        },
-                        labels: vec![],
-                    }));
+                    return Err(ParseError::unexpected(
+                        *opening_span,
+                        vec!["'}'".to_string()],
+                        "'\"'",
+                    ));
                 }
                 return Err(err);
             }
         };
 
         if !matches!(self.current.value, Token::TBraceClose) {
-            return Err(Box::new(ParseError {
-                span: self.current.span,
-                kind: ErrorKind::UnexpectedToken {
-                    expected: vec!["'}'".to_string()],
-                    found: format!("'{}'", self.current.value.text()),
-                },
-                labels: vec![],
-            }));
+            return Err(ParseError::unexpected(
+                self.current.span,
+                vec!["'}'".to_string()],
+                format!("'{}'", self.current.value.text()),
+            ));
         }
 
         // The lexer is positioned past `}` and any following trivia; rewind to
@@ -216,14 +199,12 @@ impl Parser {
         }
 
         if !self.lexer.at("''") {
-            return Err(Box::new(ParseError {
-                span: self.lexer.current_pos(),
-                kind: ErrorKind::UnclosedDelimiter {
-                    delimiter: '\'', // represents ''
-                    opening_span: open_quote_pos,
-                },
-                labels: vec![],
-            }));
+            // delimiter `'` represents the opening `''`
+            return Err(ParseError::unclosed(
+                self.lexer.current_pos(),
+                '\'',
+                open_quote_pos,
+            ));
         }
         self.lexer.advance_by(2);
 

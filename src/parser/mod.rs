@@ -110,16 +110,11 @@ impl Parser {
                     let second_param = self.parse_full_parameter()?;
 
                     if !matches!(self.current.value, Token::TColon) {
-                        return Err(Box::new(ParseError {
-                            span: at_tok.span,
-                            kind: crate::error::ErrorKind::InvalidSyntax {
-                                description: "@ is only valid in lambda parameters".to_string(),
-                                hint: Some(
-                                    "use 'name1 @ name2: body' for function parameters".to_string(),
-                                ),
-                            },
-                            labels: vec![],
-                        }));
+                        return Err(ParseError::invalid(
+                            at_tok.span,
+                            "@ is only valid in lambda parameters",
+                            Some("use 'name1 @ name2: body' for function parameters".to_string()),
+                        ));
                     }
 
                     let first_param = Parameter::ID(ident);
@@ -232,14 +227,11 @@ impl Parser {
                                 Box::new(body),
                             ))
                         } else {
-                            Err(Box::new(ParseError {
-                                span: close_brace.span,
-                                kind: crate::error::ErrorKind::InvalidSyntax {
-                                    description: "set with parameter-like syntax but no colon".to_string(),
-                                    hint: Some("use '{ x = ...; }' for set literals or '{ x }: body' for parameters".to_string()),
-                                },
-                                labels: vec![],
-                            }))
+                            Err(ParseError::invalid(
+                                close_brace.span,
+                                "set with parameter-like syntax but no colon",
+                                Some("use '{ x = ...; }' for set literals or '{ x }: body' for parameters".to_string()),
+                            ))
                         }
                     }
                     None => {
@@ -288,14 +280,11 @@ impl Parser {
                         Box::new(body),
                     ))
                 } else {
-                    Err(Box::new(ParseError {
-                        span: close_brace.span,
-                        kind: crate::error::ErrorKind::InvalidSyntax {
-                            description: "{ ... } must be followed by ':' or '@'".to_string(),
-                            hint: Some("use '{ x }: body' for function parameters".to_string()),
-                        },
-                        labels: vec![],
-                    }))
+                    Err(ParseError::invalid(
+                        close_brace.span,
+                        "{ ... } must be followed by ':' or '@'",
+                        Some("use '{ x }: body' for function parameters".to_string()),
+                    ))
                 }
             }
             _ => {
@@ -499,20 +488,14 @@ impl Parser {
                     // If we failed to parse the right-hand side and current token is }
                     // (closing an interpolation), provide a more helpful error
                     if matches!(self.current.value, Token::TBraceClose | Token::TInterClose) {
-                        return Err(Box::new(ParseError {
-                            span: self.current.span,
-                            kind: crate::error::ErrorKind::InvalidSyntax {
-                                description: format!(
-                                    "incomplete expression after '{}' operator",
-                                    op_token.value.text()
-                                ),
-                                hint: Some(
-                                    "binary operators require expressions on both sides"
-                                        .to_string(),
-                                ),
-                            },
-                            labels: vec![],
-                        }));
+                        return Err(ParseError::invalid(
+                            self.current.span,
+                            format!(
+                                "incomplete expression after '{}' operator",
+                                op_token.value.text()
+                            ),
+                            Some("binary operators require expressions on both sides".to_string()),
+                        ));
                     } else {
                         return Err(e);
                     }
@@ -630,21 +613,18 @@ impl Parser {
             Token::TParenOpen => self.parse_parenthesized(),
             Token::TDoubleQuote => self.parse_simple_string(),
             Token::TDoubleSingleQuote => self.parse_indented_string(),
-            _ => Err(Box::new(ParseError {
-                span: self.current.span,
-                kind: crate::error::ErrorKind::UnexpectedToken {
-                    expected: vec![
-                        "identifier".to_string(),
-                        "number".to_string(),
-                        "string".to_string(),
-                        "set".to_string(),
-                        "list".to_string(),
-                        "path".to_string(),
-                    ],
-                    found: format!("'{}'", self.current.value.text()),
-                },
-                labels: vec![],
-            })),
+            _ => Err(ParseError::unexpected(
+                self.current.span,
+                vec![
+                    "identifier".to_string(),
+                    "number".to_string(),
+                    "string".to_string(),
+                    "set".to_string(),
+                    "list".to_string(),
+                    "path".to_string(),
+                ],
+                format!("'{}'", self.current.value.text()),
+            )),
         }?;
 
         self.parse_postfix_selection(base_term)
@@ -806,35 +786,26 @@ impl Parser {
         if self.current.value == closing_token {
             self.take_and_advance()
         } else if matches!(self.current.value, Token::Sof) {
-            Err(Box::new(ParseError {
-                span: self.current.span,
-                kind: crate::error::ErrorKind::UnclosedDelimiter {
-                    delimiter: opening_char,
-                    opening_span,
-                },
-                labels: vec![],
-            }))
+            Err(ParseError::unclosed(
+                self.current.span,
+                opening_char,
+                opening_span,
+            ))
         } else {
             // Special case: comma inside parentheses (common mistake from other languages)
             if opening_char == '(' && matches!(self.current.value, Token::TComma) {
-                return Err(Box::new(ParseError {
-                    span: self.current.span,
-                    kind: crate::error::ErrorKind::InvalidSyntax {
-                        description: "comma not allowed inside parentheses".to_string(),
-                        hint: Some("Nix doesn't use commas in parenthesized expressions. For function calls, use spaces: f x y. For multiple values, use a list [x y] or set { a = x; b = y; }".to_string()),
-                    },
-                    labels: vec![],
-                }));
+                return Err(ParseError::invalid(
+                    self.current.span,
+                    "comma not allowed inside parentheses",
+                    Some("Nix doesn't use commas in parenthesized expressions. For function calls, use spaces: f x y. For multiple values, use a list [x y] or set { a = x; b = y; }".to_string()),
+                ));
             }
 
-            Err(Box::new(ParseError {
-                span: self.current.span,
-                kind: crate::error::ErrorKind::UnexpectedToken {
-                    expected: vec![format!("'{}'", closing_token.text())],
-                    found: format!("'{}'", self.current.value.text()),
-                },
-                labels: vec![],
-            }))
+            Err(ParseError::unexpected(
+                self.current.span,
+                vec![format!("'{}'", closing_token.text())],
+                format!("'{}'", self.current.value.text()),
+            ))
         }
     }
 
@@ -846,14 +817,11 @@ impl Parser {
         if predicate(&self.current.value) {
             self.take_and_advance()
         } else {
-            Err(Box::new(ParseError {
-                span: self.current.span,
-                kind: crate::error::ErrorKind::UnexpectedToken {
-                    expected: vec![], // caller doesn't specify what's expected
-                    found: format!("'{}'", self.current.value.text()),
-                },
-                labels: vec![],
-            }))
+            Err(ParseError::unexpected(
+                self.current.span,
+                vec![], // caller doesn't specify what's expected
+                format!("'{}'", self.current.value.text()),
+            ))
         }
     }
 
@@ -862,14 +830,11 @@ impl Parser {
         if matches!(self.current.value, Token::Sof) {
             Ok(())
         } else {
-            Err(Box::new(ParseError {
-                span: self.current.span,
-                kind: crate::error::ErrorKind::UnexpectedToken {
-                    expected: vec!["end of file".to_string()],
-                    found: format!("'{}'", self.current.value.text()),
-                },
-                labels: vec![],
-            }))
+            Err(ParseError::unexpected(
+                self.current.span,
+                vec!["end of file".to_string()],
+                format!("'{}'", self.current.value.text()),
+            ))
         }
     }
 }

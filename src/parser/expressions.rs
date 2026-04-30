@@ -6,7 +6,7 @@
 //! - `with ...; ...` - With expressions (scope introduction)
 //! - `assert ...; ...` - Assert expressions
 
-use crate::error::{ErrorKind, ParseError, Result};
+use crate::error::{ParseError, Result};
 use crate::types::*;
 
 use super::Parser;
@@ -20,14 +20,11 @@ impl Parser {
         let in_tok = if matches!(self.current.value, Token::KIn) {
             self.take_and_advance()?
         } else {
-            return Err(Box::new(ParseError {
-                span: self.current.span,
-                kind: ErrorKind::UnexpectedToken {
-                    expected: vec!["'in'".to_string()],
-                    found: format!("'{}'", self.current.value.text()),
-                },
-                labels: vec![],
-            }));
+            return Err(ParseError::unexpected(
+                self.current.span,
+                vec!["'in'".to_string()],
+                format!("'{}'", self.current.value.text()),
+            ));
         };
 
         let body = self.parse_expression()?;
@@ -43,14 +40,11 @@ impl Parser {
         let then_tok = if matches!(self.current.value, Token::KThen) {
             self.take_and_advance()?
         } else {
-            return Err(Box::new(ParseError {
-                span: self.current.span,
-                kind: ErrorKind::UnexpectedToken {
-                    expected: vec!["'then'".to_string()],
-                    found: format!("'{}'", self.current.value.text()),
-                },
-                labels: vec![],
-            }));
+            return Err(ParseError::unexpected(
+                self.current.span,
+                vec!["'then'".to_string()],
+                format!("'{}'", self.current.value.text()),
+            ));
         };
 
         let then_expr = self.parse_expression()?;
@@ -58,14 +52,11 @@ impl Parser {
         let else_tok = if matches!(self.current.value, Token::KElse) {
             self.take_and_advance()?
         } else {
-            return Err(Box::new(ParseError {
-                span: self.current.span,
-                kind: ErrorKind::UnexpectedToken {
-                    expected: vec!["'else'".to_string()],
-                    found: format!("'{}'", self.current.value.text()),
-                },
-                labels: vec![],
-            }));
+            return Err(ParseError::unexpected(
+                self.current.span,
+                vec!["'else'".to_string()],
+                format!("'{}'", self.current.value.text()),
+            ));
         };
 
         let else_expr = self.parse_expression()?;
@@ -88,14 +79,11 @@ impl Parser {
         let semi = if matches!(self.current.value, Token::TSemicolon) {
             self.take_and_advance()?
         } else {
-            return Err(Box::new(ParseError {
-                span: self.current.span,
-                kind: ErrorKind::MissingToken {
-                    token: "';'".to_string(),
-                    after: "'with' expression".to_string(),
-                },
-                labels: vec![],
-            }));
+            return Err(ParseError::missing(
+                self.current.span,
+                "';'",
+                "'with' expression",
+            ));
         };
 
         let expr2 = self.parse_expression()?;
@@ -116,14 +104,11 @@ impl Parser {
         let semi = if matches!(self.current.value, Token::TSemicolon) {
             self.take_and_advance()?
         } else {
-            return Err(Box::new(ParseError {
-                span: self.current.span,
-                kind: ErrorKind::MissingToken {
-                    token: "';'".to_string(),
-                    after: "'assert' condition".to_string(),
-                },
-                labels: vec![],
-            }));
+            return Err(ParseError::missing(
+                self.current.span,
+                "';'",
+                "'assert' condition",
+            ));
         };
 
         let body = self.parse_expression()?;
