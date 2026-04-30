@@ -10,9 +10,7 @@ A from-scratch Rust reimplementation of [nixfmt] that produces byte-identical ou
 
 - Byte-identical output across the entire nixpkgs tree
   (`LIMIT=0 cargo run --release --example diff_sweep`).
-- Formats all of nixpkgs (≈43 k `.nix` files) in ≈2 s versus
-  ≈70 s for the Haskell original — about 35× (Apple M3, 8‑core,
-  16 GB).
+- Formats all of nixpkgs in ≈2 s — see [Benchmarks](#benchmarks).
 
 See [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) for how the pieces fit
 together.
@@ -50,6 +48,26 @@ LIMIT=0 cargo run --release --example diff_sweep -- format
 The test suite is layered (unit → regression → vendored fixtures →
 properties); see [`tests/README.md`](tests/README.md) for where to add
 new cases.
+
+## Benchmarks
+
+`--check` over a full nixpkgs checkout (42 954 `.nix` files), Apple M3
+8-core / 16 GB, nixfmt 1.2.0, treefmt 2.5.0. treefmt runs use
+`--no-cache` so every file is actually processed:
+
+| command                           | wall time  | user time | vs nixfmt-rs |
+| --------------------------------- | ---------- | --------- | ------------ |
+| `nixfmt-rs --check .`             | **2.10 s** | 5.08 s    | 1.00×        |
+| `treefmt` driving nixfmt-rs       | 2.83 s     | 6.35 s    | 1.35×        |
+| `nixfmt-tree` (treefmt + Haskell) | 32.35 s    | 152.9 s   | 15.4×        |
+| `nixfmt --check .` (Haskell)      | 69.03 s    | 64.1 s    | 32.9×        |
+
+Single large file (`all-packages.nix`, ~12 k lines): 22.5 ms vs 416.8 ms
+(18.5×).
+
+Reproduce with [`scripts/bench.sh`](scripts/bench.sh) (needs `hyperfine`
+and a nixpkgs checkout; runs against a throwaway rsync copy so your tree
+is not modified).
 
 ## Design goals
 
