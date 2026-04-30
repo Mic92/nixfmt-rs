@@ -53,98 +53,91 @@ impl Parser {
     ///
     /// Paths can contain interpolations and have specific validation rules.
     pub(super) fn parse_path(&mut self) -> Result<Term> {
-        let start_pos = self.current.span;
-        let pre_trivia = std::mem::take(&mut self.current.pre_trivia);
-        let mut parts = Vec::new();
+        let ann = self.with_raw_ann(|p| {
+            let mut parts = Vec::new();
 
-        // NOTE: Don't call self.advance() here - we need to read raw chars from lexer
-        match &self.current.value {
-            Token::Identifier(ident) => {
-                // Path starting with identifier (e.g., common/file.nix, foo-bar/baz.nix)
-                parts.push(StringPart::TextPart(ident.to_string()));
-            }
-            Token::TDot => {
-                // ./ or ../
-                if self.lexer.peek() == Some('.') {
-                    parts.push(StringPart::TextPart("..".to_string()));
-                    self.lexer.advance();
-                } else {
-                    parts.push(StringPart::TextPart(".".to_string()));
+            // NOTE: Don't call self.advance() here - we need to read raw chars from lexer
+            match &p.current.value {
+                Token::Identifier(ident) => {
+                    // Path starting with identifier (e.g., common/file.nix, foo-bar/baz.nix)
+                    parts.push(StringPart::TextPart(ident.to_string()));
                 }
-                if self.lexer.peek() == Some('/') {
-                    self.lexer.advance();
-                    if let Some(StringPart::TextPart(text)) = parts.last_mut() {
-                        text.push('/');
+                Token::TDot => {
+                    // ./ or ../
+                    if p.lexer.peek() == Some('.') {
+                        parts.push(StringPart::TextPart("..".to_string()));
+                        p.lexer.advance();
+                    } else {
+                        parts.push(StringPart::TextPart(".".to_string()));
                     }
-                }
-            }
-            Token::TDiv => {
-                // Absolute path /
-                parts.push(StringPart::TextPart("/".to_string()));
-            }
-            Token::TTilde => {
-                // ~/
-                parts.push(StringPart::TextPart("~".to_string()));
-                if self.lexer.peek() == Some('/') {
-                    self.lexer.advance();
-                    if let Some(StringPart::TextPart(text)) = parts.last_mut() {
-                        text.push('/');
-                    }
-                }
-            }
-            _ => {}
-        }
-
-        loop {
-            match self.lexer.peek() {
-                Some('$') if self.lexer.at("${") => {
-                    let interp = self.parse_string_interpolation()?;
-                    parts.push(interp);
-                }
-                Some(ch) if ch.is_alphanumeric() || matches!(ch, '.' | '_' | '-' | '+') => {
-                    let text = self.parse_path_part()?;
-                    if !text.is_empty() {
-                        if let Some(StringPart::TextPart(last_text)) = parts.last_mut() {
-                            last_text.push_str(&text);
-                        } else {
-                            parts.push(StringPart::TextPart(text));
+                    if p.lexer.peek() == Some('/') {
+                        p.lexer.advance();
+                        if let Some(StringPart::TextPart(text)) = parts.last_mut() {
+                            text.push('/');
                         }
                     }
                 }
-                Some('/') => {
-                    self.lexer.advance();
-                    if let Some(StringPart::TextPart(text)) = parts.last_mut() {
-                        text.push('/');
-                    } else {
-                        parts.push(StringPart::TextPart("/".to_string()));
+                Token::TDiv => {
+                    // Absolute path /
+                    parts.push(StringPart::TextPart("/".to_string()));
+                }
+                Token::TTilde => {
+                    // ~/
+                    parts.push(StringPart::TextPart("~".to_string()));
+                    if p.lexer.peek() == Some('/') {
+                        p.lexer.advance();
+                        if let Some(StringPart::TextPart(text)) = parts.last_mut() {
+                            text.push('/');
+                        }
                     }
                 }
-                _ => break,
+                _ => {}
             }
-        }
 
-        // nixfmt's `pathTraversal` requires content after every `/`.
-        if let Some(StringPart::TextPart(text)) = parts.last() {
-            if text.ends_with('/') {
-                // Point to the trailing slash, not the start of the path
-                let current_pos = self.lexer.current_pos().start as usize;
-                let slash_pos = Span::new(current_pos.saturating_sub(1), current_pos);
-                return Err(ParseError::invalid(
-                    slash_pos,
-                    "path cannot end with a trailing slash",
-                    Some("remove the trailing '/' or add more path components".to_string()),
-                ));
+            loop {
+                match p.lexer.peek() {
+                    Some('$') if p.lexer.at("${") => {
+                        let interp = p.parse_string_interpolation()?;
+                        parts.push(interp);
+                    }
+                    Some(ch) if ch.is_alphanumeric() || matches!(ch, '.' | '_' | '-' | '+') => {
+                        let text = p.parse_path_part()?;
+                        if !text.is_empty() {
+                            if let Some(StringPart::TextPart(last_text)) = parts.last_mut() {
+                                last_text.push_str(&text);
+                            } else {
+                                parts.push(StringPart::TextPart(text));
+                            }
+                        }
+                    }
+                    Some('/') => {
+                        p.lexer.advance();
+                        if let Some(StringPart::TextPart(text)) = parts.last_mut() {
+                            text.push('/');
+                        } else {
+                            parts.push(StringPart::TextPart("/".to_string()));
+                        }
+                    }
+                    _ => break,
+                }
             }
-        }
 
-        let trail_comment = self.parse_trailing_trivia_and_advance()?;
+            // nixfmt's `pathTraversal` requires content after every `/`.
+            if let Some(StringPart::TextPart(text)) = parts.last() {
+                if text.ends_with('/') {
+                    // Point to the trailing slash, not the start of the path
+                    let current_pos = p.lexer.current_pos().start as usize;
+                    let slash_pos = Span::new(current_pos.saturating_sub(1), current_pos);
+                    return Err(ParseError::invalid(
+                        slash_pos,
+                        "path cannot end with a trailing slash",
+                        Some("remove the trailing '/' or add more path components".to_string()),
+                    ));
+                }
+            }
 
-        let ann = Ann {
-            pre_trivia,
-            span: start_pos,
-            value: parts,
-            trail_comment,
-        };
+            Ok(parts)
+        })?;
 
         Ok(Term::Path(ann))
     }
@@ -173,47 +166,38 @@ impl Parser {
     /// Parse URI as a SimpleString
     /// Based on nixfmt's uri parser
     pub(super) fn parse_uri(&mut self) -> Result<Term> {
-        let start_pos = self.current.span;
-        let pre_trivia = std::mem::take(&mut self.current.pre_trivia);
+        let ann = self.with_raw_ann(|p| {
+            let Token::Identifier(scheme) = &p.current.value else {
+                return Err(ParseError::unexpected(
+                    p.current.span,
+                    vec!["identifier".to_string()],
+                    format!("'{}'", p.current.value.text()),
+                ));
+            };
 
-        let Token::Identifier(scheme) = &self.current.value else {
-            return Err(ParseError::unexpected(
-                start_pos,
-                vec!["identifier".to_string()],
-                format!("'{}'", self.current.value.text()),
-            ));
-        };
+            let mut uri_text = scheme.clone();
 
-        let mut uri_text = scheme.clone();
-
-        if self.lexer.peek() != Some(':') {
-            return Err(ParseError::missing(
-                self.lexer.current_pos(),
-                "':'",
-                "URI scheme",
-            ));
-        }
-        self.lexer.advance();
-        uri_text.push(':');
-
-        while let Some(ch) = self.lexer.peek() {
-            if is_uri_char(ch) {
-                uri_text.push(ch);
-                self.lexer.advance();
-            } else {
-                break;
+            if p.lexer.peek() != Some(':') {
+                return Err(ParseError::missing(
+                    p.lexer.current_pos(),
+                    "':'",
+                    "URI scheme",
+                ));
             }
-        }
+            p.lexer.advance();
+            uri_text.push(':');
 
-        let trail_comment = self.parse_trailing_trivia_and_advance()?;
+            while let Some(ch) = p.lexer.peek() {
+                if is_uri_char(ch) {
+                    uri_text.push(ch);
+                    p.lexer.advance();
+                } else {
+                    break;
+                }
+            }
 
-        let parts = vec![vec![StringPart::TextPart(uri_text.to_string())]];
-        let ann = Ann {
-            pre_trivia,
-            span: start_pos,
-            value: parts,
-            trail_comment,
-        };
+            Ok(vec![vec![StringPart::TextPart(uri_text.to_string())]])
+        })?;
 
         Ok(Term::SimpleString(ann))
     }

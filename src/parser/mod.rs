@@ -634,6 +634,22 @@ impl Parser {
         Ok(trail_comment)
     }
 
+    /// Wrap a raw-content scanner (strings, paths, URIs) in the common
+    /// `Ann` prologue/epilogue: capture span and leading trivia, run the
+    /// scanner, then collect the trailing comment and advance.
+    fn with_raw_ann<T>(&mut self, f: impl FnOnce(&mut Self) -> Result<T>) -> Result<Ann<T>> {
+        let span = self.current.span;
+        let pre_trivia = std::mem::take(&mut self.current.pre_trivia);
+        let value = f(self)?;
+        let trail_comment = self.parse_trailing_trivia_and_advance()?;
+        Ok(Ann {
+            pre_trivia,
+            span,
+            value,
+            trail_comment,
+        })
+    }
+
     /// Advance to next token
     fn advance(&mut self) -> Result<()> {
         self.current = self.lexer.lexeme()?;
