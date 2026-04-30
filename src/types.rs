@@ -224,6 +224,124 @@ impl<T: Clone> Ann<T> {
     }
 }
 
+/// Type-erased shared view of an `Ann<_>`'s trivia fields.
+///
+/// Lets `FirstToken` return a uniform borrow regardless of the underlying
+/// `Ann<T>` payload type (`Token`, `NixString`, `Path`, ...).
+pub struct AnnSlot<'a> {
+    pub pre_trivia: &'a Trivia,
+    pub trail_comment: &'a Option<TrailingComment>,
+}
+
+/// Mutable counterpart of [`AnnSlot`].
+pub struct AnnSlotMut<'a> {
+    pub pre_trivia: &'a mut Trivia,
+    pub trail_comment: &'a mut Option<TrailingComment>,
+}
+
+impl<'a, T> From<&'a Ann<T>> for AnnSlot<'a> {
+    fn from(a: &'a Ann<T>) -> Self {
+        AnnSlot {
+            pre_trivia: &a.pre_trivia,
+            trail_comment: &a.trail_comment,
+        }
+    }
+}
+
+impl<'a, T> From<&'a mut Ann<T>> for AnnSlotMut<'a> {
+    fn from(a: &'a mut Ann<T>) -> Self {
+        AnnSlotMut {
+            pre_trivia: &mut a.pre_trivia,
+            trail_comment: &mut a.trail_comment,
+        }
+    }
+}
+
+/// Walk to the leftmost leaf `Ann<_>` of an AST node.
+///
+/// Haskell analogue: `mapFirstToken'` / `matchFirstToken` (Types.hs).
+pub trait FirstToken {
+    fn first_token(&self) -> AnnSlot<'_>;
+    fn first_token_mut(&mut self) -> AnnSlotMut<'_>;
+}
+
+impl FirstToken for Term {
+    fn first_token(&self) -> AnnSlot<'_> {
+        match self {
+            Term::Token(l) => l.into(),
+            Term::SimpleString(s) | Term::IndentedString(s) => s.into(),
+            Term::Path(p) => p.into(),
+            Term::List(open, _, _)
+            | Term::Set(None, open, _, _)
+            | Term::Parenthesized(open, _, _) => open.into(),
+            Term::Set(Some(rec), _, _, _) => rec.into(),
+            Term::Selection(inner, _, _) => inner.first_token(),
+        }
+    }
+    fn first_token_mut(&mut self) -> AnnSlotMut<'_> {
+        match self {
+            Term::Token(l) => l.into(),
+            Term::SimpleString(s) | Term::IndentedString(s) => s.into(),
+            Term::Path(p) => p.into(),
+            Term::List(open, _, _)
+            | Term::Set(None, open, _, _)
+            | Term::Parenthesized(open, _, _) => open.into(),
+            Term::Set(Some(rec), _, _, _) => rec.into(),
+            Term::Selection(inner, _, _) => inner.first_token_mut(),
+        }
+    }
+}
+
+impl FirstToken for Parameter {
+    fn first_token(&self) -> AnnSlot<'_> {
+        match self {
+            Parameter::ID(n) => n.into(),
+            Parameter::Set(open, _, _) => open.into(),
+            Parameter::Context(first, _, _) => first.first_token(),
+        }
+    }
+    fn first_token_mut(&mut self) -> AnnSlotMut<'_> {
+        match self {
+            Parameter::ID(n) => n.into(),
+            Parameter::Set(open, _, _) => open.into(),
+            Parameter::Context(first, _, _) => first.first_token_mut(),
+        }
+    }
+}
+
+impl FirstToken for Expression {
+    fn first_token(&self) -> AnnSlot<'_> {
+        match self {
+            Expression::Term(t) => t.first_token(),
+            Expression::With(kw, ..)
+            | Expression::Let(kw, ..)
+            | Expression::Assert(kw, ..)
+            | Expression::If(kw, ..)
+            | Expression::Negation(kw, _)
+            | Expression::Inversion(kw, _) => kw.into(),
+            Expression::Abstraction(p, _, _) => p.first_token(),
+            Expression::Application(g, _)
+            | Expression::Operation(g, _, _)
+            | Expression::MemberCheck(g, _, _) => g.first_token(),
+        }
+    }
+    fn first_token_mut(&mut self) -> AnnSlotMut<'_> {
+        match self {
+            Expression::Term(t) => t.first_token_mut(),
+            Expression::With(kw, ..)
+            | Expression::Let(kw, ..)
+            | Expression::Assert(kw, ..)
+            | Expression::If(kw, ..)
+            | Expression::Negation(kw, _)
+            | Expression::Inversion(kw, _) => kw.into(),
+            Expression::Abstraction(p, _, _) => p.first_token_mut(),
+            Expression::Application(g, _)
+            | Expression::Operation(g, _, _)
+            | Expression::MemberCheck(g, _, _) => g.first_token_mut(),
+        }
+    }
+}
+
 /// Haskell `convertTrailing`.
 impl From<&TrailingComment> for Trivium {
     fn from(tc: &TrailingComment) -> Self {
