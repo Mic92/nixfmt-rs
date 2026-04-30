@@ -16,7 +16,7 @@ pub(super) fn push_pretty_term_list(doc: &mut Doc, open: &Leaf, items: &Items<Te
     if items.0.is_empty() && open.trail_comment.is_none() && close.pre_trivia.is_empty() {
         push_empty_brackets(doc, open, close);
     } else {
-        push_render_list(doc, hardline(), open, items, close);
+        push_render_list(doc, &hardline(), open, items, close);
     }
 }
 
@@ -45,7 +45,7 @@ pub(super) fn push_pretty_term_wide(doc: &mut Doc, term: &Term) {
 /// `renderList` from Pretty.hs.
 pub(super) fn push_render_list(
     doc: &mut Doc,
-    item_sep: DocE,
+    item_sep: &DocE,
     open: &Ann<Token>,
     items: &Items<Term>,
     close: &Ann<Token>,
@@ -66,7 +66,7 @@ pub(super) fn push_render_list(
     push_surrounded(doc, &vec![sur], |d| {
         push_nested(d, |inner| {
             open.trail_comment.pretty(inner);
-            push_pretty_items_sep(inner, items, &item_sep);
+            push_pretty_items_sep(inner, items, item_sep);
         });
     });
     close.pretty(doc);

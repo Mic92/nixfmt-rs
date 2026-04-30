@@ -24,7 +24,10 @@ use predoc::{Pretty, RenderConfig, render_with_config};
 pub(crate) use error::Result;
 pub(crate) use types::File;
 
-/// Parse a Nix expression from source code
+/// Parse a Nix expression from source code.
+///
+/// # Errors
+/// Returns a [`ParseError`] if `source` is not valid Nix.
 pub fn parse(source: &str) -> Result<File> {
     let mut parser = parser::Parser::new(source)?;
     parser.parse_file()
@@ -32,13 +35,19 @@ pub fn parse(source: &str) -> Result<File> {
 
 /// Parse and return an AST with all trivia/spans stripped, suitable for
 /// structural equality comparison. Intended for the fuzzing harness.
+///
+/// # Errors
+/// See [`parse`].
 pub fn parse_normalized(source: &str) -> Result<File> {
     let mut ast = parse(source)?;
     normalize::normalize_file(&mut ast);
     Ok(ast)
 }
 
-/// Format a Nix file
+/// Format a Nix file.
+///
+/// # Errors
+/// See [`parse`]; formatting itself never fails.
 pub fn format(source: &str) -> Result<String> {
     format_with(source, 100, 2)
 }
@@ -47,6 +56,9 @@ pub fn format(source: &str) -> Result<String> {
 ///
 /// Exposed so the CLI can honour `--width` / `--indent` without re-exporting
 /// the internal `RenderConfig` type.
+///
+/// # Errors
+/// See [`parse`].
 pub fn format_with(source: &str, width: usize, indent: usize) -> Result<String> {
     let ast = parse(source)?;
     let mut doc = predoc::Doc::new();
@@ -69,21 +81,27 @@ pub fn ast_to_ir(ast: &File) -> predoc::IR {
     predoc::IR(doc)
 }
 
-/// Format AST as colored debug output (for --ast mode)
+/// Format AST as colored debug output (for --ast mode).
+///
+/// # Errors
+/// See [`parse`].
 pub fn format_ast(source: &str) -> Result<String> {
+    use pretty_simple::PrettySimple;
     let ast = parse(source)?;
     let mut writer = colored_writer::ColoredWriter::new(source);
-    use pretty_simple::PrettySimple;
     ast.format(&mut writer);
     Ok(writer.finish())
 }
 
-/// Format IR as colored debug output (for --ir mode)
+/// Format IR as colored debug output (for --ir mode).
+///
+/// # Errors
+/// See [`parse`].
 pub fn format_ir(source: &str) -> Result<String> {
+    use pretty_simple::PrettySimple;
     let ast = parse(source)?;
     let ir = ast_to_ir(&ast);
     let mut writer = colored_writer::ColoredWriter::new(source);
-    use pretty_simple::PrettySimple;
     ir.format(&mut writer);
     Ok(writer.finish())
 }

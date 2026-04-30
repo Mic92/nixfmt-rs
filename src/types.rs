@@ -21,6 +21,7 @@ pub struct Span {
 
 impl Span {
     /// Create a span from byte offsets, with line numbers defaulting to 1.
+    #[allow(clippy::cast_possible_truncation)] // source files are < 4 GiB
     pub const fn new(start: usize, end: usize) -> Self {
         Self {
             start: start as u32,
@@ -31,6 +32,7 @@ impl Span {
     }
 
     /// Create a new span with line information
+    #[allow(clippy::cast_possible_truncation)]
     pub const fn with_lines(start: usize, end: usize, start_line: usize, end_line: usize) -> Self {
         Self {
             start: start as u32,
@@ -41,6 +43,7 @@ impl Span {
     }
 
     /// Create a zero-length span at the given offset
+    #[allow(clippy::cast_possible_truncation)]
     pub const fn point(offset: usize) -> Self {
         Self {
             start: offset as u32,

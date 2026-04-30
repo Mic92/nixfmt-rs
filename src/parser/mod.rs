@@ -146,7 +146,7 @@ impl Parser {
                 // Try to parse as parameter attributes first
                 // If it fails (sees = or .), parse as bindings
                 if let Some(attrs) = self.try_parse_param_attrs()? {
-                    self.check_duplicate_formals(&attrs)?;
+                    Self::check_duplicate_formals(&attrs)?;
 
                     let close_brace = self.expect_token(Token::TBraceClose, "'}'")?;
                     let close_span = close_brace.span;
@@ -173,7 +173,7 @@ impl Parser {
             Token::TEllipsis => {
                 // Definitely a parameter: { ... }
                 let attrs = self.parse_param_attrs()?;
-                self.check_duplicate_formals(&attrs)?;
+                Self::check_duplicate_formals(&attrs)?;
 
                 let close_brace = self.expect_token(Token::TBraceClose, "'}'")?;
                 let close_span = close_brace.span;
@@ -224,7 +224,7 @@ impl Parser {
                         Some("use 'name1 @ name2: body' for function parameters".to_string()),
                     ));
                 }
-                self.validate_context_parameter(&first, &second)?;
+                Self::validate_context_parameter(&first, &second)?;
                 let colon = self.expect_token(Token::TColon, "':'")?;
                 let body = self.parse_expression()?;
                 Ok(Break(Expression::Abstraction(
@@ -276,7 +276,7 @@ impl Parser {
         // Member check (?) is handled in parse_application so that `?` binds tighter than prefix `!`/`-`.
 
         if matches!(self.current.value, Token::TColon | Token::TAt) {
-            let param = self.expr_to_parameter(expr)?;
+            let param = Self::expr_to_parameter(expr)?;
             return match self.finish_abstraction(param)? {
                 Break(abs) => Ok(abs),
                 // Unreachable: we only enter this arm when the lookahead is `:`/`@`,
@@ -394,7 +394,7 @@ impl Parser {
         while self.is_binary_op() && self.get_precedence() >= min_prec {
             let op_token = self.take_current();
             let is_comparison = is_comparison_operator(&op_token.value);
-            let prec = self.get_precedence_for(&op_token.value);
+            let prec = Self::get_precedence_for(&op_token.value);
             let op_string = op_token.value.text().to_string();
 
             // Check if we're chaining comparison operators at the same precedence level
@@ -411,7 +411,7 @@ impl Parser {
                 }));
             }
 
-            let is_right_assoc = self.is_right_associative(&op_token.value);
+            let is_right_assoc = Self::is_right_associative(&op_token.value);
             self.advance()?;
 
             let mut right = match self.parse_application() {
@@ -482,13 +482,13 @@ impl Parser {
 
     /// Get precedence of current operator
     const fn get_precedence(&self) -> u8 {
-        self.get_precedence_for(&self.current.value)
+        Self::get_precedence_for(&self.current.value)
     }
 
     /// Get precedence for a token (higher = tighter binding)
     /// Precedence follows nixfmt's operator table (Types.hs:570-597)
     /// Note: Operators later in nixfmt's list have LOWER precedence
-    const fn get_precedence_for(&self, token: &Token) -> u8 {
+    const fn get_precedence_for(token: &Token) -> u8 {
         match token {
             // Highest precedence (tightest binding)
             Token::TConcat => 14,               // ++ (line 575 in nixfmt)
@@ -517,7 +517,7 @@ impl Parser {
     /// Note: `TPlus` (+) is `InfixL` in the spec and is parsed as left-associative,
     /// but nixfmt uses a HACK to restructure it to right-associative in the AST.
     /// This is handled separately in the `parse_binary_operation` function.
-    const fn is_right_associative(&self, token: &Token) -> bool {
+    const fn is_right_associative(token: &Token) -> bool {
         matches!(
             token,
             Token::TConcat | Token::TUpdate | Token::TPipeBackward
@@ -728,6 +728,7 @@ impl Parser {
     }
 
     /// Expect a closing delimiter, providing helpful error if not found
+    #[allow(clippy::needless_pass_by_value)] // call sites pass `Token::TFoo` literals
     fn expect_closing_delimiter(
         &mut self,
         opening_span: Span,
@@ -762,6 +763,7 @@ impl Parser {
 
     /// Expect a specific token, advance if it matches, otherwise emit an
     /// `UnexpectedToken` error using `label` as the expected description.
+    #[allow(clippy::needless_pass_by_value)] // call sites pass `Token::TFoo` literals
     fn expect_token(&mut self, tok: Token, label: &'static str) -> Result<Leaf> {
         if self.current.value == tok {
             self.take_and_advance()

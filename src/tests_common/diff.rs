@@ -23,6 +23,7 @@
 //! + qux              (green - added in right)
 //!   baz              (dim - unchanged)
 //! ```
+use std::fmt::Write as _;
 
 /// ANSI color codes
 const RED: &str = "\x1b[31m";
@@ -152,9 +153,15 @@ pub fn render(a: &str, b: &str, opts: DiffOpts) -> String {
         }
         last_kept = true;
         match r {
-            DiffResult::Left(l) => out.push_str(&format!("{red}- {l}{reset}\n")),
-            DiffResult::Right(r) => out.push_str(&format!("{green}+ {r}{reset}\n")),
-            DiffResult::Both(l, _) => out.push_str(&format!("{dim}  {l}{reset}\n")),
+            DiffResult::Left(l) => {
+                let _ = writeln!(out, "{red}- {l}{reset}");
+            }
+            DiffResult::Right(r) => {
+                let _ = writeln!(out, "{green}+ {r}{reset}");
+            }
+            DiffResult::Both(l, _) => {
+                let _ = writeln!(out, "{dim}  {l}{reset}");
+            }
         }
     }
     out

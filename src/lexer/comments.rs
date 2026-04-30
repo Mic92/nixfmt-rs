@@ -52,7 +52,7 @@ impl Lexer {
 
         let lines = split_lines(body);
         let lines = remove_stars(start_col, lines);
-        let lines = fix_indent(start_col, lines);
+        let lines = fix_indent(start_col, &lines);
         let lines = drop_while_empty_start(lines);
         let lines = drop_while_empty_end(lines);
 
@@ -142,7 +142,7 @@ pub(super) fn remove_stars(pos: usize, lines: Vec<String>) -> Vec<String> {
 }
 
 /// Fix indentation of block comment lines (Lexer.hs:123-128)
-fn fix_indent(pos: usize, lines: Vec<String>) -> Vec<String> {
+fn fix_indent(pos: usize, lines: &[String]) -> Vec<String> {
     if lines.is_empty() {
         return Vec::new();
     }

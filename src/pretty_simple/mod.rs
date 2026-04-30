@@ -159,7 +159,8 @@ pub fn escape_string(s: &str) -> std::borrow::Cow<'_, str> {
         if is_non_printable(ch) {
             // Non-printable character - escape as \xH (minimal hex, no leading zeros)
             // Matches Haskell's showHex behavior
-            result.push_str(&format!("\\x{:x}", ch as u32));
+            use std::fmt::Write as _;
+            let _ = write!(result, "\\x{:x}", ch as u32);
         } else {
             result.push(ch);
         }
@@ -235,11 +236,10 @@ pub fn with_brackets<W: Writer>(
 pub fn format_delimited_value<T: PrettySimple, W: Writer>(w: &mut W, value: &T) {
     if value.has_delimiters() && !value.is_empty() && !value.is_simple() {
         w.newline();
-        value.format(w);
     } else {
         w.write_plain(" ");
-        value.format(w);
     }
+    value.format(w);
 }
 
 /// Shared bracket-list rendering for `Vec<T>` and `IR`.

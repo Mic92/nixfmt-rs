@@ -48,19 +48,8 @@ codegen-units = 1
 [lints.clippy]
 pedantic = { level = "warn", priority = -1 }
 nursery = { level = "warn", priority = -1 }
-# Style lints intentionally kept off:
-items_after_statements = "allow"
-branches_sharing_code = "allow"
-# Function shape follows Haskell; size/signature lints are noise here.
+# Large match-based dispatchers mirror the Haskell structure 1:1.
 too_many_lines = "allow"
-needless_pass_by_value = "allow"
+# Parser/lexer helpers uniformly return Result for call-site `?` chaining,
+# even when the current implementation cannot fail.
 unnecessary_wraps = "allow"
-unused_self = "allow"
-missing_errors_doc = "allow"
-# Lexer/layout hot paths: nursery suggestions here are not always correct.
-inline_always = "allow"
-cast_possible_truncation = "allow"
-cast_possible_wrap = "allow"
-format_push_string = "allow"
-needless_collect = "allow"
-redundant_clone = "allow"

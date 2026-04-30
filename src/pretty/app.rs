@@ -17,7 +17,7 @@ fn push_absorb_inner(doc: &mut Doc, arg: &Expression) {
             Item::Comments(_) => true,
         });
         if items.0.len() <= 6 && all_simple {
-            push_render_list(doc, line(), open, items, close);
+            push_render_list(doc, &line(), open, items, close);
             return;
         }
     }
