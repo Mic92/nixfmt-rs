@@ -118,6 +118,7 @@ impl Parser {
     fn parse_set_parameter_or_literal(&mut self) -> Result<Expression> {
         let saved_state = self.save_state();
         let open_brace = self.take_and_advance()?;
+        let open_span = open_brace.span;
 
         match &self.current.value {
             Token::TBraceClose => {
@@ -148,7 +149,8 @@ impl Parser {
                 if let Some(attrs) = self.try_parse_param_attrs()? {
                     Self::check_duplicate_formals(&attrs)?;
 
-                    let close_brace = self.expect_token(Token::TBraceClose, "'}'")?;
+                    let close_brace =
+                        self.expect_closing_delimiter(open_span, '{', Token::TBraceClose)?;
                     let close_span = close_brace.span;
 
                     match self.finish_abstraction(Parameter::Set(open_brace, attrs, close_brace))? {
@@ -166,7 +168,8 @@ impl Parser {
                     let open_brace = self.take_and_advance()?;
 
                     let bindings = self.parse_binders()?;
-                    let close_brace = self.expect_token(Token::TBraceClose, "'}'")?;
+                    let close_brace =
+                        self.expect_closing_delimiter(open_span, '{', Token::TBraceClose)?;
                     self.finish_set_literal_expr(open_brace, bindings, close_brace)
                 }
             }
@@ -175,7 +178,8 @@ impl Parser {
                 let attrs = self.parse_param_attrs()?;
                 Self::check_duplicate_formals(&attrs)?;
 
-                let close_brace = self.expect_token(Token::TBraceClose, "'}'")?;
+                let close_brace =
+                    self.expect_closing_delimiter(open_span, '{', Token::TBraceClose)?;
                 let close_span = close_brace.span;
 
                 match self.finish_abstraction(Parameter::Set(open_brace, attrs, close_brace))? {
@@ -190,7 +194,8 @@ impl Parser {
             _ => {
                 // Must be set literal with bindings
                 let bindings = self.parse_binders()?;
-                let close_brace = self.expect_token(Token::TBraceClose, "'}'")?;
+                let close_brace =
+                    self.expect_closing_delimiter(open_span, '{', Token::TBraceClose)?;
                 self.finish_set_literal_expr(open_brace, bindings, close_brace)
             }
         }
@@ -750,6 +755,36 @@ impl Parser {
                     self.current.span,
                     "comma not allowed inside parentheses",
                     Some("Nix doesn't use commas in parenthesized expressions. For function calls, use spaces: f x y. For multiple values, use a list [x y] or set { a = x; b = y; }".to_string()),
+                ));
+            }
+
+            if opening_char == '{' && matches!(self.current.value, Token::TColon) {
+                return Err(ParseError::invalid(
+                    self.current.span,
+                    "unexpected ':' inside '{ ... }'",
+                    Some(
+                        "for a function use '{ args }: body'; for an attribute use 'name = value;'"
+                            .to_string(),
+                    ),
+                ));
+            }
+
+            if matches!(
+                self.current.value,
+                Token::TBraceClose | Token::TBrackClose | Token::TParenClose | Token::TInterClose
+            ) {
+                return Err(ParseError::invalid(
+                    self.current.span,
+                    format!(
+                        "mismatched delimiter: expected '{}', found '{}'",
+                        closing_token.text(),
+                        self.current.value.text()
+                    ),
+                    Some(format!(
+                        "change '{}' to '{}' to match the opening '{opening_char}'",
+                        self.current.value.text(),
+                        closing_token.text(),
+                    )),
                 ));
             }
 

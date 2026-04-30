@@ -1,9 +1,17 @@
 //! Error formatting with source snippets
 
-use crate::error::{ErrorKind, LabelStyle, ParseError};
+use crate::error::{ErrorKind, ParseError};
+use crate::types::Span;
 use std::fmt::Write;
 
 use super::context::ErrorContext;
+
+/// One caret/underline row to render under a source line.
+struct Mark {
+    span: Span,
+    glyph: char,
+    label: Option<String>,
+}
 
 /// Rich error formatter with source snippets
 pub struct ErrorFormatter<'a> {
@@ -22,21 +30,60 @@ impl<'a> ErrorFormatter<'a> {
     pub fn format(&self, error: &ParseError) -> String {
         let mut output = String::new();
 
-        let line_num_width = self.calculate_line_num_width(error);
+        let marks = Self::collect_marks(error);
+        let lines = self.lines_to_show(error, &marks);
+        let line_num_width = lines.last().map_or(1, |l| l + 1).to_string().len().max(2);
+
         self.format_header(error, line_num_width, &mut output);
-        self.format_snippet(error, line_num_width, &mut output);
-        self.format_notes(error, line_num_width, &mut output);
+        self.format_snippet(&marks, &lines, line_num_width, &mut output);
+        Self::format_notes(error, line_num_width, &mut output);
 
         output
     }
 
-    fn calculate_line_num_width(&self, error: &ParseError) -> usize {
-        let pos = self.context.position(error.span.start);
-        let error_line_idx = pos.line - 1;
-        let end_line =
-            (error_line_idx + 1).min(self.context.source.lines().count().saturating_sub(1));
-        let max_line_num = end_line + 1;
-        max_line_num.to_string().len().max(2)
+    /// Primary span plus any secondary spans (delimiter opener, labels) that
+    /// should get their own caret row in the snippet.
+    fn collect_marks(error: &ParseError) -> Vec<Mark> {
+        let mut marks = vec![Mark {
+            span: error.span,
+            glyph: '^',
+            label: None,
+        }];
+
+        if let ErrorKind::UnclosedDelimiter { opening_span, .. } = &error.kind {
+            marks.push(Mark {
+                span: *opening_span,
+                glyph: '-',
+                label: Some("unclosed delimiter opened here".to_string()),
+            });
+        }
+
+        for label in &error.labels {
+            marks.push(Mark {
+                span: label.span,
+                glyph: '-',
+                label: Some(label.message.clone()),
+            });
+        }
+
+        marks.sort_by_key(|m| m.span.start);
+        marks
+    }
+
+    /// 0-based line indices to render: every marked line, plus one line of
+    /// context either side of the primary error.
+    fn lines_to_show(&self, error: &ParseError, marks: &[Mark]) -> Vec<usize> {
+        let last_line = self.context.source.lines().count().saturating_sub(1);
+        let primary = self.context.position(error.span.start).line - 1;
+
+        let mut lines: Vec<usize> = marks
+            .iter()
+            .map(|m| self.context.position(m.span.start).line - 1)
+            .chain([primary.saturating_sub(1), (primary + 1).min(last_line)])
+            .collect();
+        lines.sort_unstable();
+        lines.dedup();
+        lines
     }
 
     fn format_header(&self, error: &ParseError, line_num_width: usize, out: &mut String) {
@@ -52,105 +99,72 @@ impl<'a> ErrorFormatter<'a> {
 
         // Align the ┌─ with the │ from line numbers.
         write!(out, "{:>width$} ", "", width = line_num_width).unwrap();
+        let col = pos.column + 1; // 0-based -> 1-based for editors
         if let Some(filename) = self.context.filename {
-            writeln!(out, "┌─ {}:{}:{}", filename, pos.line, pos.column).unwrap();
+            writeln!(out, "┌─ {}:{}:{}", filename, pos.line, col).unwrap();
         } else {
-            writeln!(out, "┌─ line {}:{}", pos.line, pos.column).unwrap();
+            writeln!(out, "┌─ line {}:{}", pos.line, col).unwrap();
         }
     }
 
-    fn format_snippet(&self, error: &ParseError, line_num_width: usize, out: &mut String) {
-        let pos = self.context.position(error.span.start);
-        let error_line_idx = pos.line - 1; // Convert to 0-based
+    fn format_snippet(
+        &self,
+        marks: &[Mark],
+        lines: &[usize],
+        line_num_width: usize,
+        out: &mut String,
+    ) {
+        writeln!(out, "{:>line_num_width$} │", "").unwrap();
 
-        // Context window: 1 line before, error line, 1 after.
-        let start_line = error_line_idx.saturating_sub(1);
-        let end_line =
-            (error_line_idx + 1).min(self.context.source.lines().count().saturating_sub(1));
+        let mut prev: Option<usize> = None;
+        for &line_idx in lines {
+            if prev.is_some_and(|p| line_idx > p + 1) {
+                writeln!(out, "{:>line_num_width$} ·", "").unwrap();
+            }
+            prev = Some(line_idx);
 
-        writeln!(out, "{:>width$} │", "", width = line_num_width).unwrap();
-
-        for line_idx in start_line..=end_line {
-            let line_num = line_idx + 1;
-
-            let line_start_offset = self.context.line_start(line_idx);
-            let (actual_line_num, line_text) = self.context.line_at(line_start_offset);
-            assert_eq!(line_num, actual_line_num);
-
+            let line_start = self.context.line_start(line_idx);
+            let (line_num, line_text) = self.context.line_at(line_start);
             writeln!(out, "{line_num:>line_num_width$} │ {line_text}").unwrap();
 
-            if line_idx == error_line_idx {
-                let error_col = (error.span.start as usize).saturating_sub(line_start_offset);
-                let error_len = (error.span.end - error.span.start).max(1) as usize;
-
-                // Visual column in chars, not bytes.
-                let visual_col = line_text[..error_col.min(line_text.len())].chars().count();
-
-                write!(out, "{:>width$} │ ", "", width = line_num_width).unwrap();
-
-                for _ in 0..visual_col {
-                    out.push(' ');
+            for mark in marks {
+                if self.context.position(mark.span.start).line - 1 != line_idx {
+                    continue;
                 }
-
-                // Visual length in chars, not bytes.
-                let remaining_text = &line_text[error_col.min(line_text.len())..];
-                let visual_len = remaining_text.chars().take(error_len).count().max(1);
-
-                for _ in 0..visual_len {
-                    out.push('^');
+                let (col, len) = visual_span(line_text, line_start, mark.span);
+                write!(out, "{:>line_num_width$} │ {:col$}", "", "").unwrap();
+                for _ in 0..len {
+                    out.push(mark.glyph);
                 }
-
+                if let Some(label) = &mark.label {
+                    write!(out, " {label}").unwrap();
+                }
                 writeln!(out).unwrap();
             }
         }
     }
 
-    fn format_notes(&self, error: &ParseError, line_num_width: usize, out: &mut String) {
+    fn format_notes(error: &ParseError, line_num_width: usize, out: &mut String) {
         let indent = " ".repeat(line_num_width + 1);
 
         match &error.kind {
             ErrorKind::UnexpectedToken { expected, found } => {
                 if let [single] = expected.as_slice()
-                    && let Some((note, help)) = unexpected_token_hint(single)
+                    && let Some((note, help)) = unexpected_token_hint(single, found)
                 {
                     writeln!(out, "{indent}= note: {note}").unwrap();
                     writeln!(out, "{indent}= help: {help}").unwrap();
-                } else if !expected.is_empty() {
-                    let expected_str = if expected.len() == 1 {
-                        expected[0].clone()
-                    } else {
-                        format!("one of {}", expected.join(", "))
-                    };
-                    writeln!(
-                        out,
-                        "{indent}= help: expected {expected_str}, but found {found}"
-                    )
-                    .unwrap();
                 }
+                // No fallback: header already states "expected X, found Y".
             }
             ErrorKind::InvalidSyntax {
                 hint: Some(hint), ..
             } => {
                 writeln!(out, "{indent}= help: {hint}").unwrap();
             }
-            ErrorKind::UnclosedDelimiter {
-                delimiter,
-                opening_span,
-            } => {
-                let open_pos = self.context.position(opening_span.start);
-                writeln!(
-                    out,
-                    "{}= note: '{}' opened at line {}:{}",
-                    indent, delimiter, open_pos.line, open_pos.column
-                )
-                .unwrap();
-                writeln!(
-                    out,
-                    "{}= help: add closing '{}' to match the opening delimiter",
-                    indent,
-                    Self::closing_delimiter(*delimiter)
-                )
-                .unwrap();
+            ErrorKind::UnclosedDelimiter { delimiter, .. } => {
+                let (_, close_tok) = Self::delimiter_pair(*delimiter);
+                writeln!(out, "{indent}= help: add closing {close_tok}").unwrap();
             }
             ErrorKind::ChainedComparison { .. } => {
                 writeln!(
@@ -165,34 +179,43 @@ impl<'a> ErrorFormatter<'a> {
             }
             _ => {}
         }
-
-        for label in &error.labels {
-            let pos = self.context.position(label.span.start);
-            let prefix = match label.style {
-                LabelStyle::Primary => "error",
-                LabelStyle::Secondary => "note",
-                LabelStyle::Note => "help",
-            };
-            writeln!(
-                out,
-                "{}= {}: {} at line {}:{}",
-                indent, prefix, label.message, pos.line, pos.column
-            )
-            .unwrap();
-        }
     }
 }
 
+/// Character column and width of `span` within `line_text` (bytes -> chars).
+fn visual_span(line_text: &str, line_start: usize, span: Span) -> (usize, usize) {
+    let byte_col = (span.start as usize).saturating_sub(line_start);
+    let byte_len = (span.end - span.start).max(1) as usize;
+
+    let clamped_col = byte_col.min(line_text.len());
+    let col = line_text[..clamped_col].chars().count();
+    let len = line_text[clamped_col..]
+        .chars()
+        .take(byte_len)
+        .count()
+        .max(1);
+    (col, len)
+}
+
 /// Canned `(note, help)` text for the common single-expected-token errors.
-fn unexpected_token_hint(expected: &str) -> Option<(&'static str, &'static str)> {
+///
+/// Keyed on the *expected* token; `found` lets us special-case a few
+/// confusable pairs without guessing about parser context we don't have here.
+fn unexpected_token_hint(expected: &str, found: &str) -> Option<(&'static str, &'static str)> {
     Some(match expected {
         "';'" => (
             "missing semicolon after definition",
             "add a semicolon at the end of the previous line",
         ),
-        "'}'" => (
-            "string interpolations must be closed with '}'",
-            "add '}' to close the interpolation",
+        // `'}'` closes both attrsets and interpolations; only hint when the
+        // found token disambiguates.
+        "'}'" if found == "'in'" => (
+            "'in' is only valid inside 'let ... in ...' expressions",
+            "did you mean to start with 'let' instead of '{'?",
+        ),
+        "'&&'" => (
+            "single '&' is not a valid operator in Nix",
+            "did you mean '&&' (logical and)?",
         ),
         "'then'" => (
             "if expressions require: if <condition> then <expr> else <expr>",
@@ -206,17 +229,61 @@ fn unexpected_token_hint(expected: &str) -> Option<(&'static str, &'static str)>
             "'in' is required to complete the let expression",
             "add 'in' followed by the expression body",
         ),
+        "'='" => (
+            "attribute paths must be followed by '= <value>;'",
+            "add '= ...' to assign a value",
+        ),
         _ => return None,
     })
 }
 
 impl ErrorFormatter<'_> {
-    const fn closing_delimiter(opening: char) -> char {
+    /// The lexer encodes the `''` opener as a single `'`; expand it back so we
+    /// don't render `'''`.
+    const fn delimiter_pair(opening: char) -> (&'static str, &'static str) {
         match opening {
-            '{' => '}',
-            '[' => ']',
-            '(' => ')',
-            _ => opening,
+            '{' => ("'{'", "'}'"),
+            '[' => ("'['", "']'"),
+            '(' => ("'('", "')'"),
+            '\'' => ("''", "''"),
+            '"' => ("'\"'", "'\"'"),
+            _ => ("delimiter", "delimiter"),
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::parse;
+
+    fn render(src: &str) -> String {
+        let err = parse(src).unwrap_err();
+        let ctx = ErrorContext::new(src, Some("t.nix"));
+        ErrorFormatter::new(&ctx).format(&err)
+    }
+
+    #[test]
+    fn unclosed_delimiter_shows_opener_in_snippet() {
+        let out = render("(1 + 2");
+        assert!(out.contains("t.nix:1:7"), "1-based column: {out}");
+        assert!(
+            out.contains("- unclosed delimiter opened here"),
+            "secondary mark: {out}"
+        );
+    }
+
+    #[test]
+    fn unclosed_opener_on_other_line_is_rendered() {
+        let out = render("{\n  x = 1;\n");
+        assert!(out.contains("1 │ {"), "opener line shown: {out}");
+        assert!(out.contains("opened here"), "{out}");
+    }
+
+    #[test]
+    fn indented_string_delimiter_rendered_as_double_quote() {
+        let out = render("''\nhello\n");
+        assert!(out.contains("unclosed indented string"), "{out}");
+        assert!(!out.contains("'''"), "must not render triple quote: {out}");
     }
 }

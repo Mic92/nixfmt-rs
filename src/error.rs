@@ -96,9 +96,12 @@ impl ParseError {
                     format!("expected one of {}, found {}", expected.join(", "), found)
                 }
             }
-            ErrorKind::UnclosedDelimiter { delimiter, .. } => {
-                format!("unclosed delimiter '{delimiter}'")
-            }
+            ErrorKind::UnclosedDelimiter { delimiter, .. } => match delimiter {
+                // `'` encodes the `''` opener.
+                '\'' => "unclosed indented string (missing closing '')".to_string(),
+                '"' => "unclosed string literal (missing closing '\"')".to_string(),
+                _ => format!("unclosed delimiter '{delimiter}'"),
+            },
             ErrorKind::MissingToken { token, after } => {
                 format!("missing {token} after {after}")
             }

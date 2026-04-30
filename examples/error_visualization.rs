@@ -141,7 +141,7 @@ in x + y",
         },
         ErrorExample {
             name: "unclosed_interpolation_in_binding",
-            description: "Unclosed string with interpolation in let binding (wrong position bug)",
+            description: "Unclosed string with interpolation in let binding",
             code: r#"let
   name = "World";
   greeting = "Hello ${name";
@@ -161,6 +161,66 @@ in greeting"#,
   add = x: y: x + y;
   result = add(1, 2);
 in result",
+        },
+        ErrorExample {
+            name: "missing_else",
+            description: "Missing 'else' branch in if expression",
+            code: r"if cond then 1",
+        },
+        ErrorExample {
+            name: "let_without_in",
+            description: "let without matching 'in'",
+            code: r"let x = 1; y = 2;",
+        },
+        ErrorExample {
+            name: "single_pipe",
+            description: "Single '|' is not a valid operator",
+            code: r"a | b",
+        },
+        ErrorExample {
+            name: "stray_dollar",
+            description: "'$' outside string interpolation",
+            code: r"let x = $foo; in x",
+        },
+        ErrorExample {
+            name: "with_missing_semicolon",
+            description: "Missing ';' after 'with <expr>'",
+            code: r"with pkgs let x = 1; in x",
+        },
+        ErrorExample {
+            name: "inherit_missing_semicolon",
+            description: "Missing ';' after inherit",
+            code: r"{
+  inherit foo bar
+  baz = 1;
+}",
+        },
+        ErrorExample {
+            name: "rec_without_set",
+            description: "'rec' not followed by '{'",
+            code: r"rec [ 1 2 3 ]",
+        },
+        ErrorExample {
+            name: "assert_missing_semicolon",
+            description: "Missing ';' after assert condition",
+            code: r"assert x == 1 x",
+        },
+        ErrorExample {
+            name: "double_dot_attr",
+            description: "Empty selector segment (a..b)",
+            code: r"{ a..b = 1; }",
+        },
+        ErrorExample {
+            name: "extra_closing_brace",
+            description: "Extra closing brace after a complete expression",
+            code: r"{ x = 1; } }",
+        },
+        ErrorExample {
+            name: "colon_instead_of_equals",
+            description: "Using ':' instead of '=' in attribute set (JSON habit)",
+            code: r#"{
+  name: "hello";
+}"#,
         },
     ];
 
@@ -430,20 +490,14 @@ fn print_future_error(example: &ErrorExample) {
             );
         }
         "unclosed_interpolation_in_binding" => {
-            println!("│ Error[E002]: Unclosed string literal with interpolation");
-            println!("│   ┌─ <input>:3:13");
+            println!("│ Error[E005]: Unclosed interpolation");
+            println!("│   ┌─ <input>:3:27");
             println!("│   │");
-            println!("│ 1 │ let");
-            println!("│ 2 │   name = \\\"World\\\";");
-            println!("│ 3 │   greeting = \\\"Hello ${{name\\\";");
-            println!(
-                "│   │              ^ string starts here (currently WRONG: reports column 26)"
-            );
-            println!("│   │                     ^^^^^^^ interpolation starts here");
-            println!("│ 4 │ in greeting");
+            println!("│ 3 │   greeting = \"Hello ${{name\";");
+            println!("│   │                     ^^     ^ expected '}}', found '\"'");
+            println!("│   │                     interpolation opened here");
             println!("│   │");
-            println!("│   = note: string was never closed (missing closing quote)");
-            println!("│   = help: add }} to close interpolation and \\\" to close string");
+            println!("│   = help: add '}}' before the closing quote");
         }
         "attribute_path_no_value" => {
             println!("│ Error[E001]: Expected '=' after attribute path");

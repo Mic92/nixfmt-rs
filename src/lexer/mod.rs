@@ -257,26 +257,23 @@ impl Lexer {
             }
             '>' => Ok(self.try_two_char('=', Token::TGreaterEqual, Token::TGreater)),
             '&' => {
-                self.advance();
-                if self.peek() == Some('&') {
-                    self.advance();
+                if self.at("&&") {
+                    self.advance_by(2);
                     Ok(Token::TAnd)
                 } else {
+                    // Don't advance: keep the error span on the '&' itself.
                     self.err_unexpected(&["'&&'"], "'&'")
                 }
             }
             '|' => {
-                self.advance();
-                match self.peek() {
-                    Some('|') => {
-                        self.advance();
-                        Ok(Token::TOr)
-                    }
-                    Some('>') => {
-                        self.advance();
-                        Ok(Token::TPipeForward)
-                    }
-                    _ => self.err_unexpected(&["'||'", "'|>'"], "'|'"),
+                if self.at("||") {
+                    self.advance_by(2);
+                    Ok(Token::TOr)
+                } else if self.at("|>") {
+                    self.advance_by(2);
+                    Ok(Token::TPipeForward)
+                } else {
+                    self.err_unexpected(&["'||'", "'|>'"], "'|'")
                 }
             }
             '"' => Ok(self.single(Token::TDoubleQuote)),
