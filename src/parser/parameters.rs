@@ -11,6 +11,33 @@ use crate::types::*;
 
 use super::Parser;
 
+/// Scan a parameter attribute list for the first identifier formal whose name
+/// satisfies `pred`.
+fn find_formal<'a>(
+    attrs: &'a [ParamAttr],
+    mut pred: impl FnMut(&'a str) -> bool,
+) -> Option<(Span, &'a str)> {
+    for attr in attrs {
+        if let ParamAttr::ParamAttr(name_leaf, _, _) = attr {
+            if let Token::Identifier(name) = &name_leaf.value {
+                if pred(name.as_str()) {
+                    return Some((name_leaf.span, name.as_str()));
+                }
+            }
+        }
+    }
+    None
+}
+
+/// Build the "duplicate formal function argument" error for `name` at `span`.
+fn duplicate_formal_error(span: Span, name: &str) -> Box<ParseError> {
+    ParseError::invalid(
+        span,
+        format!("duplicate formal function argument '{}'", name),
+        None,
+    )
+}
+
 impl Parser {
     /// Parse a full parameter (including context parameters)
     pub(super) fn parse_full_parameter(&mut self) -> Result<Parameter> {
@@ -133,44 +160,20 @@ impl Parser {
     /// Validates that no parameter name appears more than once in the attrs list
     pub(super) fn check_duplicate_formals(&self, attrs: &[ParamAttr]) -> Result<()> {
         use std::collections::HashSet;
-
         let mut seen: HashSet<&str> = HashSet::new();
-
-        for attr in attrs {
-            if let ParamAttr::ParamAttr(name_leaf, _, _) = attr {
-                if let Token::Identifier(name) = &name_leaf.value {
-                    if !seen.insert(name.as_str()) {
-                        return Err(ParseError::invalid(
-                            name_leaf.span,
-                            format!("duplicate formal function argument '{}'", name),
-                            None,
-                        ));
-                    }
-                }
-            }
+        match find_formal(attrs, |name| !seen.insert(name)) {
+            Some((span, name)) => Err(duplicate_formal_error(span, name)),
+            None => Ok(()),
         }
-
-        Ok(())
     }
 
     /// Check if pattern name shadows a formal parameter
     /// For args@{x, y}: the pattern name 'args' must not appear in the formals
     fn check_pattern_shadows_formal(&self, pattern_name: &str, attrs: &[ParamAttr]) -> Result<()> {
-        for attr in attrs {
-            if let ParamAttr::ParamAttr(name_leaf, _, _) = attr {
-                if let Token::Identifier(name) = &name_leaf.value {
-                    if name == pattern_name {
-                        return Err(ParseError::invalid(
-                            name_leaf.span,
-                            format!("duplicate formal function argument '{}'", name),
-                            None,
-                        ));
-                    }
-                }
-            }
+        match find_formal(attrs, |name| name == pattern_name) {
+            Some((span, name)) => Err(duplicate_formal_error(span, name)),
+            None => Ok(()),
         }
-
-        Ok(())
     }
 
     /// Validate context parameter: check that pattern name doesn't shadow a formal
