@@ -49,6 +49,46 @@ The test suite is layered (unit → regression → vendored fixtures →
 properties); see [`tests/README.md`](tests/README.md) for where to add
 new cases.
 
+## Error messages
+
+Parse errors come with source snippets, related spans and fix-it hints:
+
+```
+Error[E001]: expected ';', found '='
+   ┌─ config.nix:2:27
+   │
+ 1 │ {
+ 2 │   services.nginx.enable = true
+   │                           ^^^^
+ 3 │   networking.firewall.enable = false;
+   = note: missing semicolon after definition
+   = help: add a semicolon at the end of the previous line
+```
+
+```
+Error[E002]: unclosed delimiter '{'
+   ┌─ config.nix:5:1
+   │
+ 3 │   bar = {
+   │         - unclosed delimiter opened here
+ 4 │     baz = 2;
+ 5 │ }
+   │ ^
+   = help: add closing '}'
+```
+
+```
+Error[E005]: commas are not used to separate list elements in Nix
+   ┌─ config.nix:1:4
+   │
+ 1 │ [ 1, 2, 3 ]
+   │    ^
+   = help: use spaces to separate list elements: [1 2 3]
+```
+
+Run `cargo run --example error_visualization` to see the full catalogue
+of diagnostics on intentionally broken inputs.
+
 ## Benchmarks
 
 `--check` over a full nixpkgs checkout (42 954 `.nix` files), Apple M3
