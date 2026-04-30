@@ -43,31 +43,36 @@ impl Parser {
 
     /// Parse with expression: with expr ; expr
     pub(super) fn parse_with(&mut self) -> Result<Expression> {
-        let with_tok = self.expect_token(Token::KWith, "'with'")?;
-        let expr1 = self.parse_expression()?;
-        let semi = self.expect_semicolon_after("'with' expression")?;
-        let expr2 = self.parse_expression()?;
-
-        Ok(Expression::With(
-            with_tok,
-            Box::new(expr1),
-            semi,
-            Box::new(expr2),
-        ))
+        self.parse_keyword_semi_expr(
+            Token::KWith,
+            "'with'",
+            "'with' expression",
+            Expression::With,
+        )
     }
 
     /// Parse assert expression: assert cond ; expr
     pub(super) fn parse_assert(&mut self) -> Result<Expression> {
-        let assert_tok = self.expect_token(Token::KAssert, "'assert'")?;
-        let cond = self.parse_expression()?;
-        let semi = self.expect_semicolon_after("'assert' condition")?;
-        let body = self.parse_expression()?;
+        self.parse_keyword_semi_expr(
+            Token::KAssert,
+            "'assert'",
+            "'assert' condition",
+            Expression::Assert,
+        )
+    }
 
-        Ok(Expression::Assert(
-            assert_tok,
-            Box::new(cond),
-            semi,
-            Box::new(body),
-        ))
+    /// Shared shape for `with` / `assert`: `<kw> expr ; expr`.
+    fn parse_keyword_semi_expr(
+        &mut self,
+        keyword: Token,
+        kw_label: &'static str,
+        semi_after: &'static str,
+        build: fn(Leaf, Box<Expression>, Leaf, Box<Expression>) -> Expression,
+    ) -> Result<Expression> {
+        let kw = self.expect_token(keyword, kw_label)?;
+        let head = self.parse_expression()?;
+        let semi = self.expect_semicolon_after(semi_after)?;
+        let body = self.parse_expression()?;
+        Ok(build(kw, Box::new(head), semi, Box::new(body)))
     }
 }
