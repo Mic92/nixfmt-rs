@@ -189,10 +189,9 @@ impl Lexer {
     }
 
     /// Parse a whole file (expression + final trivia)
-    pub(crate) fn start_parse(&mut self) -> crate::error::Result<()> {
+    pub(crate) fn start_parse(&mut self) {
         self.parse_trivia();
         self.trivia_buffer = trivia::convert_leading(&self.trivia_scratch);
-        Ok(())
     }
 
     /// Parse trivia and classify it into `(trailing, next_leading)` so the
@@ -225,22 +224,22 @@ impl Lexer {
         // Nix identifiers are ASCII-only: [a-zA-Z_][a-zA-Z0-9_'-]*. Must be
         // checked before the punctuation match below.
         if ch.is_ascii_alphabetic() || ch == '_' {
-            return self.parse_ident_or_keyword();
+            return Ok(self.parse_ident_or_keyword());
         }
 
         match ch {
-            '{' => self.single(Token::TBraceOpen),
-            '}' => self.single(Token::TBraceClose),
-            '[' => self.single(Token::TBrackOpen),
-            ']' => self.single(Token::TBrackClose),
-            '(' => self.single(Token::TParenOpen),
-            ')' => self.single(Token::TParenClose),
+            '{' => Ok(self.single(Token::TBraceOpen)),
+            '}' => Ok(self.single(Token::TBraceClose)),
+            '[' => Ok(self.single(Token::TBrackOpen)),
+            ']' => Ok(self.single(Token::TBrackClose)),
+            '(' => Ok(self.single(Token::TParenOpen)),
+            ')' => Ok(self.single(Token::TParenClose)),
             '=' => Ok(self.try_two_char('=', Token::TEqual, Token::TAssign)),
-            '@' => self.single(Token::TAt),
-            ':' => self.single(Token::TColon),
-            ',' => self.single(Token::TComma),
-            ';' => self.single(Token::TSemicolon),
-            '?' => self.single(Token::TQuestion),
+            '@' => Ok(self.single(Token::TAt)),
+            ':' => Ok(self.single(Token::TColon)),
+            ',' => Ok(self.single(Token::TComma)),
+            ';' => Ok(self.single(Token::TSemicolon)),
+            '?' => Ok(self.single(Token::TQuestion)),
             '.' => {
                 if self.at("...") {
                     self.advance_by(3);
@@ -262,7 +261,7 @@ impl Lexer {
             }
             '+' => Ok(self.try_two_char('+', Token::TConcat, Token::TPlus)),
             '-' => Ok(self.try_two_char('>', Token::TImplies, Token::TMinus)),
-            '*' => self.single(Token::TMul),
+            '*' => Ok(self.single(Token::TMul)),
             '/' => Ok(self.try_two_char('/', Token::TUpdate, Token::TDiv)),
             '!' => Ok(self.try_two_char('=', Token::TUnequal, Token::TNot)),
             '<' => {
@@ -307,7 +306,7 @@ impl Lexer {
                     _ => self.err_unexpected(&["'||'", "'|>'"], "'|'"),
                 }
             }
-            '"' => self.single(Token::TDoubleQuote),
+            '"' => Ok(self.single(Token::TDoubleQuote)),
             '\'' => {
                 if self.at("''") {
                     self.advance_by(2);
@@ -324,8 +323,8 @@ impl Lexer {
                     self.err_unexpected(&["'${'"], "'$'")
                 }
             }
-            '0'..='9' => self.parse_number(),
-            '~' => self.single(Token::TTilde),
+            '0'..='9' => Ok(self.parse_number()),
+            '~' => Ok(self.single(Token::TTilde)),
             _ => {
                 // `ch` was derived from a single byte; for the error message
                 // decode the actual codepoint so multi-byte input is reported
@@ -337,7 +336,7 @@ impl Lexer {
     }
 
     /// Parse identifier or keyword
-    fn parse_ident_or_keyword(&mut self) -> crate::error::Result<Token> {
+    fn parse_ident_or_keyword(&mut self) -> Token {
         // Nix identifiers are ASCII-only: [a-zA-Z_][a-zA-Z0-9_'-]*.
         let len = self
             .take_ascii_while(|b| b.is_ascii_alphanumeric() || matches!(b, b'_' | b'-' | b'\''))
@@ -348,7 +347,8 @@ impl Lexer {
 
         // First-byte + length dispatch keeps the common "not a keyword" path
         // to a single comparison instead of up to nine `memcmp`s.
-        let token = match (len, bytes[start_byte]) {
+
+        match (len, bytes[start_byte]) {
             (6, b'a') if text == "assert" => Token::KAssert,
             (4, b'e') if text == "else" => Token::KElse,
             (2, b'i') if text == "if" => Token::KIf,
@@ -359,9 +359,7 @@ impl Lexer {
             (4, b't') if text == "then" => Token::KThen,
             (4, b'w') if text == "with" => Token::KWith,
             _ => Token::Identifier(text.into()),
-        };
-
-        Ok(token)
+        }
     }
 
     /// Parse angle bracket path: <nixpkgs>
@@ -510,12 +508,12 @@ impl Lexer {
         r
     }
 
-    /// Advance one char and return `Ok(tok)`; for trivial single-char arms in
+    /// Advance one char and return `tok`; for trivial single-char arms in
     /// `next_token`.
     #[inline]
-    fn single(&mut self, tok: Token) -> crate::error::Result<Token> {
+    fn single(&mut self, tok: Token) -> Token {
         self.advance();
-        Ok(tok)
+        tok
     }
 
     /// Consume and return current character

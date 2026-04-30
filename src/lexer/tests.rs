@@ -142,7 +142,7 @@ fn test_tokenize_simple_expression() {
 #[test]
 fn test_lexeme_with_comments() {
     let mut lexer = Lexer::new("# leading comment\n{ a = 1; # trailing\n}");
-    lexer.start_parse().unwrap();
+    lexer.start_parse();
 
     // First token: { with leading comment
     let brace = lexer.lexeme().unwrap();
@@ -178,7 +178,7 @@ fn test_lexeme_with_comments() {
 #[test]
 fn test_lexeme_preserves_trivia() {
     let mut lexer = Lexer::new("let\n\n  # comment\n  a = 1; in a");
-    lexer.start_parse().unwrap();
+    lexer.start_parse();
 
     let let_tok = lexer.lexeme().unwrap();
     assert!(matches!(let_tok.value, Token::KLet));
