@@ -218,12 +218,6 @@ impl Parser {
         Ok(Term::SimpleString(ann))
     }
 
-    /// Parse environment path term (e.g., <nixpkgs>)
-    pub(super) fn parse_env_path_term(&mut self) -> Result<Term> {
-        let token_ann = self.take_and_advance()?;
-        Ok(Term::Token(token_ann))
-    }
-
     /// Check if there's path content at the given offset
     /// Used to validate that what follows is a valid path component
     fn is_path_content_at(&self, offset: usize) -> bool {

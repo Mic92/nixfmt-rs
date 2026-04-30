@@ -602,10 +602,9 @@ impl Parser {
         }
 
         let base_term = match &self.current.value {
-            Token::Identifier(_) => self.parse_identifier_term(),
-            Token::Integer(_) => self.parse_integer_term(),
-            Token::Float(_) => self.parse_float_term(),
-            Token::EnvPath(_) => self.parse_env_path_term(),
+            Token::Identifier(_) | Token::Integer(_) | Token::Float(_) | Token::EnvPath(_) => {
+                self.parse_token_term()
+            }
             Token::TBraceOpen | Token::KRec | Token::KLet => self.parse_set(),
             Token::TBrackOpen => self.parse_list(),
             Token::TParenOpen => self.parse_parenthesized(),
@@ -686,20 +685,8 @@ impl Parser {
         }
     }
 
-    /// Parse identifier as a term (Token)
-    fn parse_identifier_term(&mut self) -> Result<Term> {
-        let token_ann = self.take_and_advance()?;
-        Ok(Term::Token(token_ann))
-    }
-
-    /// Parse integer as a term (Token)
-    fn parse_integer_term(&mut self) -> Result<Term> {
-        let token_ann = self.take_and_advance()?;
-        Ok(Term::Token(token_ann))
-    }
-
-    /// Parse float as a term (Token)
-    fn parse_float_term(&mut self) -> Result<Term> {
+    /// Parse a single-token term (identifier, integer, float, env path).
+    fn parse_token_term(&mut self) -> Result<Term> {
         let token_ann = self.take_and_advance()?;
         Ok(Term::Token(token_ann))
     }
