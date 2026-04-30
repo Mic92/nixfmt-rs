@@ -78,10 +78,10 @@ pub(super) fn is_simple_expression(expr: &Expression) -> bool {
         Expression::Term(term) => is_simple_term(term),
         Expression::Application(f, a) => {
             // No more than two arguments.
-            if let Expression::Application(f2, _) = &**f {
-                if matches!(**f2, Expression::Application(_, _)) {
-                    return false;
-                }
+            if let Expression::Application(f2, _) = &**f
+                && matches!(**f2, Expression::Application(_, _))
+            {
+                return false;
             }
             is_simple_expression(f) && is_simple_expression(a)
         }

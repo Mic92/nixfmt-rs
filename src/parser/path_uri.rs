@@ -123,17 +123,17 @@ impl Parser {
             }
 
             // nixfmt's `pathTraversal` requires content after every `/`.
-            if let Some(StringPart::TextPart(text)) = parts.last() {
-                if text.ends_with('/') {
-                    // Point to the trailing slash, not the start of the path
-                    let current_pos = p.lexer.current_pos().start as usize;
-                    let slash_pos = Span::new(current_pos.saturating_sub(1), current_pos);
-                    return Err(ParseError::invalid(
-                        slash_pos,
-                        "path cannot end with a trailing slash",
-                        Some("remove the trailing '/' or add more path components".to_string()),
-                    ));
-                }
+            if let Some(StringPart::TextPart(text)) = parts.last()
+                && text.ends_with('/')
+            {
+                // Point to the trailing slash, not the start of the path
+                let current_pos = p.lexer.current_pos().start as usize;
+                let slash_pos = Span::new(current_pos.saturating_sub(1), current_pos);
+                return Err(ParseError::invalid(
+                    slash_pos,
+                    "path cannot end with a trailing slash",
+                    Some("remove the trailing '/' or add more path components".to_string()),
+                ));
             }
 
             Ok(parts)
@@ -151,11 +151,8 @@ impl Parser {
             if ch.is_alphanumeric() || matches!(ch, '.' | '_' | '-' | '+' | '~') {
                 text.push(ch);
                 self.lexer.advance();
-            } else if ch == '$' && self.lexer.at("${") {
-                break;
-            } else if ch == '/' {
-                break;
             } else {
+                // `/`, `${`, or any other char terminates this path segment.
                 break;
             }
         }

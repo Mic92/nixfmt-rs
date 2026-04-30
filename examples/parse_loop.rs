@@ -6,8 +6,7 @@ fn main() {
     let path = args.next().expect("usage: parse_loop <file> [iters]");
     let iters: usize = args
         .next()
-        .map(|s| s.parse().expect("iters must be a number"))
-        .unwrap_or(100);
+        .map_or(100, |s| s.parse().expect("iters must be a number"));
     let src = fs::read_to_string(&path).expect("read");
     let t0 = std::time::Instant::now();
     for _ in 0..iters {

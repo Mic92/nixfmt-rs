@@ -13,17 +13,16 @@ impl Pretty for StringPart {
                 let trailing_empty = whole.trailing_trivia.is_empty();
                 let value = &whole.value;
 
-                if trailing_empty {
-                    if let Expression::Term(term) = value {
-                        if is_absorbable_term(term) {
-                            push_group(doc, |g| {
-                                push_text(g, "${");
-                                term.pretty(g);
-                                push_text(g, "}");
-                            });
-                            return;
-                        }
-                    }
+                if trailing_empty
+                    && let Expression::Term(term) = value
+                    && is_absorbable_term(term)
+                {
+                    push_group(doc, |g| {
+                        push_text(g, "${");
+                        term.pretty(g);
+                        push_text(g, "}");
+                    });
+                    return;
                 }
 
                 // Simple interpolations (mostly identifiers/selections): force

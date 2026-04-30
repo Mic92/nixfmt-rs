@@ -1,7 +1,7 @@
 //! Example demonstrating error visualization
 //!
 //! This example shows what error messages look like for common parsing errors.
-//! Run with: cargo run --example error_visualization
+//! Run with: cargo run --example `error_visualization`
 
 use nixfmt_rs::error::context::ErrorContext;
 use nixfmt_rs::error::format::ErrorFormatter;
@@ -19,38 +19,38 @@ fn main() {
         ErrorExample {
             name: "missing_semicolon",
             description: "Missing semicolon after attribute definition",
-            code: r#"{
+            code: r"{
   services.nginx.enable = true
   networking.firewall.enable = false;
-}"#,
+}",
         },
         ErrorExample {
             name: "missing_semicolon_in_let",
             description: "Missing semicolon in let binding",
-            code: r#"let
+            code: r"let
   x = 1
   y = 2;
-in x + y"#,
+in x + y",
         },
         ErrorExample {
             name: "missing_semicolon_nested",
             description: "Missing semicolon in nested attribute set",
-            code: r#"{
+            code: r"{
   foo = {
     bar = 1
     baz = 2;
   };
-}"#,
+}",
         },
         ErrorExample {
             name: "unclosed_brace",
             description: "Unclosed brace in attribute set",
-            code: r#"{
+            code: r"{
   foo = 1;
   bar = {
     baz = 2;
   # missing closing brace
-}"#,
+}",
         },
         ErrorExample {
             name: "unclosed_string",
@@ -63,65 +63,65 @@ in x + y"#,
         ErrorExample {
             name: "chained_comparison",
             description: "Chained comparison operators (not allowed)",
-            code: r#"1 < 2 < 3"#,
+            code: r"1 < 2 < 3",
         },
         ErrorExample {
             name: "unexpected_token",
             description: "Unexpected token (using 'in' without 'let')",
-            code: r#"{
+            code: r"{
   foo = 1;
   in bar
-}"#,
+}",
         },
         ErrorExample {
             name: "missing_then",
             description: "Missing 'then' in if expression",
-            code: r#"if true else false"#,
+            code: r"if true else false",
         },
         ErrorExample {
             name: "unclosed_parenthesis",
             description: "Unclosed parenthesis",
-            code: r#"(1 + 2"#,
+            code: r"(1 + 2",
         },
         ErrorExample {
             name: "unclosed_bracket",
             description: "Unclosed list bracket",
-            code: r#"[1 2 3"#,
+            code: r"[1 2 3",
         },
         ErrorExample {
             name: "mismatched_braces",
             description: "Mismatched delimiters (list with wrong closing)",
-            code: r#"{
+            code: r"{
   foo = [1 2 3};
-}"#,
+}",
         },
         ErrorExample {
             name: "mismatched_parenthesis",
             description: "Mismatched delimiters (parenthesis with bracket)",
-            code: r#"(1 + 2]"#,
+            code: r"(1 + 2]",
         },
         ErrorExample {
             name: "comma_in_list",
             description: "Commas not allowed in Nix lists",
-            code: r#"[1, 2, 3]"#,
+            code: r"[1, 2, 3]",
         },
         ErrorExample {
             name: "trailing_slash_in_path",
             description: "Path cannot end with trailing slash",
-            code: r#"./path/to/directory/"#,
+            code: r"./path/to/directory/",
         },
         ErrorExample {
             name: "unclosed_indented_string",
             description: "Unclosed indented string",
-            code: r#"''
+            code: r"''
   This is an indented string
   that is never closed
-"#,
+",
         },
         ErrorExample {
             name: "invalid_operator",
             description: "Invalid operator usage",
-            code: r#"let x = 1 & 2; in x"#,
+            code: r"let x = 1 & 2; in x",
         },
         ErrorExample {
             name: "empty_interpolation",
@@ -156,10 +156,10 @@ in greeting"#,
         ErrorExample {
             name: "function_call_with_commas",
             description: "Function call with commas (common mistake from other languages)",
-            code: r#"let
+            code: r"let
   add = x: y: x + y;
   result = add(1, 2);
-in result"#,
+in result",
         },
     ];
 
@@ -200,7 +200,7 @@ in result"#,
                 let formatted = formatter.format(&error);
 
                 for line in formatted.lines() {
-                    println!("│ {}", line);
+                    println!("│ {line}");
                 }
                 println!("{}", "└".to_owned() + &"─".repeat(78));
             }

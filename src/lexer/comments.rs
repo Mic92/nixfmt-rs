@@ -64,12 +64,12 @@ impl Lexer {
         self.try_with_cursor(|this| {
             let pt = this.parse_block_comment();
 
-            if let ParseTrivium::BlockComment(false, lines) = &pt {
-                if lines.len() == 1 {
-                    let content = lines[0].trim();
-                    if is_valid_language_identifier(content) && this.is_next_string_delimiter() {
-                        return Some(ParseTrivium::LanguageAnnotation(content.to_string()));
-                    }
+            if let ParseTrivium::BlockComment(false, lines) = &pt
+                && lines.len() == 1
+            {
+                let content = lines[0].trim();
+                if is_valid_language_identifier(content) && this.is_next_string_delimiter() {
+                    return Some(ParseTrivium::LanguageAnnotation(content.to_string()));
                 }
             }
 

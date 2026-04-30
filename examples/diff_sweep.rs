@@ -10,10 +10,10 @@
 //! Env knobs (all optional):
 //!   NIXPKGS      root to scan when DIR is omitted (default: ~/git/nixpkgs)
 //!   LIMIT        cap file count (0 = all, default: 2000)
-//!   MAX_BYTES    skip files larger than N bytes (0 = no cap)
+//!   `MAX_BYTES`    skip files larger than N bytes (0 = no cap)
 //!   JOBS         rayon threads (default: num CPUs)
 //!   REF          reference binary (default: nixfmt)
-//!   REF_TIMEOUT  per-file timeout for the reference, seconds (default: 8)
+//!   `REF_TIMEOUT`  per-file timeout for the reference, seconds (default: 8)
 //!   OUT          output dir (default: ./sweep-out)
 
 use std::env;
@@ -159,10 +159,10 @@ fn main() {
 
     let mut files: Vec<PathBuf> = WalkDir::new(&root)
         .into_iter()
-        .filter_map(|e| e.ok())
+        .filter_map(Result::ok)
         .filter(|e| e.file_type().is_file())
         .filter(|e| e.path().extension().is_some_and(|x| x == "nix"))
-        .filter(|e| max_bytes == 0 || e.metadata().map(|m| m.len() <= max_bytes).unwrap_or(true))
+        .filter(|e| max_bytes == 0 || e.metadata().is_ok_and(|m| m.len() <= max_bytes))
         .map(|e| e.into_path())
         .collect();
     files.sort();
@@ -181,7 +181,7 @@ fn main() {
         .par_iter()
         .filter_map(|f| {
             let n = done.fetch_add(1, Ordering::Relaxed) + 1;
-            if n % 500 == 0 {
+            if n.is_multiple_of(500) {
                 eprintln!("  {n}/{total}");
             }
             let source = fs::read_to_string(f).ok()?;
@@ -213,5 +213,5 @@ fn main() {
     );
     eprintln!("  DIFF    {diff}");
     eprintln!("  REJECT  {reject}");
-    std::process::exit(if mismatches.is_empty() { 0 } else { 1 });
+    std::process::exit(i32::from(!mismatches.is_empty()));
 }

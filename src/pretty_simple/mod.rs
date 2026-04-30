@@ -187,9 +187,9 @@ pub(crate) fn sub_expr<T: PrettySimple, W: Writer>(w: &mut W, arg: &T) {
             w.write_plain(" ");
             arg.format(w);
             if inline {
-                w.write_plain(" ")
+                w.write_plain(" ");
             } else {
-                w.newline()
+                w.newline();
             }
         });
     }

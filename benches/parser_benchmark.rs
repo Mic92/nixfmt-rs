@@ -1,5 +1,6 @@
-use criterion::{Criterion, black_box, criterion_group, criterion_main};
+use criterion::{Criterion, criterion_group, criterion_main};
 use std::fs;
+use std::hint::black_box;
 use std::path::PathBuf;
 use std::process::Command;
 
@@ -38,15 +39,15 @@ fn benchmark_parser(c: &mut Criterion) {
         fs::read_to_string(very_large_file).expect("Failed to read very large file");
 
     c.bench_function("parser_small_file", |b| {
-        b.iter(|| nixfmt_rs::parse(black_box(&small_content)).unwrap())
+        b.iter(|| nixfmt_rs::parse(black_box(&small_content)).unwrap());
     });
 
     c.bench_function("parser_large_file", |b| {
-        b.iter(|| nixfmt_rs::parse(black_box(&large_content)).unwrap())
+        b.iter(|| nixfmt_rs::parse(black_box(&large_content)).unwrap());
     });
 
     c.bench_function("parser_very_large_file", |b| {
-        b.iter(|| nixfmt_rs::parse(black_box(&very_large_content)).unwrap())
+        b.iter(|| nixfmt_rs::parse(black_box(&very_large_content)).unwrap());
     });
 }
 
