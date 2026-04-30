@@ -40,11 +40,6 @@ harness = false
 lto = "thin"
 codegen-units = 1
 
-# Lints apply to all targets (lib, bin, examples, tests, benches).
-# This crate intentionally mirrors the structure of nixfmt's Haskell source
-# (Types.hs / Predoc.hs / Pretty.hs) line-for-line where possible. Many of
-# clippy's stylistic suggestions would diverge from that reference and make
-# cross-checking harder, so they are allowed below.
 [lints.clippy]
 pedantic = { level = "warn", priority = -1 }
 nursery = { level = "warn", priority = -1 }
