@@ -54,7 +54,7 @@ pub(crate) enum ParseTrivium {
 
 /// Cursor-only snapshot of the lexer (no heap state).
 #[derive(Clone, Copy)]
-struct LexerPos {
+pub(super) struct LexerPos {
     byte_pos: usize,
     line: usize,
     column: usize,
@@ -517,7 +517,7 @@ impl Lexer {
 
     /// Snapshot the cursor (position only, no trivia).
     #[inline]
-    fn mark(&self) -> LexerPos {
+    pub(super) fn mark(&self) -> LexerPos {
         LexerPos {
             byte_pos: self.byte_pos,
             line: self.line,
@@ -527,10 +527,26 @@ impl Lexer {
 
     /// Restore the cursor from a snapshot taken by `mark()`.
     #[inline]
-    fn reset(&mut self, mark: LexerPos) {
+    pub(super) fn reset(&mut self, mark: LexerPos) {
         self.byte_pos = mark.byte_pos;
         self.line = mark.line;
         self.column = mark.column;
+    }
+
+    /// Run `f`; on `None`, rewind cursor (byte_pos/line/column) only.
+    /// Does NOT restore `trivia_buffer`/`recent_*` — callers must not mutate
+    /// those inside `f`.
+    #[inline]
+    pub(super) fn try_with_cursor<T>(
+        &mut self,
+        f: impl FnOnce(&mut Self) -> Option<T>,
+    ) -> Option<T> {
+        let mark = self.mark();
+        let r = f(self);
+        if r.is_none() {
+            self.reset(mark);
+        }
+        r
     }
 
     /// Consume and return current character
