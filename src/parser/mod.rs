@@ -118,6 +118,7 @@ impl Parser {
     fn parse_set_parameter_or_literal(&mut self) -> Result<Expression> {
         let saved_state = self.save_state();
         let open_brace = self.take_and_advance()?;
+        let open_span = open_brace.span;
 
         match &self.current.value {
             Token::TBraceClose => {
@@ -148,7 +149,8 @@ impl Parser {
                 if let Some(attrs) = self.try_parse_param_attrs()? {
                     Self::check_duplicate_formals(&attrs)?;
 
-                    let close_brace = self.expect_token(Token::TBraceClose, "'}'")?;
+                    let close_brace =
+                        self.expect_closing_delimiter(open_span, '{', Token::TBraceClose)?;
                     let close_span = close_brace.span;
 
                     match self.finish_abstraction(Parameter::Set(open_brace, attrs, close_brace))? {
@@ -166,7 +168,8 @@ impl Parser {
                     let open_brace = self.take_and_advance()?;
 
                     let bindings = self.parse_binders()?;
-                    let close_brace = self.expect_token(Token::TBraceClose, "'}'")?;
+                    let close_brace =
+                        self.expect_closing_delimiter(open_span, '{', Token::TBraceClose)?;
                     self.finish_set_literal_expr(open_brace, bindings, close_brace)
                 }
             }
@@ -175,7 +178,8 @@ impl Parser {
                 let attrs = self.parse_param_attrs()?;
                 Self::check_duplicate_formals(&attrs)?;
 
-                let close_brace = self.expect_token(Token::TBraceClose, "'}'")?;
+                let close_brace =
+                    self.expect_closing_delimiter(open_span, '{', Token::TBraceClose)?;
                 let close_span = close_brace.span;
 
                 match self.finish_abstraction(Parameter::Set(open_brace, attrs, close_brace))? {
@@ -190,7 +194,8 @@ impl Parser {
             _ => {
                 // Must be set literal with bindings
                 let bindings = self.parse_binders()?;
-                let close_brace = self.expect_token(Token::TBraceClose, "'}'")?;
+                let close_brace =
+                    self.expect_closing_delimiter(open_span, '{', Token::TBraceClose)?;
                 self.finish_set_literal_expr(open_brace, bindings, close_brace)
             }
         }
