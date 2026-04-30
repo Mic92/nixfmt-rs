@@ -185,9 +185,7 @@ pub(crate) fn push_group<F>(doc: &mut Doc, f: F)
 where
     F: FnOnce(&mut Doc),
 {
-    let mut inner = Vec::new();
-    f(&mut inner);
-    doc.push(DocE::Group(GroupAnn::RegularG, inner));
+    push_group_ann(doc, GroupAnn::RegularG, f);
 }
 
 /// Push a group with specific annotation using a closure
@@ -200,16 +198,24 @@ where
     doc.push(DocE::Group(ann, inner));
 }
 
+/// Surround `f`'s output with a balanced `Nest(dn, doff)` / `Nest(-dn, -doff)`
+/// pair. `fixup` later bakes the accumulated deltas into each `Text` so the
+/// renderer's indent stack logic is unchanged.
+pub(crate) fn push_nest_pair<F>(doc: &mut Doc, dn: isize, doff: isize, f: F)
+where
+    F: FnOnce(&mut Doc),
+{
+    doc.push(DocE::Nest(dn, doff));
+    f(doc);
+    doc.push(DocE::Nest(-dn, -doff));
+}
+
 /// Push a nested document (increase indentation) using a closure.
-/// Emits a `Nest` delta pair around the region; `fixup` bakes the accumulated
-/// delta into each `Text` so the renderer's indent stack logic is unchanged.
 pub(crate) fn push_nested<F>(doc: &mut Doc, f: F)
 where
     F: FnOnce(&mut Doc),
 {
-    doc.push(DocE::Nest(1, 0));
-    f(doc);
-    doc.push(DocE::Nest(-1, 0));
+    push_nest_pair(doc, 1, 0, f);
 }
 
 /// Line break or nothing (soft)
@@ -287,10 +293,7 @@ pub(crate) fn push_offset<F>(doc: &mut Doc, level: usize, f: F)
 where
     F: FnOnce(&mut Doc),
 {
-    let level = level as isize;
-    doc.push(DocE::Nest(0, level));
-    f(doc);
-    doc.push(DocE::Nest(0, -level));
+    push_nest_pair(doc, 0, level as isize, f);
 }
 
 // Renderer: Convert IR (Doc) to formatted text
