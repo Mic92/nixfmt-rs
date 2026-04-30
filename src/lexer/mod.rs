@@ -380,25 +380,13 @@ impl Lexer {
 
     /// Parse identifier or keyword
     fn parse_ident_or_keyword(&mut self) -> crate::error::Result<Token> {
-        let start_byte = self.byte_pos;
+        // Nix identifiers are ASCII-only: [a-zA-Z_][a-zA-Z0-9_'-]*.
+        let len = self
+            .take_ascii_while(|b| b.is_ascii_alphanumeric() || matches!(b, b'_' | b'-' | b'\''))
+            .len();
+        let start_byte = self.byte_pos - len;
         let bytes = self.source.as_bytes();
-
-        // Nix identifiers are ASCII-only: [a-zA-Z_][a-zA-Z0-9_'-]*, so every
-        // accepted byte is a full char and cannot be a newline.
-        let mut i = self.byte_pos;
-        while i < bytes.len() {
-            let b = bytes[i];
-            if b.is_ascii_alphanumeric() || matches!(b, b'_' | b'-' | b'\'') {
-                i += 1;
-            } else {
-                break;
-            }
-        }
-        let len = i - start_byte;
-        self.byte_pos = i;
-        self.column += len;
-
-        let text = &self.source[start_byte..i];
+        let text = &self.source[start_byte..self.byte_pos];
 
         // First-byte + length dispatch keeps the common "not a keyword" path
         // to a single comparison instead of up to nine `memcmp`s.
@@ -611,6 +599,22 @@ impl Lexer {
         &self.source[start..end]
     }
 
+    /// Consume the longest run of ASCII bytes satisfying `pred` and return it
+    /// as a `&str` borrow into `self.source`. `pred` must never accept `b'\n'`
+    /// (so `column` can be bumped by byte count without line tracking).
+    #[inline]
+    pub(super) fn take_ascii_while(&mut self, pred: impl Fn(u8) -> bool) -> &str {
+        let bytes = self.source.as_bytes();
+        let start = self.byte_pos;
+        let mut i = start;
+        while i < bytes.len() && pred(bytes[i]) {
+            i += 1;
+        }
+        self.byte_pos = i;
+        self.column += i - start;
+        &self.source[start..i]
+    }
+
     /// Check if we're at end of input
     #[inline(always)]
     fn is_eof(&self) -> bool {
@@ -620,16 +624,7 @@ impl Lexer {
     /// Skip horizontal whitespace (spaces and tabs, but not newlines)
     #[inline]
     fn skip_hspace(&mut self) -> usize {
-        let bytes = self.source.as_bytes();
-        let start = self.byte_pos;
-        let mut i = start;
-        while i < bytes.len() && matches!(bytes[i], b' ' | b'\t') {
-            i += 1;
-        }
-        let n = i - start;
-        self.byte_pos = i;
-        self.column += n;
-        n
+        self.take_ascii_while(|b| matches!(b, b' ' | b'\t')).len()
     }
 
     /// Consume trivia when it is purely horizontal/vertical whitespace.

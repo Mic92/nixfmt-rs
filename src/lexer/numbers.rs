@@ -72,10 +72,6 @@ impl Lexer {
 
     /// Consume consecutive ASCII digits and return as String
     pub(super) fn consume_digits(&mut self) -> String {
-        let mut digits = String::new();
-        while self.peek().is_some_and(|ch| ch.is_ascii_digit()) {
-            digits.push(self.advance().unwrap());
-        }
-        digits
+        self.take_ascii_while(|b| b.is_ascii_digit()).to_owned()
     }
 }
