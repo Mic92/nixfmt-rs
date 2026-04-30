@@ -717,30 +717,38 @@ impl Lexer {
 
     /// Parse consecutive newlines, return count
     fn parse_newlines(&mut self) -> usize {
-        let bytes = self.source.as_bytes();
         let mut count = 0;
-        while self.byte_pos < bytes.len() {
-            match bytes[self.byte_pos] {
-                b'\n' => {
+        while self.eat_one_eol() {
+            count += 1;
+        }
+        count
+    }
+
+    /// Consume a single end-of-line sequence (`\n`, `\r\n`, or bare `\r`).
+    /// A bare `\r` advances `column` but not `line`, matching the historical
+    /// behaviour of `parse_newlines`.
+    #[inline]
+    pub(super) fn eat_one_eol(&mut self) -> bool {
+        let bytes = self.source.as_bytes();
+        match bytes.get(self.byte_pos) {
+            Some(&b'\n') => {
+                self.byte_pos += 1;
+                self.line += 1;
+                self.column = 0;
+                true
+            }
+            Some(&b'\r') => {
+                self.byte_pos += 1;
+                self.column += 1;
+                if bytes.get(self.byte_pos) == Some(&b'\n') {
                     self.byte_pos += 1;
                     self.line += 1;
                     self.column = 0;
-                    count += 1;
                 }
-                b'\r' => {
-                    self.byte_pos += 1;
-                    self.column += 1;
-                    if bytes.get(self.byte_pos) == Some(&b'\n') {
-                        self.byte_pos += 1;
-                        self.line += 1;
-                        self.column = 0;
-                    }
-                    count += 1;
-                }
-                _ => break,
+                true
             }
+            _ => false,
         }
-        count
     }
 
     /// Rewind the last trivia consumed (horizontal spaces, newlines, and comments)

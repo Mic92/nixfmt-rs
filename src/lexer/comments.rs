@@ -86,18 +86,7 @@ impl Lexer {
 
         // Optionally consume exactly one newline; a blank line between the
         // comment and the string disqualifies it as a language annotation.
-        match self.peek() {
-            Some('\n') => {
-                self.advance();
-            }
-            Some('\r') => {
-                self.advance();
-                if self.peek() == Some('\n') {
-                    self.advance();
-                }
-            }
-            _ => {}
-        }
+        self.eat_one_eol();
         let _ = self.skip_hspace();
 
         let result = self.peek() == Some('"') || self.at("''");
