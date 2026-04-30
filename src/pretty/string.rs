@@ -15,14 +15,15 @@ impl Pretty for StringPart {
 
                 if trailing_empty
                     && let Expression::Term(term) = value
-                        && is_absorbable_term(term) {
-                            push_group(doc, |g| {
-                                push_text(g, "${");
-                                term.pretty(g);
-                                push_text(g, "}");
-                            });
-                            return;
-                        }
+                    && is_absorbable_term(term)
+                {
+                    push_group(doc, |g| {
+                        push_text(g, "${");
+                        term.pretty(g);
+                        push_text(g, "}");
+                    });
+                    return;
+                }
 
                 // Simple interpolations (mostly identifiers/selections): force
                 // single line regardless of width.

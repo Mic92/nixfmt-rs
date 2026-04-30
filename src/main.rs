@@ -183,13 +183,13 @@ fn process(o: &Opts, name: &str, source: &str, in_place: bool) -> bool {
 
     if in_place {
         // Skip the write when unchanged to preserve mtimes for build tools.
-        if out != source {
-            if let Err(e) = std::fs::write(name, &out) {
-                if !o.quiet {
-                    eprintln!("{name}: {e}");
-                }
-                return false;
+        if out != source
+            && let Err(e) = std::fs::write(name, &out)
+        {
+            if !o.quiet {
+                eprintln!("{name}: {e}");
             }
+            return false;
         }
     } else {
         let _ = io::stdout().write_all(out.as_bytes());

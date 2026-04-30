@@ -20,14 +20,17 @@ fn find_formal<'a>(
     for attr in attrs {
         if let ParamAttr::ParamAttr(name_leaf, _, _) = attr
             && let Token::Identifier(name) = &name_leaf.value
-                && pred(name.as_str()) {
-                    return Some((name_leaf.span, name.as_str()));
-                }
+            && pred(name.as_str())
+        {
+            return Some((name_leaf.span, name.as_str()));
+        }
     }
     None
 }
 
 /// Build the "duplicate formal function argument" error for `name` at `span`.
+// Returns Box because crate::Result's error type is Box<ParseError>.
+#[allow(clippy::unnecessary_box_returns)]
 fn duplicate_formal_error(span: Span, name: &str) -> Box<ParseError> {
     ParseError::invalid(
         span,

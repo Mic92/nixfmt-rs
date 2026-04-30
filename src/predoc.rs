@@ -486,12 +486,15 @@ fn fixup_mut(doc: &mut Vec<DocE>, mut nacc: isize, mut oacc: isize) {
             DocE::Text(l, o, ann, txt) => {
                 if w > 0
                     && let DocE::Text(_, _, ann2, b) = &mut doc[w - 1]
-                        && ann == *ann2 {
-                            b.push_str(&txt);
-                            continue;
-                        }
-                let l = (l as isize + nacc) as usize;
-                let o = (o as isize + oacc) as usize;
+                    && ann == *ann2
+                {
+                    b.push_str(&txt);
+                    continue;
+                }
+                let l = l as isize + nacc;
+                let o = o as isize + oacc;
+                debug_assert!(l >= 0 && o >= 0, "unbalanced Nest deltas");
+                let (l, o) = (l.cast_unsigned(), o.cast_unsigned());
                 doc[w] = DocE::Text(l, o, ann, txt);
                 w += 1;
             }
@@ -522,10 +525,12 @@ fn fixup_mut(doc: &mut Vec<DocE>, mut nacc: isize, mut oacc: isize) {
 
                 if pre_end == 0 && post_start == body.len() && !body.is_empty() {
                     // Fast path: nothing to lift. `simplifyGroup` then keep.
-                    if body.len() == 1 && matches!(&body[0], DocE::Group(a2, _) if ann == *a2)
-                        && let Some(DocE::Group(_, inner)) = body.pop() {
-                            body = inner;
-                        }
+                    if body.len() == 1
+                        && matches!(&body[0], DocE::Group(a2, _) if ann == *a2)
+                        && let Some(DocE::Group(_, inner)) = body.pop()
+                    {
+                        body = inner;
+                    }
                     doc[w] = DocE::Group(ann, body);
                     w += 1;
                     continue;
@@ -550,20 +555,23 @@ fn fixup_mut(doc: &mut Vec<DocE>, mut nacc: isize, mut oacc: isize) {
                     r = w;
                 } else {
                     // `simplifyGroup`
-                    if core.len() == 1 && matches!(&core[0], DocE::Group(a2, _) if ann == *a2)
-                        && let Some(DocE::Group(_, inner)) = core.pop() {
-                            core = inner;
-                        }
+                    if core.len() == 1
+                        && matches!(&core[0], DocE::Group(a2, _) if ann == *a2)
+                        && let Some(DocE::Group(_, inner)) = core.pop()
+                    {
+                        core = inner;
+                    }
                     // `fixup (a : pre)`: the lifted prefix is already fixed
                     // internally, so the only remaining rewrite is a possible
                     // spacing merge across the boundary with `doc[w-1]`.
-                    if w > 0 && matches!(doc[w - 1], DocE::Spacing(_))
+                    if w > 0
+                        && matches!(doc[w - 1], DocE::Spacing(_))
                         && let (DocE::Spacing(a), Some(DocE::Spacing(b))) =
                             (&doc[w - 1], pre.first())
-                        {
-                            doc[w - 1] = DocE::Spacing(merge_spacings(*a, *b));
-                            pre.remove(0);
-                        }
+                    {
+                        doc[w - 1] = DocE::Spacing(merge_spacings(*a, *b));
+                        pre.remove(0);
+                    }
                     let pre_len = pre.len();
                     // Finalise `pre ++ [Group ann core]` into the write side
                     // and leave `post` on the read side for `fixup (post ++ ys)`.
