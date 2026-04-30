@@ -316,93 +316,76 @@ fn minimised_diff(a: &str, b: &str) -> String {
 }
 
 // ---------------------------------------------------------------------------
+// Corpus driver
+// ---------------------------------------------------------------------------
+
+/// Run `check(path, src, ast)` over every fixture that parses, print a
+/// `[tag] checked N files, M failures` summary, and panic if any check
+/// returned `Err`. Unparseable inputs are skipped (parser gaps are tracked by
+/// the parser regression suite).
+fn for_each_parsed_fixture(
+    tag: &str,
+    mut check: impl FnMut(&FsPath, &str, File) -> Result<(), String>,
+) {
+    let files = collect_inputs();
+    assert!(!files.is_empty(), "fixture corpus missing");
+    let mut failures = 0usize;
+    let mut checked = 0usize;
+    for path in &files {
+        let Ok(src) = std::fs::read_to_string(path) else {
+            continue;
+        };
+        let Ok(ast) = crate::parse(&src) else {
+            continue;
+        };
+        checked += 1;
+        if let Err(msg) = check(path, &src, ast) {
+            eprintln!("\n[{tag}] {}: {msg}", path.display());
+            failures += 1;
+        }
+    }
+    eprintln!("[{tag}] checked {checked} files, {failures} failures");
+    if failures > 0 {
+        panic!("[{tag}] {failures} file(s) failed");
+    }
+}
+
+// ---------------------------------------------------------------------------
 // Tests
 // ---------------------------------------------------------------------------
 
 #[test]
 fn idempotent_on_fixture_corpus() {
-    let files = collect_inputs();
-    assert!(!files.is_empty(), "fixture corpus missing");
-    let mut failures = 0usize;
-    let mut checked = 0usize;
-    for path in &files {
-        let Ok(src) = std::fs::read_to_string(path) else {
-            continue;
-        };
-        let once = match crate::format(&src) {
-            Ok(s) => s,
-            // Parser gaps are tracked elsewhere.
-            Err(_) => continue,
-        };
-        checked += 1;
-        let twice = match crate::format(&once) {
-            Ok(s) => s,
-            Err(e) => {
-                eprintln!("\n[idempotency] {}: reparse failed: {e:?}", path.display());
-                failures += 1;
-                continue;
-            }
-        };
+    for_each_parsed_fixture("idempotency", |_path, src, _ast| {
+        // `format` only errs on parse, which the driver already accepted.
+        let once = crate::format(src).map_err(|e| format!("format failed: {e:?}"))?;
+        let twice = crate::format(&once).map_err(|e| format!("reparse failed: {e:?}"))?;
         if once != twice {
-            eprintln!(
-                "\n[idempotency] {}: format is not idempotent",
-                path.display()
-            );
-            eprintln!("{}", minimised_diff(&once, &twice));
-            failures += 1;
+            return Err(format!(
+                "format is not idempotent\n{}",
+                minimised_diff(&once, &twice)
+            ));
         }
-    }
-    eprintln!("[idempotency] checked {checked} files, {failures} failures");
-    if failures > 0 {
-        panic!("{failures} file(s) not idempotent");
-    }
+        Ok(())
+    });
 }
 
 #[test]
 fn ast_preserved_on_fixture_corpus() {
-    let files = collect_inputs();
-    assert!(!files.is_empty(), "fixture corpus missing");
-    let mut failures = 0usize;
-    let mut checked = 0usize;
-    for path in &files {
-        let Ok(src) = std::fs::read_to_string(path) else {
-            continue;
-        };
-        let mut before = match crate::parse(&src) {
-            Ok(a) => a,
-            Err(_) => continue,
-        };
-        let formatted = match crate::format(&src) {
-            Ok(s) => s,
-            Err(_) => continue,
-        };
-        checked += 1;
-        let mut after = match crate::parse(&formatted) {
-            Ok(a) => a,
-            Err(e) => {
-                eprintln!(
-                    "\n[ast-preservation] {}: formatted output failed to parse: {e:?}",
-                    path.display()
-                );
-                failures += 1;
-                continue;
-            }
-        };
+    for_each_parsed_fixture("ast-preservation", |_path, src, mut before| {
+        let formatted = crate::format(src).map_err(|e| format!("format failed: {e:?}"))?;
+        let mut after = crate::parse(&formatted)
+            .map_err(|e| format!("formatted output failed to parse: {e:?}"))?;
         before.strip_trivia();
         after.strip_trivia();
         if before != after {
-            eprintln!(
-                "\n[ast-preservation] {}: AST changed by formatting",
-                path.display()
-            );
-            eprintln!("{}", minimised_diff(&src, &formatted));
-            failures += 1;
+            return Err(format!(
+                "AST changed by formatting\n{}",
+                minimised_diff(src, &formatted)
+            ));
         }
-    }
-    eprintln!("[ast-preservation] checked {checked} files, {failures} failures");
-    if failures > 0 {
-        panic!("{failures} file(s) changed AST after formatting");
-    }
+        Ok(())
+    });
 }
 
 /// For every `diff/*/in.nix` fixture, format the input and compare against the
