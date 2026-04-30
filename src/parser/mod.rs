@@ -10,6 +10,8 @@ mod path_uri;
 mod spans;
 mod strings;
 
+use std::ops::ControlFlow::{self, Break, Continue};
+
 use crate::error::{ParseError, Result};
 use crate::lexer::Lexer;
 use crate::types::*;
@@ -96,42 +98,13 @@ impl Parser {
 
                 let ident = self.take_and_advance()?;
 
-                if matches!(self.current.value, Token::TColon) {
-                    let colon = self.take_and_advance()?;
-                    let body = self.parse_expression()?;
-                    Ok(Expression::Abstraction(
-                        Parameter::ID(ident),
-                        colon,
-                        Box::new(body),
-                    ))
-                } else if matches!(self.current.value, Token::TAt) {
-                    // Context parameter: x @ param: body
-                    let at_tok = self.take_and_advance()?;
-                    let second_param = self.parse_full_parameter()?;
-
-                    if !matches!(self.current.value, Token::TColon) {
-                        return Err(ParseError::invalid(
-                            at_tok.span,
-                            "@ is only valid in lambda parameters",
-                            Some("use 'name1 @ name2: body' for function parameters".to_string()),
-                        ));
+                match self.finish_abstraction(Parameter::ID(ident))? {
+                    Break(abs) => Ok(abs),
+                    Continue(Parameter::ID(ident)) => {
+                        let term = self.parse_postfix_selection(Term::Token(ident))?;
+                        self.continue_operation_from(Expression::Term(term))
                     }
-
-                    let first_param = Parameter::ID(ident);
-                    self.validate_context_parameter(&first_param, &second_param)?;
-
-                    let colon = self.expect_token(Token::TColon, "':'")?;
-                    let body = self.parse_expression()?;
-                    Ok(Expression::Abstraction(
-                        Parameter::Context(Box::new(first_param), at_tok, Box::new(second_param)),
-                        colon,
-                        Box::new(body),
-                    ))
-                } else {
-                    let base_term = Term::Token(ident);
-                    let term = self.parse_postfix_selection(base_term)?;
-                    let term_expr = Expression::Term(term);
-                    self.continue_operation_from(term_expr)
+                    Continue(_) => unreachable!(),
                 }
             }
             _ => self.parse_operation_or_lambda(),
@@ -148,41 +121,22 @@ impl Parser {
                 // Empty set: {} - could be parameter or literal
                 let close_brace = self.take_and_advance()?;
 
-                if matches!(self.current.value, Token::TColon) {
-                    // Empty set parameter `{}: body`; keep trivia on the close brace for proper formatting
-                    let colon = self.take_and_advance()?;
-                    let body = self.parse_expression()?;
-                    Ok(Expression::Abstraction(
-                        Parameter::Set(open_brace, Vec::new(), close_brace),
-                        colon,
-                        Box::new(body),
-                    ))
-                } else if matches!(self.current.value, Token::TAt) {
-                    // Context parameter: { } @ param: body
-                    let at_tok = self.take_and_advance()?;
-                    let second_param = self.parse_full_parameter()?;
-
-                    let first_param = Parameter::Set(open_brace, Vec::new(), close_brace);
-                    self.validate_context_parameter(&first_param, &second_param)?;
-
-                    let colon = self.expect_token(Token::TColon, "':'")?;
-                    let body = self.parse_expression()?;
-                    Ok(Expression::Abstraction(
-                        Parameter::Context(Box::new(first_param), at_tok, Box::new(second_param)),
-                        colon,
-                        Box::new(body),
-                    ))
-                } else {
-                    // Empty set literal (possibly with comments)
-                    // Extract trivia from close brace as comments for set literals
-                    let mut close_brace_for_literal = close_brace;
-                    let items = if !close_brace_for_literal.pre_trivia.is_empty() {
-                        let comments = std::mem::take(&mut close_brace_for_literal.pre_trivia);
-                        vec![Item::Comments(comments)]
-                    } else {
-                        Vec::new()
-                    };
-                    self.finish_set_literal_expr(open_brace, Items(items), close_brace_for_literal)
+                match self.finish_abstraction(Parameter::Set(
+                    open_brace,
+                    Vec::new(),
+                    close_brace,
+                ))? {
+                    Break(abs) => Ok(abs),
+                    Continue(Parameter::Set(open_brace, _, mut close_brace)) => {
+                        // Empty set literal: trivia on `}` becomes the set's comment items.
+                        let items = if !close_brace.pre_trivia.is_empty() {
+                            vec![Item::Comments(std::mem::take(&mut close_brace.pre_trivia))]
+                        } else {
+                            Vec::new()
+                        };
+                        self.finish_set_literal_expr(open_brace, Items(items), close_brace)
+                    }
+                    Continue(_) => unreachable!(),
                 }
             }
             Token::Identifier(_) => {
@@ -193,41 +147,15 @@ impl Parser {
                         self.check_duplicate_formals(&attrs)?;
 
                         let close_brace = self.expect_token(Token::TBraceClose, "'}'")?;
+                        let close_span = close_brace.span;
 
-                        if matches!(self.current.value, Token::TColon) {
-                            // Set parameter: { x, y }: body
-                            let colon = self.take_and_advance()?;
-                            let body = self.parse_expression()?;
-                            Ok(Expression::Abstraction(
-                                Parameter::Set(open_brace, attrs, close_brace),
-                                colon,
-                                Box::new(body),
-                            ))
-                        } else if matches!(self.current.value, Token::TAt) {
-                            // Context parameter: { x } @ param: body
-                            let at_tok = self.take_and_advance()?;
-                            let second_param = self.parse_full_parameter()?;
-
-                            let first_param = Parameter::Set(open_brace, attrs, close_brace);
-                            self.validate_context_parameter(&first_param, &second_param)?;
-
-                            let colon = self.expect_token(Token::TColon, "':'")?;
-                            let body = self.parse_expression()?;
-                            Ok(Expression::Abstraction(
-                                Parameter::Context(
-                                    Box::new(first_param),
-                                    at_tok,
-                                    Box::new(second_param),
-                                ),
-                                colon,
-                                Box::new(body),
-                            ))
-                        } else {
-                            Err(ParseError::invalid(
-                                close_brace.span,
+                        match self.finish_abstraction(Parameter::Set(open_brace, attrs, close_brace))? {
+                            Break(abs) => Ok(abs),
+                            Continue(_) => Err(ParseError::invalid(
+                                close_span,
                                 "set with parameter-like syntax but no colon",
                                 Some("use '{ x = ...; }' for set literals or '{ x }: body' for parameters".to_string()),
-                            ))
+                            )),
                         }
                     }
                     None => {
@@ -248,36 +176,15 @@ impl Parser {
                 self.check_duplicate_formals(&attrs)?;
 
                 let close_brace = self.expect_token(Token::TBraceClose, "'}'")?;
+                let close_span = close_brace.span;
 
-                if matches!(self.current.value, Token::TColon) {
-                    let colon = self.take_and_advance()?;
-                    let body = self.parse_expression()?;
-                    Ok(Expression::Abstraction(
-                        Parameter::Set(open_brace, attrs, close_brace),
-                        colon,
-                        Box::new(body),
-                    ))
-                } else if matches!(self.current.value, Token::TAt) {
-                    // Context parameter: {...}@args
-                    let at_tok = self.take_and_advance()?;
-                    let second_param = self.parse_full_parameter()?;
-
-                    let first_param = Parameter::Set(open_brace, attrs, close_brace);
-                    self.validate_context_parameter(&first_param, &second_param)?;
-
-                    let colon = self.expect_token(Token::TColon, "':'")?;
-                    let body = self.parse_expression()?;
-                    Ok(Expression::Abstraction(
-                        Parameter::Context(Box::new(first_param), at_tok, Box::new(second_param)),
-                        colon,
-                        Box::new(body),
-                    ))
-                } else {
-                    Err(ParseError::invalid(
-                        close_brace.span,
+                match self.finish_abstraction(Parameter::Set(open_brace, attrs, close_brace))? {
+                    Break(abs) => Ok(abs),
+                    Continue(_) => Err(ParseError::invalid(
+                        close_span,
                         "{ ... } must be followed by ':' or '@'",
                         Some("use '{ x }: body' for function parameters".to_string()),
-                    ))
+                    )),
                 }
             }
             _ => {
@@ -286,6 +193,47 @@ impl Parser {
                 let close_brace = self.expect_token(Token::TBraceClose, "'}'")?;
                 self.finish_set_literal_expr(open_brace, bindings, close_brace)
             }
+        }
+    }
+
+    /// After a candidate lambda parameter `first` has been parsed, try to
+    /// consume the optional `@ second` part and the mandatory `: body` and
+    /// build an `Expression::Abstraction`.
+    ///
+    /// * `Break(expr)`  – a full abstraction was parsed.
+    /// * `Continue(first)` – neither `:` nor `@` follows; `first` is handed
+    ///   back untouched so the caller can reinterpret it (set literal,
+    ///   operation, or a hard error).
+    fn finish_abstraction(
+        &mut self,
+        first: Parameter,
+    ) -> Result<ControlFlow<Expression, Parameter>> {
+        match self.current.value {
+            Token::TColon => {
+                let colon = self.take_and_advance()?;
+                let body = self.parse_expression()?;
+                Ok(Break(Expression::Abstraction(first, colon, Box::new(body))))
+            }
+            Token::TAt => {
+                let at_tok = self.take_and_advance()?;
+                let second = self.parse_full_parameter()?;
+                if !matches!(self.current.value, Token::TColon) {
+                    return Err(ParseError::invalid(
+                        at_tok.span,
+                        "@ is only valid in lambda parameters",
+                        Some("use 'name1 @ name2: body' for function parameters".to_string()),
+                    ));
+                }
+                self.validate_context_parameter(&first, &second)?;
+                let colon = self.expect_token(Token::TColon, "':'")?;
+                let body = self.parse_expression()?;
+                Ok(Break(Expression::Abstraction(
+                    Parameter::Context(Box::new(first), at_tok, Box::new(second)),
+                    colon,
+                    Box::new(body),
+                )))
+            }
+            _ => Ok(Continue(first)),
         }
     }
 
@@ -325,38 +273,19 @@ impl Parser {
     fn parse_operation_or_lambda(&mut self) -> Result<Expression> {
         let expr = self.parse_application()?;
 
-        if matches!(self.current.value, Token::TAt) {
-            let at_tok = self.take_and_advance()?;
-            // Parse second part as a PARAMETER (not expression)
-            let second_param = self.parse_full_parameter()?;
-
-            if matches!(self.current.value, Token::TColon) {
-                let first_param = self.expr_to_parameter(expr)?;
-                self.validate_context_parameter(&first_param, &second_param)?;
-
-                let param =
-                    Parameter::Context(Box::new(first_param), at_tok, Box::new(second_param));
-                let colon = self.expect_token(Token::TColon, "':'")?;
-                let body = self.parse_expression()?;
-                return Ok(Expression::Abstraction(param, colon, Box::new(body)));
-            } else {
-                return Err(Box::new(ParseError::new(
-                    at_tok.span,
-                    "@ is only valid in lambda parameters",
-                )));
-            }
-        }
-
         // Member check (?) is handled in parse_application so that `?` binds tighter than prefix `!`/`-`.
 
-        if matches!(self.current.value, Token::TColon) {
+        if matches!(self.current.value, Token::TColon | Token::TAt) {
             let param = self.expr_to_parameter(expr)?;
-            let colon = self.expect_token(Token::TColon, "':'")?;
-            let body = self.parse_expression()?;
-            Ok(Expression::Abstraction(param, colon, Box::new(body)))
-        } else {
-            self.maybe_parse_binary_operation(expr)
+            return match self.finish_abstraction(param)? {
+                Break(abs) => Ok(abs),
+                // Unreachable: we only enter this arm when the lookahead is `:`/`@`,
+                // and `finish_abstraction` always consumes those.
+                Continue(_) => unreachable!(),
+            };
         }
+
+        self.maybe_parse_binary_operation(expr)
     }
 
     /// Parse function application (left-associative)
