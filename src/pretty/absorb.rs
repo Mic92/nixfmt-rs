@@ -136,9 +136,7 @@ pub(super) fn push_absorb_rhs(doc: &mut Doc, expr: &Expression) {
 
         // Not all strings are absorbable, but there is nothing to gain from
         // starting them on a new line; same for paths.
-        Expression::Term(Term::SimpleString(_))
-        | Expression::Term(Term::IndentedString(_))
-        | Expression::Term(Term::Path(_)) => {
+        Expression::Term(Term::SimpleString(_) | Term::IndentedString(_) | Term::Path(_)) => {
             push_nested_rhs(doc, hardspace(), |inner| expr.pretty(inner));
         }
 

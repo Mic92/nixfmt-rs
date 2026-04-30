@@ -30,7 +30,7 @@ pub(super) fn push_pretty_term(doc: &mut Doc, term: &Term) {
 pub(super) fn push_pretty_term_wide(doc: &mut Doc, term: &Term) {
     match term {
         Term::Set(krec, open, items, close) => {
-            push_pretty_set(doc, Width::Wide, krec, open, items, close);
+            push_pretty_set(doc, Width::Wide, krec.as_ref(), open, items, close);
         }
         // `prettyTermWide` delegates to `prettyTerm`, which unlike `instance
         // Pretty Term` does *not* wrap lists in an extra group.
@@ -74,7 +74,7 @@ pub(super) fn push_render_list(
 pub(super) fn push_pretty_set(
     doc: &mut Doc,
     wide: Width,
-    krec: &Option<Ann<Token>>,
+    krec: Option<&Ann<Token>>,
     open: &Ann<Token>,
     items: &Items<Binder>,
     close: &Ann<Token>,

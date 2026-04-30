@@ -34,7 +34,7 @@ fn find_formal<'a>(
 fn duplicate_formal_error(span: Span, name: &str) -> Box<ParseError> {
     ParseError::invalid(
         span,
-        format!("duplicate formal function argument '{}'", name),
+        format!("duplicate formal function argument '{name}'"),
         None,
     )
 }
@@ -239,12 +239,12 @@ impl Parser {
             match item {
                 Item::Item(binder) => {
                     match binder {
-                        Binder::Assignment(mut sels, _eq, expr, comma_or_semi) => {
-                            if sels.len() == 1 {
+                        Binder::Assignment(mut path, _eq, expr, comma_or_semi) => {
+                            if path.len() == 1 {
                                 if let Some(Selector {
                                     dot: None,
                                     selector: SimpleSelector::ID(name),
-                                }) = sels.pop()
+                                }) = path.pop()
                                 {
                                     // Treat any assignment as `x ? default`
                                     let default = Some((

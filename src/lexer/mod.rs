@@ -46,7 +46,7 @@ pub(crate) enum ParseTrivium {
     Newlines(usize),
     /// Line comment with text and column position
     LineComment { text: String, col: usize },
-    /// Block comment (is_doc, lines)
+    /// Block comment (`is_doc`, lines)
     BlockComment(bool, Vec<String>),
     /// Language annotation like /* lua */
     LanguageAnnotation(String),
@@ -210,7 +210,7 @@ impl Lexer {
     }
 
     /// Parse next token (without trivia handling)
-    /// Trivia should ONLY be managed by lexeme(), not by this function.
+    /// Trivia should ONLY be managed by `lexeme()`, not by this function.
     /// This matches Haskell nixfmt's `rawSymbol` which parses tokens without trivia.
     pub(super) fn next_token(&mut self) -> crate::error::Result<Token> {
         let _ = self.skip_hspace();
@@ -331,7 +331,7 @@ impl Lexer {
                 // decode the actual codepoint so multi-byte input is reported
                 // correctly.
                 let ch = self.peek().unwrap();
-                self.err_unexpected(&[], &format!("'{}'", ch))
+                self.err_unexpected(&[], &format!("'{ch}'"))
             }
         }
     }
@@ -383,7 +383,7 @@ impl Lexer {
                     return Err(Box::new(crate::error::ParseError {
                         span: self.current_pos(),
                         kind: crate::error::ErrorKind::InvalidSyntax {
-                            description: format!("invalid character '{}' in path", ch),
+                            description: format!("invalid character '{ch}' in path"),
                             hint: Some("paths can only contain alphanumeric characters, '.', '_', '-', and '/'".to_string()),
                         },
                         labels: vec![],
@@ -416,7 +416,7 @@ impl Lexer {
     }
 
     /// Helper for two-character tokens: advance and check if next char matches
-    /// Returns if_match if second char matches, otherwise if_single
+    /// Returns `if_match` if second char matches, otherwise `if_single`
     fn try_two_char(&mut self, second: char, if_match: Token, if_single: Token) -> Token {
         self.advance();
         if self.peek() == Some(second) {
@@ -491,7 +491,7 @@ impl Lexer {
         self.column = mark.column;
     }
 
-    /// Run `f`; on `None`, rewind cursor (byte_pos/line/column) only.
+    /// Run `f`; on `None`, rewind cursor (`byte_pos/line/column`) only.
     /// Does NOT restore `trivia_buffer`/`recent_*` — callers must not mutate
     /// those inside `f`.
     #[inline]
@@ -672,7 +672,7 @@ impl Lexer {
             }
 
             match self.peek() {
-                Some('\n') | Some('\r') => {
+                Some('\n' | '\r') => {
                     let count = self.parse_newlines();
                     self.recent_newlines = count;
                     self.trivia_scratch.push(ParseTrivium::Newlines(count));

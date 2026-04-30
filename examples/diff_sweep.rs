@@ -148,13 +148,13 @@ fn main() {
     let out_dir: PathBuf = env::var("OUT")
         .unwrap_or_else(|_| "sweep-out".into())
         .into();
-    if let Ok(jobs) = env::var("JOBS") {
-        if let Ok(n) = jobs.parse() {
-            rayon::ThreadPoolBuilder::new()
-                .num_threads(n)
-                .build_global()
-                .ok();
-        }
+    if let Ok(jobs) = env::var("JOBS")
+        && let Ok(n) = jobs.parse()
+    {
+        rayon::ThreadPoolBuilder::new()
+            .num_threads(n)
+            .build_global()
+            .ok();
     }
 
     let mut files: Vec<PathBuf> = WalkDir::new(&root)

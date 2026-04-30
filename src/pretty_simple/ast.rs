@@ -1,4 +1,4 @@
-//! PrettySimple implementations for AST nodes
+//! `PrettySimple` implementations for AST nodes
 
 use super::{
     NUMBER_COLOR, PrettySimple, STRING_CONTENT_COLOR, STRING_QUOTE_COLOR, Writer, escape_string,
@@ -237,7 +237,7 @@ impl PrettySimple for StringPart {
     }
 }
 
-/// PrettySimple for Token - constructor applications for data-carrying tokens
+/// `PrettySimple` for Token - constructor applications for data-carrying tokens
 impl PrettySimple for Token {
     fn format<W: Writer>(&self, w: &mut W) {
         format_enum!(self, w, {
@@ -246,7 +246,7 @@ impl PrettySimple for Token {
             Identifier(s) => [&s.as_str()],
             EnvPath(s) => [&s.as_str()],
             _ => {
-                w.write_plain(&format!("{:?}", self));
+                w.write_plain(&format!("{self:?}"));
             }
         });
     }
@@ -276,9 +276,9 @@ impl PrettySimple for SpanWrapper {
     }
 }
 
-/// PrettySimple for TrailingComment - constructor with comment contents
+/// `PrettySimple` for `TrailingComment` - constructor with comment contents
 /// In Haskell's Show output, this becomes a Parens with simple elements,
-/// so it formats inline as: ( TrailingComment "text" )
+/// so it formats inline as: ( `TrailingComment` "text" )
 impl PrettySimple for TrailingComment {
     fn format<W: Writer>(&self, w: &mut W) {
         with_brackets(w, "(", ")", true, |w, _| {
@@ -309,10 +309,10 @@ impl<T: PrettySimple> PrettySimple for Ann<T> {
     }
 }
 
-/// Generic PrettySimple for Vec<T>
+/// Generic `PrettySimple` for Vec<T>
 /// Based on pretty-simple's Brackets in Show output
 /// Implements the `list` function logic:
-/// - Vec<T> in Rust corresponds to a single "row" [[T]] in Haskell's CommaSeparated
+/// - Vec<T> in Rust corresponds to a single "row" [[T]] in Haskell's `CommaSeparated`
 /// - Empty vec: []
 /// - All elements simple: [ elem1, elem2, ... ] (inline, space-separated with commas)
 /// - Any element complex: multiline with comma-first
@@ -350,7 +350,7 @@ impl<T: PrettySimple> PrettySimple for Vec<T> {
     }
 }
 
-/// Generic PrettySimple for Option<T>
+/// Generic `PrettySimple` for Option<T>
 /// Based on Haskell's Show instance for Maybe
 impl<T: PrettySimple> PrettySimple for Option<T> {
     fn format<W: Writer>(&self, w: &mut W) {
@@ -369,7 +369,7 @@ impl<T: PrettySimple> PrettySimple for Option<T> {
     }
 }
 
-/// PrettySimple for tuples (A, B)
+/// `PrettySimple` for tuples (A, B)
 /// Based on Haskell's Show instance for tuples
 impl<A: PrettySimple, B: PrettySimple> PrettySimple for (A, B) {
     fn format<W: Writer>(&self, w: &mut W) {
@@ -389,7 +389,7 @@ impl<A: PrettySimple, B: PrettySimple> PrettySimple for (A, B) {
     }
 }
 
-/// PrettySimple for Box<T>
+/// `PrettySimple` for Box<T>
 /// Box is transparent in Haskell's Show output
 impl<T: PrettySimple> PrettySimple for Box<T> {
     fn format<W: Writer>(&self, w: &mut W) {

@@ -197,9 +197,9 @@ in result",
                 // Use the new ErrorFormatter for beautiful output
                 let context = ErrorContext::new(example.code, Some("<input>"));
                 let formatter = ErrorFormatter::new(&context);
-                let formatted = formatter.format(&error);
+                let rendered = formatter.format(&error);
 
-                for line in formatted.lines() {
+                for line in rendered.lines() {
                     println!("│ {line}");
                 }
                 println!("{}", "└".to_owned() + &"─".repeat(78));

@@ -14,10 +14,7 @@ fn main() {
         std::hint::black_box(f);
     }
     let dt = t0.elapsed();
-    eprintln!(
-        "{} iters in {:?} ({:.2} ms/iter)",
-        iters,
-        dt,
-        dt.as_secs_f64() * 1000.0 / iters as f64
-    );
+    #[allow(clippy::cast_precision_loss)]
+    let per_iter_ms = dt.as_secs_f64() * 1000.0 / iters as f64;
+    eprintln!("{iters} iters in {dt:?} ({per_iter_ms:.2} ms/iter)");
 }

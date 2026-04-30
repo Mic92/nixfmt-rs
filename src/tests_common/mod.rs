@@ -19,9 +19,10 @@ macro_rules! oracle_tests {
 /// Assert that `input` is rejected by the parser.
 #[track_caller]
 pub fn assert_parse_rejected(input: &str) {
-    if crate::parse(input).is_ok() {
-        panic!("expected parser to reject input, but it was accepted:\n{input}");
-    }
+    assert!(
+        crate::parse(input).is_err(),
+        "expected parser to reject input, but it was accepted:\n{input}"
+    );
 }
 
 /// Assert that `input` is rejected *and* the error message contains `needle`.

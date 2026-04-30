@@ -129,10 +129,10 @@ impl Parser {
                     Break(abs) => Ok(abs),
                     Continue(Parameter::Set(open_brace, _, mut close_brace)) => {
                         // Empty set literal: trivia on `}` becomes the set's comment items.
-                        let items = if !close_brace.pre_trivia.is_empty() {
-                            vec![Item::Comments(std::mem::take(&mut close_brace.pre_trivia))]
-                        } else {
+                        let items = if close_brace.pre_trivia.is_empty() {
                             Vec::new()
+                        } else {
+                            vec![Item::Comments(std::mem::take(&mut close_brace.pre_trivia))]
                         };
                         self.finish_set_literal_expr(open_brace, Items(items), close_brace)
                     }
@@ -142,32 +142,29 @@ impl Parser {
             Token::Identifier(_) => {
                 // Try to parse as parameter attributes first
                 // If it fails (sees = or .), parse as bindings
-                match self.try_parse_param_attrs()? {
-                    Some(attrs) => {
-                        self.check_duplicate_formals(&attrs)?;
+                if let Some(attrs) = self.try_parse_param_attrs()? {
+                    self.check_duplicate_formals(&attrs)?;
 
-                        let close_brace = self.expect_token(Token::TBraceClose, "'}'")?;
-                        let close_span = close_brace.span;
+                    let close_brace = self.expect_token(Token::TBraceClose, "'}'")?;
+                    let close_span = close_brace.span;
 
-                        match self.finish_abstraction(Parameter::Set(open_brace, attrs, close_brace))? {
-                            Break(abs) => Ok(abs),
-                            Continue(_) => Err(ParseError::invalid(
-                                close_span,
-                                "set with parameter-like syntax but no colon",
-                                Some("use '{ x = ...; }' for set literals or '{ x }: body' for parameters".to_string()),
-                            )),
-                        }
+                    match self.finish_abstraction(Parameter::Set(open_brace, attrs, close_brace))? {
+                        Break(abs) => Ok(abs),
+                        Continue(_) => Err(ParseError::invalid(
+                            close_span,
+                            "set with parameter-like syntax but no colon",
+                            Some("use '{ x = ...; }' for set literals or '{ x }: body' for parameters".to_string()),
+                        )),
                     }
-                    None => {
-                        // Failed to parse as parameters (saw `=` or `.`); retry as set literal
-                        self.restore_state(saved_state);
+                } else {
+                    // Failed to parse as parameters (saw `=` or `.`); retry as set literal
+                    self.restore_state(saved_state);
 
-                        let open_brace = self.take_and_advance()?;
+                    let open_brace = self.take_and_advance()?;
 
-                        let bindings = self.parse_binders()?;
-                        let close_brace = self.expect_token(Token::TBraceClose, "'}'")?;
-                        self.finish_set_literal_expr(open_brace, bindings, close_brace)
-                    }
+                    let bindings = self.parse_binders()?;
+                    let close_brace = self.expect_token(Token::TBraceClose, "'}'")?;
+                    self.finish_set_literal_expr(open_brace, bindings, close_brace)
                 }
             }
             Token::TEllipsis => {
@@ -428,9 +425,8 @@ impl Parser {
                             ),
                             Some("binary operators require expressions on both sides".to_string()),
                         ));
-                    } else {
-                        return Err(e);
                     }
+                    return Err(e);
                 }
             };
 
@@ -511,13 +507,13 @@ impl Parser {
     /// Check if an operator is right-associative
     ///
     /// Right-associative operators per nixfmt Types.hs:
-    /// - TConcat (++) - line 575: InfixR
-    /// - TUpdate (//) - line 583: InfixR
-    /// - TPipeBackward (<|) - line 596: InfixR
+    /// - `TConcat` (++) - line 575: `InfixR`
+    /// - `TUpdate` (//) - line 583: `InfixR`
+    /// - `TPipeBackward` (<|) - line 596: `InfixR`
     ///
-    /// Note: TPlus (+) is InfixL in the spec and is parsed as left-associative,
+    /// Note: `TPlus` (+) is `InfixL` in the spec and is parsed as left-associative,
     /// but nixfmt uses a HACK to restructure it to right-associative in the AST.
-    /// This is handled separately in the parse_binary_operation function.
+    /// This is handled separately in the `parse_binary_operation` function.
     fn is_right_associative(&self, token: &Token) -> bool {
         matches!(
             token,
@@ -676,7 +672,7 @@ impl Parser {
         Ok(std::mem::replace(&mut self.current, next))
     }
 
-    /// Collect pre_trivia as Comments item if not empty (common pattern)
+    /// Collect `pre_trivia` as Comments item if not empty (common pattern)
     /// Parse a sequence of items separated by trivia until `is_end` matches
     /// the current token. Leading trivia on each item (and on the closing
     /// token) is hoisted into `Item::Comments`. Callers must include
