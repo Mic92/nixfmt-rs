@@ -213,10 +213,6 @@ fn unexpected_token_hint(expected: &str, found: &str) -> Option<(&'static str, &
             "'in' is only valid inside 'let ... in ...' expressions",
             "did you mean to start with 'let' instead of '{'?",
         ),
-        "'}'" if found == "':'" => (
-            "':' is not used for attribute assignment in Nix",
-            "use '=' to assign a value: name = ...;",
-        ),
         "'&&'" => (
             "single '&' is not a valid operator in Nix",
             "did you mean '&&' (logical and)?",
@@ -236,10 +232,6 @@ fn unexpected_token_hint(expected: &str, found: &str) -> Option<(&'static str, &
         "'='" => (
             "attribute paths must be followed by '= <value>;'",
             "add '= ...' to assign a value",
-        ),
-        "'{'" => (
-            "'rec' must be followed by an attribute set",
-            "write 'rec { ... }'",
         ),
         _ => return None,
     })

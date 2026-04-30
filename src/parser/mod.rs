@@ -758,6 +758,17 @@ impl Parser {
                 ));
             }
 
+            if opening_char == '{' && matches!(self.current.value, Token::TColon) {
+                return Err(ParseError::invalid(
+                    self.current.span,
+                    "unexpected ':' inside '{ ... }'",
+                    Some(
+                        "for a function use '{ args }: body'; for an attribute use 'name = value;'"
+                            .to_string(),
+                    ),
+                ));
+            }
+
             if matches!(
                 self.current.value,
                 Token::TBraceClose | Token::TBrackClose | Token::TParenClose | Token::TInterClose
