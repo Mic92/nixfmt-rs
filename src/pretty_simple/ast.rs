@@ -2,7 +2,7 @@
 
 use super::{
     NUMBER_COLOR, PrettySimple, STRING_CONTENT_COLOR, STRING_QUOTE_COLOR, Writer, escape_string,
-    format_delimited_value, sub_expr, write_delimited,
+    format_bracket_list, sub_expr, write_delimited,
 };
 use crate::format_constructor;
 use crate::format_enum;
@@ -321,50 +321,7 @@ impl<T: PrettySimple> PrettySimple for Ann<T> {
 /// - Any element complex: multiline with comma-first
 impl<T: PrettySimple> PrettySimple for Vec<T> {
     fn format<W: Writer>(&self, w: &mut W) {
-        // Empty list: [] - use current depth, don't increment
-        if self.is_empty() {
-            w.with_color(|w_color| {
-                let bracket_color = w_color.current_color();
-                w_color.write_colored("[", bracket_color);
-                w_color.write_colored("]", bracket_color);
-            });
-            return;
-        }
-
-        // Non-empty: increment depth first, then capture color (matching Open annotation)
-        // EXACT Haskell logic from list function (Printer.hs:252-254):
-        //   [xs] | all isSimple xs -> space <> hcat (map (prettyExpr opts) xs) <> space
-        //   _ -> concatWith lineAndCommaSep ...
-        w.with_color(|w_color| {
-            let bracket_color = w_color.current_color();
-            w_color.with_depth(|w_inner| {
-                if self.len() == 1 && self[0].is_simple() {
-                    // Case: [xs] | all isSimple xs (ONE row, all elements simple)
-                    w_inner.write_colored("[", bracket_color);
-                    w_inner.write_plain(" ");
-                    for (i, item) in self.iter().enumerate() {
-                        if i > 0 {
-                            w_inner.write_plain(" ");
-                        }
-                        item.format(w_inner);
-                    }
-                    w_inner.write_plain(" ");
-                    w_inner.write_colored("]", bracket_color);
-                } else {
-                    // Case: _ (multiline with comma-first)
-                    w_inner.write_colored("[", bracket_color);
-                    for (i, item) in self.iter().enumerate() {
-                        if i > 0 {
-                            w_inner.newline();
-                            w_inner.write_colored(",", bracket_color);
-                        }
-                        format_delimited_value(w_inner, item);
-                    }
-                    w_inner.newline();
-                    w_inner.write_colored("]", bracket_color);
-                }
-            });
-        });
+        format_bracket_list(w, self, true);
     }
 
     fn is_simple(&self) -> bool {
