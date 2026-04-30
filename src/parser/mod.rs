@@ -182,10 +182,7 @@ impl Parser {
                     } else {
                         Vec::new()
                     };
-                    let set_term =
-                        Term::Set(None, open_brace, Items(items), close_brace_for_literal);
-                    let term_with_selection = self.parse_postfix_selection(set_term)?;
-                    self.continue_operation_from(Expression::Term(term_with_selection))
+                    self.finish_set_literal_expr(open_brace, Items(items), close_brace_for_literal)
                 }
             }
             Token::Identifier(_) => {
@@ -241,9 +238,7 @@ impl Parser {
 
                         let bindings = self.parse_binders()?;
                         let close_brace = self.expect_token(Token::TBraceClose, "'}'")?;
-                        let set_term = Term::Set(None, open_brace, bindings, close_brace);
-                        let term_with_selection = self.parse_postfix_selection(set_term)?;
-                        self.continue_operation_from(Expression::Term(term_with_selection))
+                        self.finish_set_literal_expr(open_brace, bindings, close_brace)
                     }
                 }
             }
@@ -289,11 +284,21 @@ impl Parser {
                 // Must be set literal with bindings
                 let bindings = self.parse_binders()?;
                 let close_brace = self.expect_token(Token::TBraceClose, "'}'")?;
-                let set_term = Term::Set(None, open_brace, bindings, close_brace);
-                let term_with_selection = self.parse_postfix_selection(set_term)?;
-                self.continue_operation_from(Expression::Term(term_with_selection))
+                self.finish_set_literal_expr(open_brace, bindings, close_brace)
             }
         }
+    }
+
+    /// Shared tail of the set-literal branches in `parse_set_parameter_or_literal`.
+    fn finish_set_literal_expr(
+        &mut self,
+        open: Leaf,
+        bindings: Items<Binder>,
+        close: Leaf,
+    ) -> Result<Expression> {
+        let set_term = Term::Set(None, open, bindings, close);
+        let term = self.parse_postfix_selection(set_term)?;
+        self.continue_operation_from(Expression::Term(term))
     }
 
     /// Continue parsing operation from a given left expression
