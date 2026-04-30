@@ -700,12 +700,11 @@ impl Lexer {
                     self.trivia_scratch.push(c);
                 }
                 Some('/') if self.at("/*") => {
-                    let saved_state = self.save_state();
-
+                    // try_parse_language_annotation already restores state on
+                    // failure, so no outer save/restore is needed here.
                     if let Some(lang_annot) = self.try_parse_language_annotation() {
                         self.trivia_scratch.push(lang_annot);
                     } else {
-                        self.restore_state(saved_state);
                         let c = self.parse_block_comment();
                         self.trivia_scratch.push(c);
                     }
