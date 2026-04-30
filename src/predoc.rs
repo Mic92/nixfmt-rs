@@ -193,8 +193,11 @@ pub(crate) fn push_group_ann<F>(doc: &mut Doc, ann: GroupAnn, f: F)
 where
     F: FnOnce(&mut Doc),
 {
-    let mut inner = Vec::new();
-    f(&mut inner);
+    // Write into the parent's tail and split_off, so the body grows an
+    // amortised buffer instead of a fresh zero-cap Vec per group.
+    let start = doc.len();
+    f(doc);
+    let inner = doc.split_off(start);
     doc.push(DocE::Group(ann, inner));
 }
 
