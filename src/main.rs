@@ -3,14 +3,13 @@
 //! Mirrors the flag surface and exit-code semantics of the Haskell `nixfmt`
 //! binary so the two can be used interchangeably by editors / CI.
 
-use rayon::prelude::*;
 use std::io::{self, Read, Write};
 
 #[global_allocator]
 static GLOBAL: mimalloc::MiMalloc = mimalloc::MiMalloc;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use std::process::exit;
-use walkdir::WalkDir;
+use std::sync::atomic::{AtomicBool, Ordering};
 
 const VERSION: &str = env!("CARGO_PKG_VERSION");
 
@@ -218,79 +217,73 @@ fn main() {
         let name = o.filename.as_deref().unwrap_or("<stdin>");
         ok &= process(&o, name, &buf, false);
     } else {
-        let process_path = |path: PathBuf| -> bool {
-            let name = path.to_string_lossy();
-            match std::fs::read_to_string(&path) {
-                Ok(source) => process(&o, &name, &source, true),
-                Err(e) => {
-                    if !o.quiet {
-                        eprintln!("{name}: {e}");
-                    }
-                    false
-                }
-            }
-        };
         // Debug dumps stream to stderr; running them in parallel would
         // interleave output, so keep those modes sequential.
-        ok &= if o.ast || o.ir || o.parse_only {
-            expand_paths(&o.files)
-                .map(process_path)
-                .fold(true, |a, b| a & b)
-        } else {
-            // Stream paths into rayon as the directory walk produces them so
-            // worker threads start formatting immediately instead of waiting
-            // for the full file list to be collected and sorted.
-            expand_paths(&o.files)
-                .par_bridge()
-                .map(process_path)
-                .reduce(|| true, |a, b| a & b)
-        };
+        let parallel = !(o.ast || o.ir || o.parse_only);
+        ok &= walk_and_process(&o, parallel);
     }
 
     exit(i32::from(!ok));
 }
 
-/// Expand argument paths lazily: directories are walked for `*.nix` files,
-/// files are passed through unchanged so that explicit non-`.nix` paths still
-/// get formatted. Unlike upstream `nixfmt` we treat directory arguments as a
-/// first-class, supported feature.
-fn expand_paths(args: &[String]) -> impl Iterator<Item = PathBuf> + '_ {
-    args.iter().flat_map(|arg| {
-        let p = Path::new(arg);
-        if p.is_dir() {
-            either::Left(
-                WalkDir::new(p)
-                    .into_iter()
-                    .filter_map(Result::ok)
-                    .filter(|e| e.file_type().is_file())
-                    .filter(|e| e.path().extension().is_some_and(|x| x == "nix"))
-                    .map(walkdir::DirEntry::into_path),
-            )
-        } else {
-            either::Right(std::iter::once(p.to_owned()))
+fn process_path(o: &Opts, path: &Path) -> bool {
+    let name = path.to_string_lossy();
+    match std::fs::read_to_string(path) {
+        Ok(source) => process(o, &name, &source, true),
+        Err(e) => {
+            if !o.quiet {
+                eprintln!("{name}: {e}");
+            }
+            false
         }
-    })
+    }
 }
 
-/// Minimal `Either` so we can return two iterator types from `expand_paths`
-/// without pulling in the `either` crate.
-mod either {
-    pub enum Either<L, R> {
-        Left(L),
-        Right(R),
+/// Walk argument paths with `ignore`'s parallel walker and run `process_path`
+/// on every match. Explicit file arguments are passed through even without a
+/// `.nix` extension; the filter only applies to entries discovered under a
+/// directory argument.
+fn walk_and_process(o: &Opts, parallel: bool) -> bool {
+    let mut args = o.files.iter();
+    let first = args.next().expect("caller checked non-empty");
+    let mut wb = ignore::WalkBuilder::new(first);
+    for a in args {
+        wb.add(a);
     }
-    pub use Either::{Left, Right};
-    impl<L, R, T> Iterator for Either<L, R>
-    where
-        L: Iterator<Item = T>,
-        R: Iterator<Item = T>,
-    {
-        type Item = T;
-        fn next(&mut self) -> Option<T> {
-            match self {
-                Self::Left(l) => l.next(),
-                Self::Right(r) => r.next(),
+    // We are a formatter, not a search tool: walk everything.
+    wb.standard_filters(false);
+
+    let want = |e: &ignore::DirEntry| {
+        e.file_type().is_some_and(|t| t.is_file())
+            && (e.depth() == 0 || e.path().extension().is_some_and(|x| x == "nix"))
+    };
+
+    let visit = |entry: Result<ignore::DirEntry, ignore::Error>| -> bool {
+        match entry {
+            Ok(e) if want(&e) => process_path(o, e.path()),
+            Ok(_) => true,
+            Err(e) => {
+                if !o.quiet {
+                    eprintln!("{e}");
+                }
+                false
             }
         }
+    };
+
+    if !parallel {
+        wb.threads(1);
+        return wb.build().map(visit).fold(true, |a, b| a & b);
     }
+
+    let ok = AtomicBool::new(true);
+    wb.build_parallel().run(|| {
+        Box::new(|entry| {
+            if !visit(entry) {
+                ok.store(false, Ordering::Relaxed);
+            }
+            ignore::WalkState::Continue
+        })
+    });
+    ok.load(Ordering::Relaxed)
 }
