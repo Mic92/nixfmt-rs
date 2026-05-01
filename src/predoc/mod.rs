@@ -103,13 +103,6 @@ impl<T: Pretty> Pretty for Option<T> {
     }
 }
 
-impl<T: Pretty, U: Pretty> Pretty for (T, U) {
-    fn pretty(&self, doc: &mut Doc) {
-        self.0.pretty(doc);
-        self.1.pretty(doc);
-    }
-}
-
 /// Display width of `s`. Haskell `textWidth = Text.length`, i.e. one column
 /// per Unicode scalar; we match that so multi-byte UTF-8 (e.g. `«»`) doesn't
 /// over-count and force spurious line breaks.
