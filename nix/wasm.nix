@@ -10,7 +10,7 @@
 rustPlatform.buildRustPackage {
   pname = "nixfmt-wasm";
   version = "0.1.0";
-  src = ../.;
+  src = import ./source.nix { inherit lib; };
   cargoLock.lockFile = ../Cargo.lock;
 
   # cargoBuildHook hard-codes the host target via env+arg, so override
