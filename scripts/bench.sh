@@ -55,21 +55,26 @@ echo "nixpkgs:    $NIXPKGS ($NFILES .nix files)"
 "$RS" --version
 echo
 
-# Single large file (pure formatter throughput, no fs walk).
+# Single large file (pure formatter throughput, no fs walk). --check parses and
+# formats but does not write, so the read-only store path is fine and both
+# tools do the same work.
 BIG=$NIXPKGS/pkgs/top-level/all-packages.nix
 echo "== single file: $(wc -l <"$BIG") lines =="
 hyperfine --warmup 3 --runs 15 -N \
-  -n nixfmt-hs "$HS < $BIG" \
-  -n nixfmt-rs "$RS $BIG"
+  -n nixfmt-hs "$HS --check $BIG" \
+  -n nixfmt-rs "$RS --check $BIG"
 
 echo
 echo "== full tree: --check $NIXPKGS =="
 # treefmt's --fail-on-change still writes; route it through a tmpfs copy so the
 # user's checkout is not touched.
 WORK=$(mktemp -d -t nixfmt-bench.XXXXXX)
-trap 'rm -rf "$WORK" "$TF_RS"' EXIT
+trap 'chmod -R u+w "$WORK" 2>/dev/null; rm -rf "$WORK" "$TF_RS"' EXIT
 echo ">> rsyncing nixpkgs to $WORK (treefmt writes in place)"
 rsync -a --delete --exclude .git "$NIXPKGS"/ "$WORK"/
+# When NIXPKGS is the flake-locked store path the rsync inherits its read-only
+# bits, which breaks `git init`, treefmt's in-place writes and the cleanup trap.
+chmod -R u+w "$WORK"
 git -C "$WORK" init -q && git -C "$WORK" add -A -f >/dev/null && git -C "$WORK" commit -q -m bench --no-gpg-sign
 
 hyperfine -i --warmup "$WARMUP" --runs "$RUNS" \
