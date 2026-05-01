@@ -590,22 +590,22 @@ impl Parser {
         // selector; otherwise it is the (deprecated) identifier `or` and
         // must be left for the application parser.
         let or_default = if !selectors.is_empty() && self.is_or_token() {
-            let saved_state = self.save_state();
-
             let mut or_tok = self.take_current();
             // is_or_token() guarantees this is either KOr or Identifier("or").
             or_tok.value = Token::KOr;
             self.advance()?;
 
-            // Check if the next token can start a term (the default value)
-            // If not, backtrack and treat 'or' as an identifier
-            if self.is_term_start() {
-                let default_term = self.parse_term()?;
-                Some((or_tok, Box::new(default_term)))
-            } else {
-                self.restore_state(saved_state);
-                None
+            // Nix requires a default expression here; `a.b or ]`/`a.b or;`
+            // are syntax errors, so do not backtrack to or-as-identifier.
+            if !self.is_term_start() {
+                return Err(ParseError::unexpected(
+                    self.current.span,
+                    vec!["expression".to_string()],
+                    format!("'{}'", self.current.value.text()),
+                ));
             }
+            let default_term = self.parse_term()?;
+            Some((or_tok, Box::new(default_term)))
         } else {
             None
         };
