@@ -1,7 +1,12 @@
+{ pkgs, ... }:
 {
   projectRootFile = "flake.nix";
   programs = {
-    nixfmt.enable = true;
+    nixfmt = {
+      enable = true;
+      # Dogfood: format this repo with the binary built from this repo.
+      package = pkgs.callPackage ./package.nix { };
+    };
     rustfmt.enable = true;
   };
   settings.global.excludes = [
