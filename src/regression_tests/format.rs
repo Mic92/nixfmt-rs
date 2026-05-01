@@ -314,3 +314,12 @@ fn format_text_width_counts_chars_not_bytes() {
 fn format_empty_set_with_pretrivia_keeps_linebreak() {
     test_format("# c\n{\n}\n");
 }
+
+/// `Vec<StringPart>::pretty` second `[Interpolation(_)]` arm: an `''…''` line
+/// that is exactly one `${…}` whose `Whole` carries trailing trivia (the `# c`
+/// before `}`). The first arm only matches when that trivia is empty.
+#[test]
+fn format_indented_string_lone_interpolation_with_trailing_trivia() {
+    test_format("''\n${x\n# c\n}\n''\n");
+    test_format("''\n  ${ x\n  # multi\n  # line\n  }\n''\n");
+}
