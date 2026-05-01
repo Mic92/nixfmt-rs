@@ -1,7 +1,8 @@
 [workspace]
-members = ["fuzz"]
-# The fuzz crate requires a nightly toolchain via `cargo-fuzz`; keep it out
-# of the default set so `cargo build` / `cargo test` work on stable.
+members = ["fuzz", "wasm"]
+# fuzz needs nightly via cargo-fuzz; wasm only builds for
+# wasm32-unknown-unknown. Keep both out of the default set so plain
+# `cargo build` / `cargo test` work on stable native toolchains.
 default-members = ["."]
 
 [package]
@@ -24,6 +25,9 @@ path = "src/lib.rs"
 [dependencies]
 memchr = "2"
 compact_str = "0.9"
+
+# Binary-only deps; none of these support wasm32-unknown-unknown.
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 rayon = "1"
 walkdir = "2"
 mimalloc = { version = "0.1", default-features = false }
