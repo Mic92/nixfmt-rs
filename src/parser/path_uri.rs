@@ -19,16 +19,30 @@ const URI_SPECIAL_CHARS: &[char] = &[
     '~', '!', '@', '$', '%', '&', '*', '-', '=', '_', '+', ':', '\'', ',', '.', '/', '?',
 ];
 
-/// Check if character is valid in a URI scheme
-/// Based on nixfmt's schemeChar: "-.+" + alphanumeric
+/// nixfmt `schemeChar`: "-.+" + alphanumeric
 fn is_scheme_char(c: char) -> bool {
     c.is_alphanumeric() || URI_SCHEME_SPECIAL_CHARS.contains(&c)
 }
 
-/// Check if character is valid in URI
-/// Based on nixfmt's uriChar: "~!@$%&*-=_+:',./?" + alphanumeric
+/// nixfmt `uriChar`: "~!@$%&*-=_+:',./?" + alphanumeric
 fn is_uri_char(c: char) -> bool {
     c.is_alphanumeric() || URI_SPECIAL_CHARS.contains(&c)
+}
+
+/// nixfmt `pathChar`: "._-+~" + alphanumeric
+fn is_path_char(c: char) -> bool {
+    c.is_alphanumeric() || matches!(c, '.' | '_' | '-' | '+' | '~')
+}
+
+/// Append `s` to a trailing `TextPart`, or push a new one. Paths are built
+/// from a token-level head and a char-level tail; this keeps adjacent text in
+/// one part so the formatter sees the literal source slice.
+fn push_path_text(parts: &mut Vec<StringPart>, s: &str) {
+    if let Some(StringPart::TextPart(last)) = parts.last_mut() {
+        last.push_str(s);
+    } else {
+        parts.push(StringPart::TextPart(s.to_owned()));
+    }
 }
 
 impl Parser {
@@ -56,67 +70,33 @@ impl Parser {
         let ann = self.with_raw_ann(|p| {
             let mut parts = Vec::new();
 
-            // NOTE: Don't call self.advance() here - we need to read raw chars from lexer
+            // The head was already lexed as a token; do not advance() — the
+            // tail must be read as raw chars so `a/b` is one path, not `a / b`.
             match &p.current.value {
-                Token::Identifier(ident) => {
-                    // Path starting with identifier (e.g., common/file.nix, foo-bar/baz.nix)
-                    parts.push(StringPart::TextPart(ident.to_string()));
+                // e.g. common/file.nix, foo-bar/baz.nix
+                Token::Identifier(ident) => parts.push(StringPart::TextPart(ident.to_string())),
+                // ./ or ../ — the following `/` is consumed by the tail loop.
+                Token::TDot if p.lexer.peek() == Some('.') => {
+                    p.lexer.advance();
+                    push_path_text(&mut parts, "..");
                 }
-                Token::TDot => {
-                    // ./ or ../
-                    if p.lexer.peek() == Some('.') {
-                        parts.push(StringPart::TextPart("..".to_string()));
-                        p.lexer.advance();
-                    } else {
-                        parts.push(StringPart::TextPart(".".to_string()));
-                    }
-                    if p.lexer.peek() == Some('/') {
-                        p.lexer.advance();
-                        if let Some(StringPart::TextPart(text)) = parts.last_mut() {
-                            text.push('/');
-                        }
-                    }
-                }
-                Token::TDiv => {
-                    // Absolute path /
-                    parts.push(StringPart::TextPart("/".to_string()));
-                }
-                Token::TTilde => {
-                    // ~/
-                    parts.push(StringPart::TextPart("~".to_string()));
-                    if p.lexer.peek() == Some('/') {
-                        p.lexer.advance();
-                        if let Some(StringPart::TextPart(text)) = parts.last_mut() {
-                            text.push('/');
-                        }
-                    }
-                }
+                Token::TDot => push_path_text(&mut parts, "."),
+                Token::TDiv => push_path_text(&mut parts, "/"),
+                Token::TTilde => push_path_text(&mut parts, "~"),
                 _ => {}
             }
 
             loop {
                 match p.lexer.peek() {
                     Some('$') if p.lexer.at("${") => {
-                        let interp = p.parse_string_interpolation()?;
-                        parts.push(interp);
+                        parts.push(p.parse_string_interpolation()?);
                     }
                     Some(ch) if ch.is_alphanumeric() || matches!(ch, '.' | '_' | '-' | '+') => {
-                        let text = p.parse_path_part();
-                        if !text.is_empty() {
-                            if let Some(StringPart::TextPart(last_text)) = parts.last_mut() {
-                                last_text.push_str(&text);
-                            } else {
-                                parts.push(StringPart::TextPart(text));
-                            }
-                        }
+                        push_path_text(&mut parts, &p.parse_path_part());
                     }
                     Some('/') => {
                         p.lexer.advance();
-                        if let Some(StringPart::TextPart(text)) = parts.last_mut() {
-                            text.push('/');
-                        } else {
-                            parts.push(StringPart::TextPart("/".to_string()));
-                        }
+                        push_path_text(&mut parts, "/");
                     }
                     _ => break,
                 }
@@ -142,21 +122,13 @@ impl Parser {
         Ok(Term::Path(ann))
     }
 
-    /// Parse path text component (without /)
-    /// Based on Haskell's pathText
+    /// One path segment (no `/`). Haskell `pathText`.
     fn parse_path_part(&mut self) -> String {
         let mut text = String::new();
-
-        while let Some(ch) = self.lexer.peek() {
-            if ch.is_alphanumeric() || matches!(ch, '.' | '_' | '-' | '+' | '~') {
-                text.push(ch);
-                self.lexer.advance();
-            } else {
-                // `/`, `${`, or any other char terminates this path segment.
-                break;
-            }
+        while let Some(ch) = self.lexer.peek().filter(|&c| is_path_char(c)) {
+            text.push(ch);
+            self.lexer.advance();
         }
-
         text
     }
 
@@ -199,12 +171,11 @@ impl Parser {
         Ok(Term::SimpleString(ann))
     }
 
-    /// Check if there's path content at the given offset
-    /// Used to validate that what follows is a valid path component
+    /// Whether a path segment (text or `${…}`) starts at `offset`.
     fn is_path_content_at(&self, offset: usize) -> bool {
         match self.lexer.peek_ahead(offset) {
-            Some(c) if c.is_alphanumeric() || matches!(c, '.' | '_' | '-' | '+' | '~') => true,
-            Some('$') => self.lexer.peek_ahead(offset + 1) == Some('{'), // interpolation ${
+            Some(c) if is_path_char(c) => true,
+            Some('$') => self.lexer.peek_ahead(offset + 1) == Some('{'),
             _ => false,
         }
     }
