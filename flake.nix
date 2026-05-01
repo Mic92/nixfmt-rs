@@ -26,21 +26,10 @@
       );
     in
     {
-      packages = forAllSystems (
-        system:
-        let
-          pkgs = pkgsFor.${system};
-          plain = pkgs.callPackage ./nix/package.nix { };
-          pgo = pkgs.callPackage ./nix/package-pgo.nix { nixpkgs-src = nixpkgs; };
-        in
-        {
-          inherit plain pgo;
-          # PGO needs to run the instrumented target binary during the build,
-          # so fall back to the plain build when cross-compiling.
-          default = if pkgs.stdenv.buildPlatform.canExecute pkgs.stdenv.hostPlatform then pgo else plain;
-          wasm = pkgs.callPackage ./nix/wasm.nix { };
-        }
-      );
+      packages = forAllSystems (system: {
+        default = pkgsFor.${system}.callPackage ./nix/package.nix { };
+        wasm = pkgsFor.${system}.callPackage ./nix/wasm.nix { };
+      });
 
       devShells = forAllSystems (system: {
         default = pkgsFor.${system}.callPackage ./nix/shell.nix { };
