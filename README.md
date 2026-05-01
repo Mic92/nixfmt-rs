@@ -37,6 +37,27 @@ echo '{a=1;}' | ./target/release/nixfmt_rs --ast
 echo '{a=1;}' | ./target/release/nixfmt_rs --ir
 ```
 
+## Library
+
+The formatter is also usable as a library. Disable default features to skip
+the CLI-only dependencies (`ignore`, `mimalloc`):
+
+```toml
+[dependencies]
+nixfmt_rs = { version = "0.1", default-features = false }
+```
+
+```rust
+let formatted = nixfmt_rs::format("{foo=1;}")?;
+
+let mut opts = nixfmt_rs::Options::default();
+opts.width = 80;
+let formatted = nixfmt_rs::format_with(src, &opts)?;
+```
+
+On parse failure, render the returned `ParseError` with source context via
+`nixfmt_rs::format_error`. See the [API docs](https://docs.rs/nixfmt_rs).
+
 ## Testing
 
 ```bash
