@@ -2,6 +2,7 @@
 
 [![crates.io](https://img.shields.io/crates/v/nixfmt_rs.svg)](https://crates.io/crates/nixfmt_rs)
 [![docs.rs](https://img.shields.io/docsrs/nixfmt_rs)](https://docs.rs/nixfmt_rs)
+[![npm](https://img.shields.io/npm/v/nixfmt-rs.svg)](https://www.npmjs.com/package/nixfmt-rs)
 [![license](https://img.shields.io/crates/l/nixfmt_rs.svg)](LICENSE)
 
 A drop-in replacement for [nixfmt]: same binary name, same flags, **byte-identical output** — just faster and embeddable.
@@ -256,6 +257,10 @@ let formatted = nixfmt_rs::format_with(src, &opts)?;
 
 On parse failure, render the returned `ParseError` with source context via
 `nixfmt_rs::format_error`. See the [API docs](https://docs.rs/nixfmt_rs).
+
+For JavaScript/TypeScript, the WebAssembly build is on npm as
+[`nixfmt-rs`](https://www.npmjs.com/package/nixfmt-rs) — see
+[`wasm/README.md`](wasm/README.md).
 
 ## Design goals
 
