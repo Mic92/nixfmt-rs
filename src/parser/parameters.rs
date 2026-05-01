@@ -41,58 +41,41 @@ fn duplicate_formal_error(span: Span, name: &str) -> Box<ParseError> {
 
 impl Parser {
     /// Parse a full parameter (including context parameters)
-    pub(super) fn parse_full_parameter(&mut self) -> Result<Parameter> {
-        if matches!(self.current.value, Token::TBraceOpen) {
-            self.parse_set_or_context_parameter()
-        } else if matches!(self.current.value, Token::Identifier(_)) {
-            let ident = self.take_and_advance()?;
-
-            if matches!(self.current.value, Token::TAt) {
-                // Context parameter: id @ pattern
-                let at_tok = self.take_and_advance()?;
-                let second = self.parse_full_parameter()?;
-
-                let first_param = Parameter::ID(ident);
-                Self::validate_context_parameter(&first_param, &second)?;
-
-                Ok(Parameter::Context(
-                    Box::new(first_param),
-                    at_tok,
-                    Box::new(second),
-                ))
-            } else {
-                Ok(Parameter::ID(ident))
+    /// Parse the part of a context parameter that follows `@`.
+    ///
+    /// Nix only allows `id @ { formals }` or `{ formals } @ id`, so the second
+    /// half is fully determined by the first: an identifier must be followed by
+    /// a set pattern and vice versa. Enforcing that here (instead of accepting
+    /// any parameter and validating afterwards) rejects `a@b@{}` / `a@b` /
+    /// `{}@{}` with the same "expected '{'" / "expected identifier" pointing at
+    /// the offending token that `nix-instantiate --parse` produces.
+    pub(super) fn parse_context_second(&mut self, first: &Parameter) -> Result<Parameter> {
+        match first {
+            Parameter::ID(name) => {
+                let open = self.expect_token(Token::TBraceOpen, "'{'")?;
+                let attrs = self.parse_param_attrs()?;
+                Self::check_duplicate_formals(&attrs)?;
+                if let Token::Identifier(n) = &name.value {
+                    Self::check_pattern_shadows_formal(n, &attrs)?;
+                }
+                let close = self.expect_token(Token::TBraceClose, "'}'")?;
+                Ok(Parameter::Set(open, attrs, close))
             }
-        } else {
-            Err(ParseError::unexpected(
-                self.current.span,
-                vec!["identifier".to_string(), "set pattern".to_string()],
-                format!("'{}'", self.current.value.text()),
-            ))
-        }
-    }
-
-    /// Parse set parameter or context parameter starting with {
-    fn parse_set_or_context_parameter(&mut self) -> Result<Parameter> {
-        let open_brace = self.expect_token(Token::TBraceOpen, "'{'")?;
-        let attrs = self.parse_param_attrs()?;
-        Self::check_duplicate_formals(&attrs)?;
-        let close_brace = self.expect_token(Token::TBraceClose, "'}'")?;
-
-        let set_param = Parameter::Set(open_brace, attrs, close_brace);
-
-        if matches!(self.current.value, Token::TAt) {
-            let at_tok = self.take_and_advance()?;
-            let second = self.parse_full_parameter()?;
-            Self::validate_context_parameter(&set_param, &second)?;
-
-            Ok(Parameter::Context(
-                Box::new(set_param),
-                at_tok,
-                Box::new(second),
-            ))
-        } else {
-            Ok(set_param)
+            Parameter::Set(_, attrs, _) => {
+                if !matches!(self.current.value, Token::Identifier(_)) {
+                    return Err(ParseError::unexpected(
+                        self.current.span,
+                        vec!["identifier".to_string()],
+                        format!("'{}'", self.current.value.text()),
+                    ));
+                }
+                let name = self.take_and_advance()?;
+                if let Token::Identifier(n) = &name.value {
+                    Self::check_pattern_shadows_formal(n, attrs)?;
+                }
+                Ok(Parameter::ID(name))
+            }
+            Parameter::Context(..) => unreachable!("callers pass ID or Set"),
         }
     }
 
@@ -175,23 +158,6 @@ impl Parser {
             Some((span, name)) => Err(duplicate_formal_error(span, name)),
             None => Ok(()),
         }
-    }
-
-    /// Validate context parameter: check that pattern name doesn't shadow a formal
-    /// For id@{formals} or {formals}@id patterns
-    pub(super) fn validate_context_parameter(first: &Parameter, second: &Parameter) -> Result<()> {
-        match (first, second) {
-            // `args@{x, y, z}` or `{x, y, z}@args`
-            (Parameter::ID(pattern_leaf), Parameter::Set(_, attrs, _))
-            | (Parameter::Set(_, attrs, _), Parameter::ID(pattern_leaf)) => {
-                if let Token::Identifier(pattern_name) = &pattern_leaf.value {
-                    Self::check_pattern_shadows_formal(pattern_name, attrs)?;
-                }
-            }
-            _ => {}
-        }
-
-        Ok(())
     }
 
     /// Called from `parse_operation_or_lambda` when `:`/`@` follows an

@@ -350,7 +350,21 @@ fn regression_pattern_shadows_formal() {
 
 #[test]
 fn regression_at_without_colon_error() {
-    assert_parse_error_contains("x @ y", "@ is only valid in lambda parameters");
+    // Matches `nix-instantiate --parse`: after `id @` only a set pattern may follow.
+    assert_parse_error_contains("x @ y", "expected '{', found 'y'");
+    assert_parse_error_contains("x @ { }", "@ is only valid in lambda parameters");
+}
+
+/// Nix only allows `id @ { ... }` or `{ ... } @ id`; we used to accept nested
+/// `@` and `id @ id` because `validate_context_parameter` fell through on the
+/// catch-all arm. Mirrors `nix-instantiate --parse` rejection.
+#[test]
+fn regression_context_parameter_shape() {
+    assert_parse_error_contains("a@b@{ }: 1", "expected '{'");
+    assert_parse_error_contains("{ }@a@b: 1", "expected ':'");
+    assert_parse_error_contains("a@{ }@b: 1", "expected ':'");
+    assert_parse_error_contains("a@b: 1", "expected '{'");
+    assert_parse_error_contains("{ }@{ }: 1", "expected identifier");
 }
 
 #[test]

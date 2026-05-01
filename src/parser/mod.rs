@@ -221,15 +221,21 @@ impl Parser {
             }
             Token::TAt => {
                 let at_tok = self.take_and_advance()?;
-                let second = self.parse_full_parameter()?;
+                let second = self.parse_context_second(&first)?;
                 if !matches!(self.current.value, Token::TColon) {
+                    if matches!(self.current.value, Token::TAt) {
+                        return Err(ParseError::unexpected(
+                            self.current.span,
+                            vec!["':'".to_string()],
+                            "'@'",
+                        ));
+                    }
                     return Err(ParseError::invalid(
                         at_tok.span,
                         "@ is only valid in lambda parameters",
                         Some("use 'name1 @ name2: body' for function parameters".to_string()),
                     ));
                 }
-                Self::validate_context_parameter(&first, &second)?;
                 let colon = self.expect_token(Token::TColon, "':'")?;
                 let body = self.parse_expression()?;
                 Ok(Break(Expression::Abstraction(
