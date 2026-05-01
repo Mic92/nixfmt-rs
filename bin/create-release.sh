@@ -45,9 +45,8 @@ if git tag -l | grep -q "^${version}\$"; then
   exit 1
 fi
 sed -i -e "0,/^version = \".*\"/s!^version = \".*\"!version = \"${version}\"!" Cargo.toml
-sed -i -e "s!version = \".*\";!version = \"${version}\";!" nix/package.nix
 cargo update --workspace # bump version in Cargo.lock
-git add Cargo.toml Cargo.lock nix/package.nix
+git add Cargo.toml Cargo.lock
 git branch -D "release-${version}" || true
 git checkout -b "release-${version}"
 git commit -m "bump version ${version}"
