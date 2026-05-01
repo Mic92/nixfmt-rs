@@ -9,11 +9,8 @@ pub mod format;
 /// A parse error with span and structured error kind
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ParseError {
-    /// Primary error location (byte offsets into source)
-    pub span: Span,
-
-    /// Error kind with structured data
-    pub kind: ErrorKind,
+    pub(crate) span: Span,
+    pub(crate) kind: ErrorKind,
 }
 
 #[allow(clippy::unnecessary_box_returns)] // returned straight into Result<_, Box<ParseError>>
@@ -100,6 +97,12 @@ impl ParseError {
                 )
             }
         }
+    }
+
+    /// Byte offsets `start..end` of the primary error location in the source.
+    #[must_use]
+    pub const fn byte_range(&self) -> std::ops::Range<usize> {
+        self.span.start as usize..self.span.end as usize
     }
 
     /// Get error code if available

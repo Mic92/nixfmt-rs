@@ -117,10 +117,9 @@ fn parse_args() -> Result<Opts, String> {
 
 fn try_format(o: &Opts, name: &str, source: &str) -> Result<String, String> {
     let fmt = |s: &str| {
-        let opts = nixfmt_rs::Options {
-            width: o.width,
-            indent: o.indent,
-        };
+        let mut opts = nixfmt_rs::Options::default();
+        opts.width = o.width;
+        opts.indent = o.indent;
         nixfmt_rs::format_with(s, &opts).map_err(|e| nixfmt_rs::format_error(s, Some(name), &e))
     };
     let out = fmt(source)?;
