@@ -812,34 +812,25 @@ impl Renderer {
         }
 
         if self.col == 0 {
-            // At start of line - drop leading whitespace.
-            let mut head_idx = 0;
-            while head_idx < grp.len() && grp[head_idx].is_empty() {
-                head_idx += 1;
-            }
-            let grp = &grp[head_idx..];
-            let adj_storage: Vec<&[DocE]>;
-            let grp: &[&[DocE]] = match grp[0].first() {
-                Some(DocE::Spacing(_)) => {
-                    adj_storage = std::iter::once(&grp[0][1..])
-                        .chain(grp[1..].iter().copied())
-                        .collect();
-                    &adj_storage
-                }
+            // At start of line a leading spacing is meaningless (the next
+            // Text emits indentation), so drop one leading Spacing — looking
+            // through a leading nested group — before measuring.
+            let mut grp: Vec<&[DocE]> = grp.iter().copied().filter(|s| !s.is_empty()).collect();
+            match grp[0].first() {
+                Some(DocE::Spacing(_)) => grp[0] = &grp[0][1..],
                 Some(DocE::Group(ann, inner))
                     if matches!(inner.first(), Some(DocE::Spacing(_))) =>
                 {
-                    // Rare: leading subgroup itself starts with spacing.
-                    // Rebuild that one element; the rest stays borrowed.
-                    let owned = vec![DocE::Group(*ann, inner[1..].to_vec())];
-                    let mut new: Vec<&[DocE]> = Vec::with_capacity(grp.len() + 1);
-                    new.push(&owned);
-                    new.push(&grp[0][1..]);
-                    new.extend_from_slice(&grp[1..]);
-                    return self.try_render_group(&new, lookahead);
+                    // Rebuilding the subgroup yields an owned element that
+                    // `grp` must borrow, so recurse with it spliced in front.
+                    let owned = [DocE::Group(*ann, inner[1..].to_vec())];
+                    grp[0] = &grp[0][1..];
+                    grp.insert(0, &owned);
+                    return self.try_render_group(&grp, lookahead);
                 }
-                _ => grp,
-            };
+                _ => {}
+            }
+            let grp = grp.as_slice();
 
             let (nest, offset) = next_indent(grp);
             // Haskell `goGroup` (cc == 0): the budget is
