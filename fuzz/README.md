@@ -16,36 +16,42 @@ All targets are seeded from `tests/fixtures/nixfmt/`. Run
 
 ## Running
 
-`cargo-fuzz` requires a nightly toolchain. From the repo root:
+Use the dedicated dev shell, which exports `RUSTC_BOOTSTRAP=1` so the nixpkgs
+rustc accepts cargo-fuzz's unstable flags:
 
 ```sh
-# one-time
-rustup toolchain install nightly
-
-# run a target for 5 minutes
-cargo +nightly fuzz run fuzz_parse      -- -max_total_time=300 -timeout=10
-cargo +nightly fuzz run fuzz_roundtrip  -- -max_total_time=300 -timeout=10
-cargo +nightly fuzz run fuzz_idempotent -- -max_total_time=300 -timeout=10
+nix develop .#fuzz
+cargo fuzz run -s none fuzz_parse      -- -max_total_time=300 -timeout=10
+cargo fuzz run -s none fuzz_roundtrip  -- -max_total_time=300 -timeout=10
+cargo fuzz run -s none fuzz_idempotent -- -max_total_time=300 -timeout=10
 ```
 
-With Nix (no rustup):
+`-s none` is required: nixpkgs rustc does not ship the sanitizer runtimes, so
+the default `-Zsanitizer=address` cannot link. libFuzzer's coverage-guided
+engine still works; only AddressSanitizer's extra UB detection is lost.
+
+## Coverage
+
+The `fuzz` dev shell also provides version-matched `llvm-profdata` / `llvm-cov`.
+`fuzz/coverage.sh` runs a target over its corpus and prints a per-file
+line/region report:
 
 ```sh
-nix run nixpkgs#cargo-fuzz -- run fuzz_parse -- -max_total_time=300
+nix develop .#fuzz -c ./fuzz/coverage.sh fuzz_roundtrip
 ```
 
-On macOS with a Nix-provided toolchain you may need
-`LIBRARY_PATH=$(nix build --print-out-paths nixpkgs#libiconv)/lib` for the
-libfuzzer build script to link.
+The merged profile lands in `fuzz/coverage/<target>/coverage.profdata`; the
+script also prints the `llvm-cov show --format=html` invocation for a browsable
+report.
 
 ## Triage
 
 ```sh
 # reproduce a crash
-cargo +nightly fuzz run <target> fuzz/artifacts/<target>/crash-<hash>
+cargo fuzz run -s none <target> fuzz/artifacts/<target>/crash-<hash>
 
 # minimise it
-cargo +nightly fuzz tmin <target> fuzz/artifacts/<target>/crash-<hash>
+cargo fuzz tmin -s none <target> fuzz/artifacts/<target>/crash-<hash>
 ```
 
 Minimised reproducers belong in `src/regression_tests/fuzz.rs`.

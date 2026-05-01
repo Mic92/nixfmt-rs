@@ -33,6 +33,7 @@
 
       devShells = forAllSystems (system: {
         default = pkgsFor.${system}.callPackage ./nix/shell.nix { };
+        fuzz = pkgsFor.${system}.callPackage ./nix/fuzz-shell.nix { };
       });
 
       formatter = forAllSystems (system: treefmtEvalFor.${system}.config.build.wrapper);
