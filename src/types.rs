@@ -542,8 +542,11 @@ pub enum Token {
 
 impl Token {
     /// Source text for keyword / operator tokens (Haskell: `tokenText`).
-    pub const fn text(&self) -> &str {
+    pub fn text(&self) -> &str {
         match self {
+            Self::Identifier(s) | Self::Integer(s) | Self::Float(s) | Self::EnvPath(s) => {
+                s.as_str()
+            }
             Self::KAssert => "assert",
             Self::KElse => "else",
             Self::KIf => "if",
@@ -590,7 +593,7 @@ impl Token {
             Self::TPipeForward => "|>",
             Self::TPipeBackward => "<|",
             Self::Sof => "end of file",
-            _ => "",
+            Self::TTilde => "~",
         }
     }
 }
