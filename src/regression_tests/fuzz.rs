@@ -59,3 +59,13 @@ fn fuzz_indented_string_blank_line_preserves_excess() {
     test_format("''\n   \n  b''");
     test_format("''\n  \nb''");
 }
+
+/// `/* ... */` containing a bare `\r` was treated as single-line and rewritten
+/// to `# ...`, but the lexer ends a line comment at `\r` too, so the bytes
+/// after the `\r` re-lexed as code on the next pass.
+#[test]
+#[ignore = "FIXME: block→line comment conversion must reject embedded CR/NUL"]
+fn fuzz_block_comment_with_cr_reparses() {
+    roundtrip("2/*\0\r\0");
+    roundtrip("/*a\r\0*/3");
+}
