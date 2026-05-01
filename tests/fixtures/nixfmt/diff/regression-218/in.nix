@@ -1,6 +1,6 @@
 {
-  foo,
+  foo
   # bar
-  baz, # qux
+  , baz # qux
 }:
 null

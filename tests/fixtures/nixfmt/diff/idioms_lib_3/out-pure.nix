@@ -33,7 +33,11 @@ rec {
     v:
     with builtins;
     let
-      err = t: v: abort ("generators.mkValueStringDefault: " + "${t} not supported: ${toPretty { } v}");
+      err =
+        t: v:
+        abort (
+          "generators.mkValueStringDefault: " + "${t} not supported: ${toPretty { } v}"
+        );
     in
     if isInt v then
       toString v
@@ -101,7 +105,8 @@ rec {
         else
           k: v: [ (mkLine k v) ];
     in
-    attrs: libStr.concatStrings (lib.concatLists (libAttr.mapAttrsToList mkLines attrs));
+    attrs:
+    libStr.concatStrings (lib.concatLists (libAttr.mapAttrsToList mkLines attrs));
 
   # Generate an INI-style config file from an
   # attrset of sections to an attrset of key-value pairs.
@@ -225,7 +230,10 @@ rec {
           subsections = tail sections;
           subsection = concatStringsSep "." subsections;
         in
-        if containsQuote || subsections == [ ] then name else ''${section} "${subsection}"'';
+        if containsQuote || subsections == [ ] then
+          name
+        else
+          ''${section} "${subsection}"'';
 
       # generation for multiple ini values
       mkKeyValue =
@@ -278,7 +286,8 @@ rec {
         "__toString"
         "__pretty"
       ];
-      stepIntoAttr = evalNext: name: if builtins.elem name specialAttrs then id else evalNext;
+      stepIntoAttr =
+        evalNext: name: if builtins.elem name specialAttrs then id else evalNext;
       transform =
         depth:
         if depthLimit != null && depth > depthLimit then
@@ -358,7 +367,8 @@ rec {
               "\${"
             ];
             escapeMultiline = libStr.replaceStrings [ "\${" "''" ] [ "''\${" "'''" ];
-            singlelineResult = ''"'' + concatStringsSep "\\n" (map escapeSingleline lines) + ''"'';
+            singlelineResult =
+              ''"'' + concatStringsSep "\\n" (map escapeSingleline lines) + ''"'';
             multilineResult =
               let
                 escapedLines = map escapeMultiline lines;
@@ -385,12 +395,18 @@ rec {
           if v == [ ] then
             "[ ]"
           else
-            "[" + introSpace + libStr.concatMapStringsSep introSpace (go (indent + "  ")) v + outroSpace + "]"
+            "["
+            + introSpace
+            + libStr.concatMapStringsSep introSpace (go (indent + "  ")) v
+            + outroSpace
+            + "]"
         else if isFunction v then
           let
             fna = lib.functionArgs v;
             showFnas = concatStringsSep ", " (
-              libAttr.mapAttrsToList (name: hasDefVal: if hasDefVal then name + "?" else name) fna
+              libAttr.mapAttrsToList (
+                name: hasDefVal: if hasDefVal then name + "?" else name
+              ) fna
             );
           in
           if fna == { } then "<function>" else "<function, args: {${showFnas}}>"
@@ -409,7 +425,9 @@ rec {
               libAttr.mapAttrsToList (
                 name: value:
                 "${libStr.escapeNixIdentifier name} = ${
-                  builtins.addErrorContext "while evaluating an attribute `${name}`" (go (indent + "  ") value)
+                  builtins.addErrorContext "while evaluating an attribute `${name}`" (
+                    go (indent + "  ") value
+                  )
                 };"
               ) v
             )
@@ -510,7 +528,11 @@ rec {
       concatItems = lib.strings.concatStringsSep ", ";
     in
     if isAttrs v then
-      "{ ${concatItems (lib.attrsets.mapAttrsToList (key: value: "${key} = ${toDhall args value}") v)} }"
+      "{ ${
+        concatItems (
+          lib.attrsets.mapAttrsToList (key: value: "${key} = ${toDhall args value}") v
+        )
+      } }"
     else if isList v then
       "[ ${concatItems (map (toDhall args) v)} ]"
     else if isInt v then

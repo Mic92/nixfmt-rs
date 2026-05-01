@@ -178,7 +178,11 @@ let
   # LTO requires LLVM bintools including ld.lld and llvm-ar.
   buildStdenv = overrideCC llvmPackages.stdenv (
     llvmPackages.stdenv.cc.override {
-      bintools = if ltoSupport then buildPackages.rustc.llvmPackages.bintools else stdenv.cc.bintools;
+      bintools =
+        if ltoSupport then
+          buildPackages.rustc.llvmPackages.bintools
+        else
+          stdenv.cc.bintools;
     }
   );
 
@@ -405,7 +409,8 @@ buildStdenv.mkDerivation ({
   # elf-hack is broken when using clang+lld:
   # https://bugzilla.mozilla.org/show_bug.cgi?id=1482204
   ++ lib.optional (
-    ltoSupport && (buildStdenv.isAarch32 || buildStdenv.isi686 || buildStdenv.isx86_64)
+    ltoSupport
+    && (buildStdenv.isAarch32 || buildStdenv.isi686 || buildStdenv.isx86_64)
   ) "--disable-elf-hack"
   ++ lib.optional (!drmSupport) "--disable-eme"
   ++ [

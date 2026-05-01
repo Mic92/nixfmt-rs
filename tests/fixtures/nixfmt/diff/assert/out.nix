@@ -64,9 +64,11 @@
       else
         0;
     assert
-      with lib.strings; (versionAtLeast stdenv.cc.version "7.1" && versionOlder stdenv.cc.version "13");
+      with lib.strings;
+      (versionAtLeast stdenv.cc.version "7.1" && versionOlder stdenv.cc.version "13");
     assert (
-      stringLength (drvName (toString oldDependency)) == stringLength (drvName (toString newDependency))
+      stringLength (drvName (toString oldDependency))
+      == stringLength (drvName (toString newDependency))
     );
     assert (
       lib.assertMsg (!enableGoldPlugin)
@@ -76,7 +78,9 @@
       "Gold plugin cannot be enabled on LLVM16 due to a upstream issue: https://github.com/llvm/llvm-project/issues/61350";
     assert (
       builtins.length eriAm == eriDeriv + 1
-      && builtins.foldl' (a: b: a && b) true (builtins.map (a: a <= maxAm && a >= 0) eriAm)
+      && builtins.foldl' (a: b: a && b) true (
+        builtins.map (a: a <= maxAm && a >= 0) eriAm
+      )
     );
     assert assertMsg (originalValid -> absConcatOrig == absConcatNormalised)
       "For valid subpath \"${str}\", appending to an absolute Nix path value gives \"${absConcatOrig}\", but appending the normalised result \"${tryOnce.value}\" gives a different value \"${absConcatNormalised}\"";

@@ -1,33 +1,27 @@
 [
-  [ ]
+  []
   [
   ]
   [
 
   ]
 
-  [
-    [
+  [ [
 
-    ]
-  ]
+  ] ]
 
-  [
-    "string"
+  [ "string"
 
   ]
 
-  [
-    {
-      # multiline
-      foo = "bar";
-      foo2 = "barbar";
-    }
-  ]
-  {
-    # List in attrset with comment
+  [ {
+    # multiline
+    foo = "bar";
+    foo2 = "barbar";
+  } ]
+  { # List in attrset with comment
 
-    imports0 = [ ];
+    imports0 = [];
 
     imports2 = [
       # ./disko.nix
@@ -39,104 +33,67 @@
       ./hardware-configuration.nix
     ];
   }
-  [
-    (
-      if foo then
-        bar # multiline too
-      else
-        baz
-    )
-  ]
+  [ (if foo then
+    bar #multiline too
+    else
+    baz
+  )]
   [ 1 ]
 
-  [
-    1
+  [ 1
   ]
 
-  [
-    b
-    d
-  ]
-  [
-    b
-    d # e
-  ]
-  [
-    b # c
-    d
-  ]
-  [
-    b # c
-    d # e
-  ]
-  [
-    # a
-    b
-    d
-  ]
-  [
-    # a
-    b
-    d # e
-  ]
-  [
-    # a
-    b # c
-    d
-  ]
-  [
-    # a
-    b # c
-    d # e
-  ]
+  [       b       d       ]
+  [       b       d /*e*/ ]
+  [       b /*c*/ d       ]
+  [       b /*c*/ d /*e*/ ]
+  [ /*a*/ b       d       ]
+  [ /*a*/ b       d /*e*/ ]
+  [ /*a*/ b /*c*/ d       ]
+  [ /*a*/ b /*c*/ d /*e*/ ]
 
   [
+
 
     b
 
+
     d
+
 
   ]
   [
 
-    # a
+
+    /*a*/
+
 
     b
 
-    # c
+
+    /*c*/
+
 
     d
 
-    # e
 
+    /*e*/
+
+
+  ]
+
+  [ /* foobar */ ]
+
+  [ # foobar
   ]
 
   [
     # foobar
   ]
 
-  [
-    # foobar
-  ]
 
-  [
-    # foobar
-  ]
-
-  [
-    [
-      multi
-      line
-    ]
-  ]
+  [ [ multi line ] ]
   [ [ [ singleton ] ] ]
   [ [ [ { } ] ] ]
-  [
-    [
-      [
-        { }
-        multiline
-      ]
-    ]
-  ]
+  [ [ [ { } multiline ] ] ]
 ]

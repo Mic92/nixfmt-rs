@@ -739,10 +739,18 @@ in
           Using config.services.nextcloud.poolConfig is deprecated and will become unsupported in a future release.
           Please migrate your configuration to config.services.nextcloud.poolSettings.
         '')
-        ++ (optional (versionOlder cfg.package.version "23") (upgradeWarning 22 "22.05"))
-        ++ (optional (versionOlder cfg.package.version "24") (upgradeWarning 23 "22.05"))
-        ++ (optional (versionOlder cfg.package.version "25") (upgradeWarning 24 "22.11"))
-        ++ (optional (versionOlder cfg.package.version "26") (upgradeWarning 25 "23.05"))
+        ++ (optional (versionOlder cfg.package.version "23") (
+          upgradeWarning 22 "22.05"
+        ))
+        ++ (optional (versionOlder cfg.package.version "24") (
+          upgradeWarning 23 "22.05"
+        ))
+        ++ (optional (versionOlder cfg.package.version "25") (
+          upgradeWarning 24 "22.11"
+        ))
+        ++ (optional (versionOlder cfg.package.version "26") (
+          upgradeWarning 25 "23.05"
+        ))
         ++ (optional cfg.enableBrokenCiphersForSSE ''
           You're using PHP's openssl extension built against OpenSSL 1.1 for Nextcloud.
           This is only necessary if you're using Nextcloud's server-side encryption.
@@ -812,7 +820,8 @@ in
         nextcloud-setup =
           let
             c = cfg.config;
-            writePhpArray = a: "[${concatMapStringsSep "," (val: ''"${toString val}"'') a}]";
+            writePhpArray =
+              a: "[${concatMapStringsSep "," (val: ''"${toString val}"'') a}]";
             requiresReadSecretFunction = c.dbpassFile != null || c.objectstore.s3.enable;
             objectstoreConfig =
               let
@@ -875,9 +884,9 @@ in
               }
               $CONFIG = [
                 'apps_paths' => [
-                  ${optionalString (
-                    cfg.extraApps != { }
-                  ) "[ 'path' => '${cfg.home}/nix-apps', 'url' => '/nix-apps', 'writable' => false ],"}
+                  ${optionalString (cfg.extraApps != { })
+                    "[ 'path' => '${cfg.home}/nix-apps', 'url' => '/nix-apps', 'writable' => false ],"
+                  }
                   [ 'path' => '${cfg.home}/apps', 'url' => '/apps', 'writable' => false ],
                   [ 'path' => '${cfg.home}/store-apps', 'url' => '/store-apps', 'writable' => true ],
                 ],
@@ -887,19 +896,25 @@ in
                 ${optionalString cfg.caching.apcu "'memcache.local' => '\\OC\\Memcache\\APCu',"}
                 'log_type' => '${cfg.logType}',
                 'loglevel' => '${builtins.toString cfg.logLevel}',
-                ${optionalString (c.overwriteProtocol != null) "'overwriteprotocol' => '${c.overwriteProtocol}',"}
+                ${optionalString (
+                  c.overwriteProtocol != null
+                ) "'overwriteprotocol' => '${c.overwriteProtocol}',"}
                 ${optionalString (c.dbname != null) "'dbname' => '${c.dbname}',"}
                 ${optionalString (c.dbhost != null) "'dbhost' => '${c.dbhost}',"}
                 ${optionalString (c.dbport != null) "'dbport' => '${toString c.dbport}',"}
                 ${optionalString (c.dbuser != null) "'dbuser' => '${c.dbuser}',"}
-                ${optionalString (c.dbtableprefix != null) "'dbtableprefix' => '${toString c.dbtableprefix}',"}
+                ${optionalString (
+                  c.dbtableprefix != null
+                ) "'dbtableprefix' => '${toString c.dbtableprefix}',"}
                 ${optionalString (c.dbpassFile != null) ''
                   'dbpassword' => nix_read_secret(
                     "${c.dbpassFile}"
                   ),
                 ''}
                 'dbtype' => '${c.dbtype}',
-                'trusted_domains' => ${writePhpArray ([ cfg.hostName ] ++ c.extraTrustedDomains)},
+                'trusted_domains' => ${
+                  writePhpArray ([ cfg.hostName ] ++ c.extraTrustedDomains)
+                },
                 'trusted_proxies' => ${writePhpArray (c.trustedProxies)},
                 ${optionalString (
                   c.defaultPhoneRegion != null
@@ -925,7 +940,8 @@ in
                 mkExport = { arg, value }: "export ${arg}=${value}";
                 dbpass = {
                   arg = "DBPASS";
-                  value = if c.dbpassFile != null then ''"$(<"${toString c.dbpassFile}")"'' else ''""'';
+                  value =
+                    if c.dbpassFile != null then ''"$(<"${toString c.dbpassFile}")"'' else ''""'';
                 };
                 adminpass = {
                   arg = "ADMINPASS";
@@ -939,7 +955,8 @@ in
                     # will be omitted.
                     ${if c.dbname != null then "--database-name" else null} = ''"${c.dbname}"'';
                     ${if c.dbhost != null then "--database-host" else null} = ''"${c.dbhost}"'';
-                    ${if c.dbport != null then "--database-port" else null} = ''"${toString c.dbport}"'';
+                    ${if c.dbport != null then "--database-port" else null} =
+                      ''"${toString c.dbport}"'';
                     ${if c.dbuser != null then "--database-user" else null} = ''"${c.dbuser}"'';
                     "--database-pass" = "\"\$${dbpass.arg}\"";
                     "--admin-user" = ''"${c.adminuser}"'';
@@ -990,7 +1007,11 @@ in
 
               # Install extra apps
               ln -sfT \
-                ${pkgs.linkFarm "nix-apps" (mapAttrsToList (name: path: { inherit name path; }) cfg.extraApps)} \
+                ${
+                  pkgs.linkFarm "nix-apps" (
+                    mapAttrsToList (name: path: { inherit name path; }) cfg.extraApps
+                  )
+                } \
                 ${cfg.home}/nix-apps
 
               # create nextcloud directories.
@@ -1147,9 +1168,10 @@ in
           "~ ^/(?:build|tests|config|lib|3rdparty|templates|data)(?:$|/)".extraConfig = ''
             return 404;
           '';
-          "~ ^/(?:\\.(?!well-known)|autotest|occ|issue|indie|db_|console)".extraConfig = ''
-            return 404;
-          '';
+          "~ ^/(?:\\.(?!well-known)|autotest|occ|issue|indie|db_|console)".extraConfig =
+            ''
+              return 404;
+            '';
           "~ ^\\/(?:index|remote|public|cron|core\\/ajax\\/update|status|ocs\\/v[12]|updater\\/.+|oc[ms]-provider\\/.+|.+\\/richdocumentscode\\/proxy)\\.php(?:$|\\/)" =
             {
               priority = 500;

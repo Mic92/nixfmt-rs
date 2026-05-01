@@ -20,20 +20,28 @@
   )
   (replaceStrings [ "@" ":" "\\" "[" "]" ] [ "-" "-" "-" "" "" ])
   (lists.removePrefix [ 1 2 ] [ ])
-  (lists.removePrefix aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa [ 1 2 ] [ ])
-  (builtins.replaceStrings [ "@NIX_STORE_VERITY@" ] [ partitionTypes.usr-verity ] (
-    builtins.readFile ./assert_uki_repart_match.py
-  ))
+  (lists.removePrefix aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+    [ 1 2 ]
+    [ ]
+  )
+  (builtins.replaceStrings [ "@NIX_STORE_VERITY@" ] [ partitionTypes.usr-verity ]
+    (builtins.readFile ./assert_uki_repart_match.py)
+  )
   (replaceStrings [ "-" ] [ "_" ] (toUpper final.rust.cargoShortTarget))
   (lib.mkChangedOptionModule
     [ "security" "acme" "validMin" ]
     [ "security" "acme" "defaults" "validMinDays" ]
     (config: config.security.acme.validMin / (24 * 3600))
   )
-  (lib.replaceStrings [ "https://registry" ".io/providers" ] [ "registry" ".io" ] homepage)
+  (lib.replaceStrings [ "https://registry" ".io/providers" ] [ "registry" ".io" ]
+    homepage
+  )
   (lib.mkRenamedOptionModule [ "boot" "extraTTYs" ] [ "console" "extraTTYs" ])
   # This line is engineered to exactly hit the line length limit
-  (lib.mkRenamedOptionModule [ "hardware" "package234" ] [ "hardware" "graphics" ])
+  (lib.mkRenamedOptionModule
+    [ "hardware" "package234" ]
+    [ "hardware" "graphics" ]
+  )
   (mkRenamedOptionModule
     [
       "services"

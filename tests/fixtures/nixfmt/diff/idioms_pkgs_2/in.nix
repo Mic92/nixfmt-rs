@@ -1,11 +1,10 @@
-{
-  lib,
-  stdenv,
-  fetchurl,
-  nixos,
-  testVersion,
-  testEqualDerivation,
-  hello,
+{ lib
+, stdenv
+, fetchurl
+, nixos
+, testVersion
+, testEqualDerivation
+, hello
 }:
 
 stdenv.mkDerivation rec {
@@ -23,7 +22,9 @@ stdenv.mkDerivation rec {
     version = testVersion { package = hello; };
 
     invariant-under-noXlibs =
-      testEqualDerivation "hello must not be rebuilt when environment.noXlibs is set." hello
+      testEqualDerivation
+        "hello must not be rebuilt when environment.noXlibs is set."
+        hello
         (nixos { environment.noXlibs = true; }).pkgs.hello;
   };
 

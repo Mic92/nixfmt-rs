@@ -133,7 +133,9 @@
           3
         ],
       things ? with a; if null then true else false,
-      things ? with a; if null then true else "looooooooooooooooooooooooooooooooooooong",
+      things ?
+        with a;
+        if null then true else "looooooooooooooooooooooooooooooooooooong",
     }:
     { }
   )
@@ -148,6 +150,8 @@
         3
       ];
     things = with a; if null then true else false;
-    things = with a; if null then true else "looooooooooooooooooooooooooooooooooooong";
+    things =
+      with a;
+      if null then true else "looooooooooooooooooooooooooooooooooooong";
   }
 ]

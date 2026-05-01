@@ -24,6 +24,7 @@
       # comment 3 after blanks
       b # multiple newlines
 
+
       c # multiple comments
       # comment 1
       # comment 2
