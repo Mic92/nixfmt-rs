@@ -76,27 +76,6 @@ echo '{a=1;}' | nixfmt --ast
 echo '{a=1;}' | nixfmt --ir
 ```
 
-## Library
-
-The formatter is also usable as a library. Disable default features to skip
-the CLI-only dependencies (`ignore`, `mimalloc`):
-
-```toml
-[dependencies]
-nixfmt_rs = { version = "0.1", default-features = false }
-```
-
-```rust
-let formatted = nixfmt_rs::format("{foo=1;}")?;
-
-let mut opts = nixfmt_rs::Options::default();
-opts.width = 80;
-let formatted = nixfmt_rs::format_with(src, &opts)?;
-```
-
-On parse failure, render the returned `ParseError` with source context via
-`nixfmt_rs::format_error`. See the [API docs](https://docs.rs/nixfmt_rs).
-
 ## treefmt
 
 The binary is a drop-in for `nixfmt`, so with [treefmt-nix] just override the
@@ -184,20 +163,6 @@ stdout, exit 1 on parse error).
 
 </details>
 
-## Testing
-
-```bash
-cargo test                       # full suite
-
-# differential check vs. reference `nixfmt` over a nixpkgs checkout
-# modes: format | ir | ast; env: NIXPKGS, LIMIT, JOBS, MAX_BYTES, REF, OUT
-LIMIT=0 cargo run --release --features sweep --example diff_sweep -- format
-```
-
-The test suite is layered (unit → regression → vendored fixtures →
-properties); see [`tests/README.md`](tests/README.md) for where to add
-new cases.
-
 ## Error messages
 
 Parse errors come with source snippets, related spans and fix-it hints:
@@ -266,6 +231,27 @@ criterion dependency so `cargo test` stays lean):
 cargo bench --features bench
 ```
 
+## Library
+
+The formatter is also usable as a library. Disable default features to skip
+the CLI-only dependencies (`ignore`, `mimalloc`):
+
+```toml
+[dependencies]
+nixfmt_rs = { version = "0.1", default-features = false }
+```
+
+```rust
+let formatted = nixfmt_rs::format("{foo=1;}")?;
+
+let mut opts = nixfmt_rs::Options::default();
+opts.width = 80;
+let formatted = nixfmt_rs::format_with(src, &opts)?;
+```
+
+On parse failure, render the returned `ParseError` with source context via
+`nixfmt_rs::format_error`. See the [API docs](https://docs.rs/nixfmt_rs).
+
 ## Design goals
 
 - **Exact behavioural parity.** `--ast`, `--ir` and formatted output are
@@ -277,3 +263,18 @@ cargo bench --features bench
 - **Minimal dependencies.** The library itself uses only `memchr` and
   `compact_str`; the binary adds `rayon` and `walkdir` for parallel
   directory formatting.
+
+## Testing
+
+```bash
+cargo test                       # full suite
+
+# differential check vs. reference `nixfmt` over a nixpkgs checkout
+# modes: format | ir | ast; env: NIXPKGS, LIMIT, JOBS, MAX_BYTES, REF, OUT
+LIMIT=0 cargo run --release --features sweep --example diff_sweep -- format
+```
+
+The test suite is layered (unit → regression → vendored fixtures →
+properties); see [`tests/README.md`](tests/README.md) for where to add
+new cases.
+
