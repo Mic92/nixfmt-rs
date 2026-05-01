@@ -18,4 +18,11 @@ find tests/fixtures/nixfmt fuzz/seeds -name '*.nix' -print0 |
 		done
 	done
 
-echo "seeded $(find fuzz/corpus/fuzz_roundtrip -type f | wc -l | tr -d ' ') files per target"
+# Invalid inputs only help fuzz_parse (which renders the diagnostic); the
+# other targets bail on parse error so they would just be wasted iterations.
+find fuzz/seeds-invalid -name '*.nix' -print0 |
+	while IFS= read -r -d '' f; do
+		cp "$f" "fuzz/corpus/fuzz_parse/${f//\//_}"
+	done
+
+echo "seeded $(find fuzz/corpus/fuzz_roundtrip -type f | wc -l | tr -d ' ') valid + $(find fuzz/seeds-invalid -name '*.nix' | wc -l | tr -d ' ') invalid files"
