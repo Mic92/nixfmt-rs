@@ -17,6 +17,7 @@
 // Clippy pedantic/nursery are enabled workspace-wide via Cargo.toml [lints];
 // see the allow-list there for rationale.
 #![warn(missing_docs)]
+#![forbid(unsafe_code)]
 
 // Internal modules - hidden from public API
 mod colored_writer;
