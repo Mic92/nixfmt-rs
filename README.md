@@ -4,22 +4,19 @@
 [![docs.rs](https://img.shields.io/docsrs/nixfmt_rs)](https://docs.rs/nixfmt_rs)
 [![license](https://img.shields.io/crates/l/nixfmt_rs.svg)](LICENSE)
 
-A from-scratch Rust reimplementation of [nixfmt] that produces byte-identical output to the Haskell original.
+A drop-in replacement for [nixfmt]: same binary name, same flags, **byte-identical output** — just faster and embeddable.
 
-Try it in your browser: <https://mic92.github.io/nixfmt-rs/> (WebAssembly build, formats locally — no upload).
+- **Drop-in.** Verified byte-for-byte against `nixfmt` v1.2.0 across all of
+  nixpkgs; swap the binary and nothing in your tree reformats.
+- **Fast.** Formats the entire nixpkgs checkout in under 2 s — ~130× the
+  Haskell implementation single-threaded ([benchmarks](#benchmarks)).
+- **Embeddable.** Usable as a [Rust library](#library) (`#![forbid(unsafe_code)]`,
+  two dependencies) or in the browser via the
+  [WebAssembly build](https://mic92.github.io/nixfmt-rs/).
+- **Helpful errors.** rustc-style diagnostics with source snippets and
+  fix-it hints ([examples](#error-messages)).
 
 [nixfmt]: https://github.com/NixOS/nixfmt
-
-## Status
-
-**Parity reached** with upstream `nixfmt` v1.2.0:
-
-- Byte-identical output across the entire nixpkgs tree
-  (`LIMIT=0 cargo run --release --features sweep --example diff_sweep`).
-- Formats all of nixpkgs in <2 s — see [Benchmarks](#benchmarks).
-
-See [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) for how the pieces fit
-together.
 
 ## Install
 
@@ -260,9 +257,12 @@ On parse failure, render the returned `ParseError` with source context via
 - **Hand-written recursive-descent parser.** No parser-combinator or
   grammar generator; the structure mirrors `Nixfmt/Parser.hs` directly,
   which keeps error messages and trivia handling under our control.
-- **Minimal dependencies.** The library itself uses only `memchr` and
-  `compact_str`; the binary adds `rayon` and `walkdir` for parallel
-  directory formatting.
+- **Minimal dependencies.** The library uses only `memchr` and
+  `compact_str`; the binary adds `ignore` (parallel `.nix` walking) and
+  `mimalloc`.
+
+See [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) for how the pieces fit
+together.
 
 ## Testing
 
