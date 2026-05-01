@@ -1,83 +1,10 @@
-//! Intermediate representation and renderer
+//! Convert IR (`Doc`) to formatted text.
 //!
-//! Implements the Wadler/Leijen-style pretty-printing algorithm
-//! from nixfmt's Predoc.hs
+//! Implementation of the Wadler/Leijen layout algorithm from nixfmt: the
+//! `fixup` normalisation pass, the width-probing `fits`/`firstLine*` helpers,
+//! and the greedy `Renderer` that drives them.
 
-/// Spacing types for layout
-///
-/// Sequential spacings are reduced to a single spacing by taking the maximum.
-/// This means that e.g. a Space followed by an Emptyline results in just an Emptyline.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
-pub enum Spacing {
-    /// Line break or nothing (soft)
-    Softbreak,
-    /// Line break or nothing
-    Break,
-    /// Always a space
-    Hardspace,
-    /// Line break or space (soft)
-    Softspace,
-    /// Line break or space
-    Space,
-    /// Always a line break
-    Hardline,
-    /// Two line breaks (blank line)
-    Emptyline,
-    /// n line breaks
-    Newlines(usize),
-}
-
-/// Group annotation
-///
-/// Controls how groups are expanded during layout
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum GroupAnn {
-    /// Regular group - expand if doesn't fit
-    RegularG,
-    /// Priority group - try to keep compressed longer
-    /// Used to compact things left and right of multiline elements
-    Priority,
-    /// Transparent group - handled by parent
-    /// Priority children are associated with the parent's parent
-    Transparent,
-}
-
-/// Text annotation
-///
-/// Controls how text contributes to line length calculations
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum TextAnn {
-    /// Regular text
-    RegularT,
-    /// Comment (doesn't count towards line length limits)
-    Comment,
-    /// Trailing comment (single-line comment at end of line)
-    TrailingComment,
-    /// Trailing text (only rendered in expanded groups)
-    Trailing,
-}
-
-/// Document element
-///
-/// Documents are represented as lists of these elements
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum DocE {
-    /// Text element
-    /// (`nesting_depth`, offset, annotation, text)
-    Text(usize, usize, TextAnn, String),
-    /// Spacing element
-    Spacing(Spacing),
-    /// Group element
-    /// Contains annotation and nested document
-    Group(GroupAnn, Doc),
-    /// Indentation delta marker (nest, offset). Emitted in begin/end pairs by
-    /// `push_nested`/`push_offset` and folded into `Text` during `fixup`, so
-    /// the renderer never sees it.
-    Nest(isize, isize),
-}
-
-/// Document - a list of document elements
-pub type Doc = Vec<DocE>;
+use super::{Doc, DocE, GroupAnn, Spacing, TextAnn, text_width};
 
 /// Borrowed lookahead: a chain of slices scanned in order. Lets the layout
 /// engine pass "rest of current level ++ outer lookahead" without cloning.
@@ -122,188 +49,6 @@ impl<'a> Iterator for LookIter<'a> {
     }
 }
 
-/// Opaque wrapper for intermediate representation (for debugging)
-#[derive(Debug)]
-pub struct IR(pub(crate) Doc);
-
-/// Pretty-printable trait
-pub trait Pretty {
-    fn pretty(&self, doc: &mut Doc);
-}
-
-impl Pretty for Doc {
-    fn pretty(&self, doc: &mut Doc) {
-        doc.extend(self.iter().cloned());
-    }
-}
-
-impl<T: Pretty> Pretty for Option<T> {
-    fn pretty(&self, doc: &mut Doc) {
-        if let Some(x) = self {
-            x.pretty(doc);
-        }
-    }
-}
-
-impl<T: Pretty, U: Pretty> Pretty for (T, U) {
-    fn pretty(&self, doc: &mut Doc) {
-        self.0.pretty(doc);
-        self.1.pretty(doc);
-    }
-}
-
-/// Push a text element with the given annotation, dropping empty strings.
-pub fn push_text_ann(doc: &mut Doc, ann: TextAnn, s: impl Into<String>) {
-    let s = s.into();
-    if !s.is_empty() {
-        doc.push(DocE::Text(0, 0, ann, s));
-    }
-}
-
-/// Push a text element
-pub fn push_text(doc: &mut Doc, s: impl Into<String>) {
-    push_text_ann(doc, TextAnn::RegularT, s);
-}
-
-/// Push a comment element
-pub fn push_comment(doc: &mut Doc, s: impl Into<String>) {
-    push_text_ann(doc, TextAnn::Comment, s);
-}
-
-/// Push a trailing comment element
-pub fn push_trailing_comment(doc: &mut Doc, s: impl Into<String>) {
-    push_text_ann(doc, TextAnn::TrailingComment, s);
-}
-
-/// Push a trailing text element (only rendered in expanded groups)
-pub fn push_trailing(doc: &mut Doc, s: impl Into<String>) {
-    push_text_ann(doc, TextAnn::Trailing, s);
-}
-
-/// Push a grouped document using a closure
-pub fn push_group<F>(doc: &mut Doc, f: F)
-where
-    F: FnOnce(&mut Doc),
-{
-    push_group_ann(doc, GroupAnn::RegularG, f);
-}
-
-/// Push a group with specific annotation using a closure
-pub fn push_group_ann<F>(doc: &mut Doc, ann: GroupAnn, f: F)
-where
-    F: FnOnce(&mut Doc),
-{
-    // Write into the parent's tail and split_off, so the body grows an
-    // amortised buffer instead of a fresh zero-cap Vec per group.
-    let start = doc.len();
-    f(doc);
-    let inner = doc.split_off(start);
-    doc.push(DocE::Group(ann, inner));
-}
-
-/// Surround `f`'s output with a balanced `Nest(dn, doff)` / `Nest(-dn, -doff)`
-/// pair. `fixup` later bakes the accumulated deltas into each `Text` so the
-/// renderer's indent stack logic is unchanged.
-pub fn push_nest_pair<F>(doc: &mut Doc, dn: isize, doff: isize, f: F)
-where
-    F: FnOnce(&mut Doc),
-{
-    doc.push(DocE::Nest(dn, doff));
-    f(doc);
-    doc.push(DocE::Nest(-dn, -doff));
-}
-
-/// Push a nested document (increase indentation) using a closure.
-pub fn push_nested<F>(doc: &mut Doc, f: F)
-where
-    F: FnOnce(&mut Doc),
-{
-    push_nest_pair(doc, 1, 0, f);
-}
-
-/// Line break or nothing (soft)
-pub const fn softline_prime() -> DocE {
-    DocE::Spacing(Spacing::Softbreak)
-}
-
-/// Line break or nothing
-pub const fn line_prime() -> DocE {
-    DocE::Spacing(Spacing::Break)
-}
-
-/// Line break or space (soft)
-pub const fn softline() -> DocE {
-    DocE::Spacing(Spacing::Softspace)
-}
-
-/// Line break or space
-pub const fn line() -> DocE {
-    DocE::Spacing(Spacing::Space)
-}
-
-/// Always space
-pub const fn hardspace() -> DocE {
-    DocE::Spacing(Spacing::Hardspace)
-}
-
-/// Always line break
-pub const fn hardline() -> DocE {
-    DocE::Spacing(Spacing::Hardline)
-}
-
-/// Two line breaks (blank line)
-pub const fn emptyline() -> DocE {
-    DocE::Spacing(Spacing::Emptyline)
-}
-
-/// n line breaks
-pub const fn newline() -> DocE {
-    DocE::Spacing(Spacing::Newlines(1))
-}
-
-/// Push documents separated by a separator
-pub fn push_sep_by<P: Pretty>(doc: &mut Doc, separator: &Doc, docs: Vec<P>) {
-    let mut first = true;
-    for item in docs {
-        if !first {
-            doc.extend(separator.iter().cloned());
-        }
-        first = false;
-        item.pretty(doc);
-    }
-}
-
-/// Push multiple documents horizontally without spacing
-pub fn push_hcat<P: Pretty>(doc: &mut Doc, docs: Vec<P>) {
-    for item in docs {
-        item.pretty(doc);
-    }
-}
-
-/// Push a document surrounded by the same elements on both sides using a closure
-pub fn push_surrounded<F>(doc: &mut Doc, outside: &Doc, f: F)
-where
-    F: FnOnce(&mut Doc),
-{
-    doc.extend(outside.iter().cloned());
-    f(doc);
-    doc.extend(outside.iter().cloned());
-}
-
-/// Push a document with manual offset to all text elements using a closure
-/// This is used for indented strings where we need to preserve the original indentation
-pub fn push_offset<F>(doc: &mut Doc, level: usize, f: F)
-where
-    F: FnOnce(&mut Doc),
-{
-    push_nest_pair(doc, 0, level.cast_signed(), f);
-}
-
-// Renderer: Convert IR (Doc) to formatted text
-//
-// Implementation of the Wadler/Leijen layout algorithm from nixfmt
-
-/// Configuration for rendering
 pub struct RenderConfig {
     /// Maximum line width (default: 100)
     pub width: usize,
@@ -320,16 +65,8 @@ impl Default for RenderConfig {
     }
 }
 
-/// Render a document with specific configuration
 pub fn render_with_config(doc: Doc, config: &RenderConfig) -> String {
     layout_greedy(config.width, config.indent_width, doc)
-}
-
-/// Display width of `s`. Haskell `textWidth = Text.length`, i.e. one column
-/// per Unicode scalar; we match that so multi-byte UTF-8 (e.g. `«»`) doesn't
-/// over-count and force spurious line breaks.
-pub fn text_width(s: &str) -> usize {
-    s.chars().count()
 }
 
 /// Check if element is hard spacing (always rendered as-is)
@@ -368,7 +105,6 @@ fn lift_bounds(body: &[DocE]) -> (usize, usize) {
     (pre_end, post_start)
 }
 
-/// Check if element is a comment
 fn is_comment(elem: &DocE) -> bool {
     match elem {
         DocE::Text(_, _, TextAnn::Comment | TextAnn::TrailingComment, _) => true,
@@ -392,46 +128,6 @@ fn merge_spacings(a: Spacing, b: Spacing) -> Spacing {
         (_, Newlines(x)) => Newlines(x + 1),
         _ => max_sp,
     }
-}
-
-/// Manually force a doc to its compact layout, replacing all soft whitespace.
-/// Recurses into inner groups (flattening them). Returns `None` if the doc
-/// contains hard line breaks or exceeds the optional width limit.
-/// Mirrors Haskell `unexpandSpacing'` (Predoc.hs).
-pub fn unexpand_spacing_prime(mut limit: Option<i32>, doc: &[DocE]) -> Option<Doc> {
-    let mut result = Vec::new();
-    let mut stack: Vec<std::slice::Iter<'_, DocE>> = vec![doc.iter()];
-    while let Some(iter) = stack.last_mut() {
-        let Some(elem) = iter.next() else {
-            stack.pop();
-            continue;
-        };
-        match elem {
-            DocE::Text(_, _, _, t) => {
-                if let Some(n) = limit.as_mut() {
-                    #[allow(clippy::cast_possible_truncation, clippy::cast_possible_wrap)]
-                    {
-                        *n -= text_width(t) as i32;
-                    }
-                }
-                result.push(elem.clone());
-            }
-            DocE::Spacing(Spacing::Hardspace | Spacing::Space | Spacing::Softspace) => {
-                if let Some(n) = limit.as_mut() {
-                    *n -= 1;
-                }
-                result.push(DocE::Spacing(Spacing::Hardspace));
-            }
-            DocE::Spacing(Spacing::Break | Spacing::Softbreak) => {}
-            DocE::Spacing(_) => return None,
-            DocE::Nest(..) => result.push(elem.clone()),
-            DocE::Group(_, inner) => stack.push(inner.iter()),
-        }
-        if matches!(limit, Some(n) if n < 0) {
-            return None;
-        }
-    }
-    Some(result)
 }
 
 /// Manually force a group to compact layout (does not recurse into inner groups)
@@ -726,7 +422,6 @@ fn fits_width(budget: isize, doc: &[DocE]) -> Option<usize> {
     fits_impl::<false>(0, budget, &[doc], &mut sink)
 }
 
-/// Find the width of the first line in a document
 /// Mirrors `firstLineWidth` in Nixfmt/Predoc.hs.
 fn first_line_width(chain: Look<'_>) -> usize {
     let mut width = 0;
@@ -899,7 +594,6 @@ struct Checkpoint {
     indents: Vec<IndentEntry>,
 }
 
-/// Main layout algorithm
 fn layout_greedy(target_width: usize, indent_width: usize, doc: Doc) -> String {
     let doc = vec![DocE::Group(GroupAnn::RegularG, fixup(doc))];
 
@@ -943,7 +637,6 @@ impl Renderer {
         self.indents.last().map_or(0, |e| e.nest)
     }
 
-    /// Render a document with state tracking.
     fn render_doc(&mut self, doc: &[DocE], lookahead: Look<'_>) {
         let mut chain: Vec<&[DocE]> = Vec::with_capacity(1 + lookahead.len());
         for (i, elem) in doc.iter().enumerate() {
@@ -966,7 +659,6 @@ impl Renderer {
         }
     }
 
-    /// Render a single element.
     fn render_elem(&mut self, elem: &DocE, lookahead: Look<'_>) {
         let at_line_start = self.col == 0;
 
@@ -1065,9 +757,7 @@ impl Renderer {
         }
     }
 
-    /// Render text with proper indentation.
     fn render_text(&mut self, text_nest: usize, text_offset: usize, text: &str) {
-        // Manage indentation stack.
         while let Some(&top) = self.indents.last() {
             match text_nest.cmp(&top.nest) {
                 std::cmp::Ordering::Greater => {
@@ -1213,12 +903,10 @@ impl Renderer {
 
     /// Render a group (try compact first, then expand).
     fn render_group(&mut self, ann: GroupAnn, body: &[DocE], lookahead: Look<'_>) {
-        // Try to fit group compactly.
         if self.try_render_group(&[body], lookahead) {
             return;
         }
 
-        // Try priority groups if not transparent.
         if ann != GroupAnn::Transparent && has_priority_groups(body) {
             let checkpoint = self.checkpoint();
             for (pre, prio, post) in priority_groups(body).into_iter().rev() {
@@ -1228,7 +916,6 @@ impl Renderer {
                 pre_lookahead.extend_from_slice(&post);
                 pre_lookahead.extend_from_slice(lookahead);
                 if self.try_render_group(&pre, &pre_lookahead) {
-                    // Render prio expanded.
                     let unexpanded_post = unexpand_spacing(&post);
                     let mut prio_lookahead: Vec<&[DocE]> = Vec::with_capacity(1 + lookahead.len());
                     prio_lookahead.push(&unexpanded_post);
@@ -1247,7 +934,6 @@ impl Renderer {
             }
         }
 
-        // Fully expand group.
         self.render_doc(body, lookahead);
     }
 }
