@@ -39,8 +39,8 @@ jobs:
       - name: Build
         run: |
           nix build -L .#${{ matrix.attr }}
-          if [ -d result/pkg ]; then
-            tar -C result -czf ${{ matrix.asset }} pkg
+          if [ -d result/npm ]; then
+            tar -C result -czf ${{ matrix.asset }} npm
           else
             cp result/bin/nixfmt ${{ matrix.asset }}
           fi

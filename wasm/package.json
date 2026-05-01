@@ -1,0 +1,28 @@
+{
+  "name": "nixfmt-rs",
+  "version": "0.0.0",
+  "description": "WebAssembly build of nixfmt-rs — drop-in nixfmt with byte-identical output",
+  "license": "MPL-2.0",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Mic92/nixfmt-rs.git"
+  },
+  "keywords": ["nix", "formatter", "nixfmt", "wasm"],
+  "type": "module",
+  "files": ["bundler", "node", "web", "README.md"],
+  "main": "./node/nixfmt_wasm.js",
+  "module": "./bundler/nixfmt_wasm.js",
+  "types": "./bundler/nixfmt_wasm.d.ts",
+  "exports": {
+    ".": {
+      "types": "./bundler/nixfmt_wasm.d.ts",
+      "node": "./node/nixfmt_wasm.js",
+      "default": "./bundler/nixfmt_wasm.js"
+    },
+    "./web": {
+      "types": "./web/nixfmt_wasm.d.ts",
+      "default": "./web/nixfmt_wasm.js"
+    }
+  },
+  "sideEffects": ["./bundler/nixfmt_wasm.js", "./node/nixfmt_wasm.js"]
+}
