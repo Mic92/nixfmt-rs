@@ -224,6 +224,13 @@ provides `hyperfine` and the script defaults to the nixpkgs revision
 pinned in `flake.lock`, so `nix develop -c scripts/bench.sh` is
 self-contained.
 
+For parser micro-benchmarks via criterion (the `bench` feature gates the
+criterion dependency so `cargo test` stays lean):
+
+```bash
+cargo bench --features bench
+```
+
 ## Design goals
 
 - **Exact behavioural parity.** `--ast`, `--ir` and formatted output are
