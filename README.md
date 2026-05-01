@@ -11,7 +11,7 @@ Try it in your browser: <https://mic92.github.io/nixfmt-rs/> (WebAssembly build,
 **Parity reached** with upstream `nixfmt` v1.2.0:
 
 - Byte-identical output across the entire nixpkgs tree
-  (`LIMIT=0 cargo run --release --example diff_sweep`).
+  (`LIMIT=0 cargo run --release --features sweep --example diff_sweep`).
 - Formats all of nixpkgs in <2 s — see [Benchmarks](#benchmarks).
 
 See [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) for how the pieces fit
@@ -44,7 +44,7 @@ cargo test                       # full suite
 
 # differential check vs. reference `nixfmt` over a nixpkgs checkout
 # modes: format | ir | ast; env: NIXPKGS, LIMIT, JOBS, MAX_BYTES, REF, OUT
-LIMIT=0 cargo run --release --example diff_sweep -- format
+LIMIT=0 cargo run --release --features sweep --example diff_sweep -- format
 ```
 
 The test suite is layered (unit → regression → vendored fixtures →

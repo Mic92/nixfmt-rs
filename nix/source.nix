@@ -9,6 +9,7 @@ fs.toSource {
     ../Cargo.lock
     ../src
     ../benches
+    ../examples
     ../tests
     # cargo workspace members; manifests must exist even when not built.
     ../wasm
