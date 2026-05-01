@@ -6,7 +6,7 @@
 }:
 rustPlatform.buildRustPackage {
   pname = "nixfmt-rs";
-  version = "0.1.0";
+  version = "0.1.1";
   src = import ./source.nix { inherit lib; };
   cargoLock.lockFile = ../Cargo.lock;
   # The test suite shells out to the reference Haskell `nixfmt` to compare
