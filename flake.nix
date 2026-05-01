@@ -26,10 +26,24 @@
       );
     in
     {
-      packages = forAllSystems (system: {
-        default = pkgsFor.${system}.callPackage ./nix/package.nix { };
-        wasm = pkgsFor.${system}.callPackage ./nix/wasm.nix { };
-      });
+      packages = forAllSystems (
+        system:
+        let
+          pkgs = pkgsFor.${system};
+        in
+        {
+          default = pkgs.callPackage ./nix/package.nix { };
+          wasm = pkgs.callPackage ./nix/wasm.nix { };
+        }
+        // pkgs.lib.optionalAttrs pkgs.stdenv.hostPlatform.isLinux {
+          # Fully static musl binary for release artifacts.
+          static = pkgs.pkgsStatic.callPackage ./nix/package.nix {
+            # The reference Haskell nixfmt does not build under pkgsStatic;
+            # parity is already covered by the dynamic build's checkPhase.
+            nixfmt = null;
+          };
+        }
+      );
 
       devShells = forAllSystems (system: {
         default = pkgsFor.${system}.callPackage ./nix/shell.nix { };
