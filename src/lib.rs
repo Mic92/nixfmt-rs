@@ -1,4 +1,17 @@
-//! nixfmt-rs: Rust implementation of nixfmt with exact Haskell compatibility
+//! nixfmt-rs: Rust implementation of nixfmt with exact Haskell compatibility.
+//!
+//! # Example
+//!
+//! ```
+//! let src = "{foo=1;}";
+//! assert_eq!(nixfmt_rs::format(src).unwrap(), "{ foo = 1; }\n");
+//!
+//! let opts = nixfmt_rs::Options { width: 40, indent: 4 };
+//! let _ = nixfmt_rs::format_with(src, &opts).unwrap();
+//! ```
+//!
+//! On parse failure the returned [`ParseError`] can be rendered for users via
+//! [`format_error`].
 
 // Clippy pedantic/nursery are enabled workspace-wide via Cargo.toml [lints];
 // see the allow-list there for rationale.
@@ -122,7 +135,18 @@ pub fn format_ir(source: &str) -> Result<String> {
     Ok(writer.finish())
 }
 
-/// Format a parse error as a user-friendly colored error message
+/// Render a [`ParseError`] as a multi-line diagnostic with source snippet and
+/// caret, in the style of rustc.
+///
+/// # Example
+///
+/// ```
+/// let src = "{ x = ";
+/// let err = nixfmt_rs::format(src).unwrap_err();
+/// let msg = nixfmt_rs::format_error(src, Some("default.nix"), &err);
+/// assert!(msg.contains("default.nix:1:"));
+/// assert!(msg.contains("{ x = "));
+/// ```
 #[must_use]
 pub fn format_error(source: &str, filename: Option<&str>, error: &ParseError) -> String {
     let context = error::context::ErrorContext::new(source, filename);
