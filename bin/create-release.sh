@@ -2,6 +2,10 @@
 
 set -euo pipefail
 
+# Brace group so bash reads the whole script before executing anything;
+# `git pull` below may rewrite this file mid-run otherwise.
+{
+
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" >/dev/null && pwd)"
 cd "$SCRIPT_DIR/.."
 
@@ -66,4 +70,7 @@ git checkout main
 
 waitForPr "release-${version}"
 git pull git@github.com:Mic92/nixfmt-rs main
-gh release create "${version}" --draft --title "${version}" --notes ""
+gh release create "${version}" --draft --title "${version}" --generate-notes
+
+exit 0
+}
