@@ -37,8 +37,13 @@
       });
 
       formatter = forAllSystems (system: treefmtEvalFor.${system}.config.build.wrapper);
-      checks = forAllSystems (system: {
-        formatting = treefmtEvalFor.${system}.config.build.check self;
-      });
+      checks = forAllSystems (
+        system:
+        # buildbot-nix builds .#checks; expose packages here so CI builds them.
+        self.packages.${system}
+        // {
+          formatting = treefmtEvalFor.${system}.config.build.check self;
+        }
+      );
     };
 }
