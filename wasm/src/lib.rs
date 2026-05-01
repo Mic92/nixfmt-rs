@@ -1,58 +1,78 @@
 //! WebAssembly bindings for `nixfmt-rs`.
 //!
-//! Build via `nix build .#wasm`, or manually:
-//!
-//! ```sh
-//! cargo build -p nixfmt-wasm --release --target wasm32-unknown-unknown
-//! wasm-bindgen --target web --out-dir pkg \
-//!     target/wasm32-unknown-unknown/release/nixfmt_wasm.wasm
+//! ```js
+//! import init, { format, version } from "nixfmt-wasm";
+//! await init();
+//! format("{a=1;}");                    // "{ a = 1; }\n"
+//! format(src, { width: 80, indent: 4, filename: "foo.nix" });
 //! ```
 
+use js_sys::{Array, Error, Reflect};
 use wasm_bindgen::prelude::*;
 
-/// Format a Nix expression with default layout (width 100, indent 2).
-///
-/// # Errors
-/// Throws a JS exception whose message is the same multi-line diagnostic
-/// the CLI prints (snippet + caret + hint). ANSI escapes are stripped
-/// since browser DOM nodes don't render them.
-#[wasm_bindgen]
-pub fn format(source: &str) -> Result<String, JsError> {
-    format_with(source, 100, 2)
+#[wasm_bindgen(typescript_custom_section)]
+const TS: &str = r#"
+export interface FormatOptions {
+  /** Target line width (soft). Default 100. */
+  width?: number;
+  /** Spaces per indentation level. Default 2. */
+  indent?: number;
+  /** Name shown in the diagnostic on parse failure. */
+  filename?: string;
 }
 
-/// Format a Nix expression with explicit `width` (line width) and `indent`
-/// (spaces per level).
-///
-/// # Errors
-/// See [`format`].
+/** Thrown by {@link format} when `source` is not valid Nix. */
+export interface ParseError extends Error {
+  /** Multi-line rustc-style diagnostic with source snippet and caret. */
+  diagnostic: string;
+  /** Byte offsets `[start, end)` of the primary error span in `source`. */
+  range: [number, number];
+}
+"#;
+
 #[wasm_bindgen]
-pub fn format_with(source: &str, width: usize, indent: usize) -> Result<String, JsError> {
+extern "C" {
+    #[wasm_bindgen(typescript_type = "FormatOptions")]
+    pub type FormatOptions;
+    #[wasm_bindgen(method, getter, structural)]
+    fn width(this: &FormatOptions) -> Option<u32>;
+    #[wasm_bindgen(method, getter, structural)]
+    fn indent(this: &FormatOptions) -> Option<u32>;
+    #[wasm_bindgen(method, getter, structural)]
+    fn filename(this: &FormatOptions) -> Option<String>;
+}
+
+/// Format a Nix expression. Throws {@link ParseError} if `source` is invalid.
+#[wasm_bindgen(unchecked_return_type = "string")]
+pub fn format(source: &str, options: Option<FormatOptions>) -> Result<String, JsValue> {
     let mut opts = nixfmt_rs::Options::default();
-    opts.width = width;
-    opts.indent = indent;
+    let mut filename = None;
+    if let Some(o) = options.as_ref() {
+        if let Some(w) = o.width() {
+            opts.width = w as usize;
+        }
+        if let Some(i) = o.indent() {
+            opts.indent = i as usize;
+        }
+        filename = o.filename();
+    }
+
     nixfmt_rs::format_with(source, &opts).map_err(|e| {
-        let pretty = nixfmt_rs::format_error(source, None, &e);
-        JsError::new(&strip_ansi(&pretty))
+        let r = e.byte_range();
+        let diagnostic = nixfmt_rs::format_error(source, filename.as_deref(), &e);
+        let err = Error::new(&e.message());
+        err.set_name("ParseError");
+        let obj: &JsValue = err.as_ref();
+        let _ = Reflect::set(obj, &"diagnostic".into(), &diagnostic.into());
+        let range = Array::of2(&(r.start as u32).into(), &(r.end as u32).into());
+        let _ = Reflect::set(obj, &"range".into(), &range);
+        err.into()
     })
 }
 
-/// Drop ANSI SGR escape sequences (`\x1b[...m`). The CLI formatter colours
-/// its output for terminals; the playground renders plain text in a `<pre>`.
-fn strip_ansi(s: &str) -> String {
-    let mut out = String::with_capacity(s.len());
-    let mut chars = s.chars().peekable();
-    while let Some(c) = chars.next() {
-        if c == '\x1b' && chars.peek() == Some(&'[') {
-            chars.next();
-            for term in chars.by_ref() {
-                if term.is_ascii_alphabetic() {
-                    break;
-                }
-            }
-        } else {
-            out.push(c);
-        }
-    }
-    out
+/// Crate version string, e.g. `"0.1.2"`.
+#[wasm_bindgen]
+#[must_use]
+pub fn version() -> String {
+    nixfmt_rs::VERSION.into()
 }

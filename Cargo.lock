@@ -478,6 +478,7 @@ dependencies = [
 name = "nixfmt-wasm"
 version = "0.1.0"
 dependencies = [
+ "js-sys",
  "nixfmt_rs",
  "wasm-bindgen",
 ]

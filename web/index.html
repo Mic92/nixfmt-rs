@@ -262,7 +262,7 @@
     </main>
 
     <script type="module">
-      import init, { format_with } from "./pkg/nixfmt_wasm.js";
+      import init, { format } from "./pkg/nixfmt_wasm.js";
 
       const $ = (id) => document.getElementById(id);
       const input = $("input");
@@ -282,13 +282,13 @@
         const indent = Math.max(0, +indentEl.value || 2);
         const t0 = performance.now();
         try {
-          output.textContent = format_with(input.value, width, indent);
+          output.textContent = format(input.value, { width, indent });
           output.classList.remove("error");
           const dt = (performance.now() - t0).toFixed(2);
           const bytes = new TextEncoder().encode(input.value).length;
           setStatus(`formatted ${bytes} B in ${dt} ms`, "ready");
         } catch (e) {
-          output.textContent = String(e.message ?? e);
+          output.textContent = e.diagnostic ?? String(e.message ?? e);
           output.classList.add("error");
           setStatus("parse error", "error");
         }

@@ -33,6 +33,10 @@ mod pretty;
 mod types;
 
 pub use error::ParseError;
+
+/// Version of the `nixfmt_rs` crate (and thus the formatting rules).
+pub const VERSION: &str = env!("CARGO_PKG_VERSION");
+
 use predoc::{Pretty, RenderConfig, render_with_config};
 
 // Internal-only Result type and AST types
