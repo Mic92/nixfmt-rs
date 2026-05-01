@@ -536,29 +536,16 @@ fn line_prefix(line: &[StringPart]) -> Option<String> {
     }
 }
 
-/// Find the common leading space prefix across all lines
+/// Find the common leading space prefix across all lines.
+///
+/// Only space characters are considered (Nix's `''…''` indent stripping ignores
+/// tabs), so the "common prefix" is simply the minimum count of leading spaces.
 fn find_common_space_prefix(prefixes: &[String]) -> Option<String> {
-    if prefixes.is_empty() {
-        return None;
-    }
-
-    let mut common: String = prefixes[0].chars().take_while(|c| *c == ' ').collect();
-    for prefix in prefixes.iter().skip(1) {
-        let candidate: String = prefix.chars().take_while(|c| *c == ' ').collect();
-        let mut new_common = String::new();
-        for (a, b) in common.chars().zip(candidate.chars()) {
-            if a == b {
-                new_common.push(a);
-            } else {
-                break;
-            }
-        }
-        common = new_common;
-        if common.is_empty() {
-            break;
-        }
-    }
-    Some(common)
+    prefixes
+        .iter()
+        .map(|p| p.bytes().take_while(|&b| b == b' ').count())
+        .min()
+        .map(|n| " ".repeat(n))
 }
 
 /// Strip a prefix from the first text part of a line.

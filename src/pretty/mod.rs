@@ -180,70 +180,11 @@ impl Pretty for Binder {
 
 impl Pretty for Token {
     fn pretty(&self, doc: &mut Doc) {
-        use Token::{
-            EnvPath, Float, Identifier, Integer, KAssert, KElse, KIf, KIn, KInherit, KLet, KOr,
-            KRec, KThen, KWith, Sof, TAnd, TAssign, TAt, TBraceClose, TBraceOpen, TBrackClose,
-            TBrackOpen, TColon, TComma, TConcat, TDiv, TDot, TDoubleQuote, TDoubleSingleQuote,
-            TEllipsis, TEqual, TGreater, TGreaterEqual, TImplies, TInterClose, TInterOpen, TLess,
-            TLessEqual, TMinus, TMul, TNegate, TNot, TOr, TParenClose, TParenOpen, TPipeBackward,
-            TPipeForward, TPlus, TQuestion, TSemicolon, TTilde, TUnequal, TUpdate,
-        };
-        if let EnvPath(s) = self {
+        if let Self::EnvPath(s) = self {
             push_text(doc, format!("<{s}>"));
             return;
         }
-        let s = match self {
-            Integer(s) | Float(s) | Identifier(s) => s.as_str(),
-            EnvPath(_) => unreachable!("EnvPath handled above"),
-            KAssert => "assert",
-            KElse => "else",
-            KIf => "if",
-            KIn => "in",
-            KInherit => "inherit",
-            KLet => "let",
-            KOr => "or",
-            KRec => "rec",
-            KThen => "then",
-            KWith => "with",
-            TBraceOpen => "{",
-            TBraceClose | TInterClose => "}",
-            TBrackOpen => "[",
-            TBrackClose => "]",
-            TInterOpen => "${",
-            TParenOpen => "(",
-            TParenClose => ")",
-            TAssign => "=",
-            TAt => "@",
-            TColon => ":",
-            TComma => ",",
-            TDot => ".",
-            TDoubleQuote => "\"",
-            TDoubleSingleQuote => "''",
-            TEllipsis => "...",
-            TQuestion => "?",
-            TSemicolon => ";",
-            TConcat => "++",
-            TNegate | TMinus => "-",
-            TUpdate => "//",
-            TPlus => "+",
-            TMul => "*",
-            TDiv => "/",
-            TAnd => "&&",
-            TOr => "||",
-            TEqual => "==",
-            TGreater => ">",
-            TGreaterEqual => ">=",
-            TImplies => "->",
-            TLess => "<",
-            TLessEqual => "<=",
-            TNot => "!",
-            TUnequal => "!=",
-            TPipeForward => "|>",
-            TPipeBackward => "<|",
-            Sof => "",
-            TTilde => "~",
-        };
-        push_text(doc, s);
+        push_text(doc, self.text());
     }
 }
 

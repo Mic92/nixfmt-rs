@@ -260,14 +260,11 @@ pub fn format_bracket_list<T: PrettySimple, W: Writer>(w: &mut W, items: &[T], b
     }
 
     with_brackets(w, "[", "]", bump_depth, |w, bracket_color| {
-        if items.len() == 1 && items[0].is_simple() {
+        if let [only] = items
+            && only.is_simple()
+        {
             w.write_plain(" ");
-            for (i, item) in items.iter().enumerate() {
-                if i > 0 {
-                    w.write_plain(" ");
-                }
-                item.format(w);
-            }
+            only.format(w);
             w.write_plain(" ");
         } else {
             for (i, item) in items.iter().enumerate() {

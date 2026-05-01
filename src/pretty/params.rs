@@ -61,11 +61,8 @@ fn take_last_trail_comment_expr(expr: &mut Expression) -> Option<TrailingComment
             | Term::Set(_, _, _, close)
             | Term::Parenthesized(_, _, close) => close.trail_comment.take(),
             Term::Selection(_, _, Some((_, def))) => term(def),
-            #[allow(clippy::option_if_let_else)] // map_or_else fights the borrow checker here
-            Term::Selection(inner, sels, None) => match sels.last_mut() {
-                Some(last) => sel(last),
-                None => term(inner),
-            },
+            // The parser only builds `Selection` when `selectors` is non-empty.
+            Term::Selection(_, sels, None) => sel(sels.last_mut().expect("≥1 selector")),
         }
     }
     match expr {
@@ -79,10 +76,8 @@ fn take_last_trail_comment_expr(expr: &mut Expression) -> Option<TrailingComment
         | Expression::Operation(_, _, body)
         | Expression::Negation(_, body)
         | Expression::Inversion(_, body) => take_last_trail_comment_expr(body),
-        Expression::MemberCheck(_, qmark, sels) => match sels.last_mut() {
-            Some(last) => sel(last),
-            None => qmark.trail_comment.take(),
-        },
+        // `parse_selector_path` always pushes at least one selector.
+        Expression::MemberCheck(_, _, sels) => sel(sels.last_mut().expect("≥1 selector")),
     }
 }
 
