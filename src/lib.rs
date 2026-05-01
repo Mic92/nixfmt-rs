@@ -6,7 +6,7 @@
 
 // Internal modules - hidden from public API
 mod colored_writer;
-pub mod error; // Keep public for ParseError export
+mod error;
 mod predoc;
 mod pretty_simple;
 
@@ -24,10 +24,30 @@ use predoc::{Pretty, RenderConfig, render_with_config};
 pub(crate) use error::Result;
 pub(crate) use types::File;
 
+/// Layout options for [`format_with`].
+#[derive(Debug, Clone)]
+pub struct Options {
+    /// Maximum line width the formatter targets (soft limit).
+    pub width: usize,
+    /// Spaces per indentation level.
+    pub indent: usize,
+}
+
+impl Default for Options {
+    /// Matches the upstream Haskell `nixfmt` defaults (`--width 100 --indent 2`).
+    fn default() -> Self {
+        Self {
+            width: 100,
+            indent: 2,
+        }
+    }
+}
+
 /// Parse a Nix expression from source code.
 ///
 /// # Errors
 /// Returns a [`ParseError`] if `source` is not valid Nix.
+#[doc(hidden)] // AST type is internal; exposed for in-tree bin/benches/fuzz only
 pub fn parse(source: &str) -> Result<File> {
     let mut parser = parser::Parser::new(source)?;
     parser.parse_file()
@@ -38,6 +58,7 @@ pub fn parse(source: &str) -> Result<File> {
 ///
 /// # Errors
 /// See [`parse`].
+#[doc(hidden)]
 pub fn parse_normalized(source: &str) -> Result<File> {
     let mut ast = parse(source)?;
     normalize::normalize_file(&mut ast);
@@ -49,42 +70,36 @@ pub fn parse_normalized(source: &str) -> Result<File> {
 /// # Errors
 /// See [`parse`]; formatting itself never fails.
 pub fn format(source: &str) -> Result<String> {
-    format_with(source, 100, 2)
+    format_with(source, &Options::default())
 }
 
-/// Format a Nix file with explicit layout parameters.
-///
-/// Exposed so the CLI can honour `--width` / `--indent` without re-exporting
-/// the internal `RenderConfig` type.
+/// Format a Nix file with explicit layout [`Options`].
 ///
 /// # Errors
 /// See [`parse`].
-pub fn format_with(source: &str, width: usize, indent: usize) -> Result<String> {
+pub fn format_with(source: &str, opts: &Options) -> Result<String> {
     let ast = parse(source)?;
     let mut doc = predoc::Doc::new();
     ast.pretty(&mut doc);
     let config = RenderConfig {
-        width,
-        indent_width: indent,
+        width: opts.width,
+        indent_width: opts.indent,
     };
     let output = render_with_config(doc, &config);
     Ok(output)
 }
 
-/// Convert AST to IR (intermediate representation) for debugging
-/// Returns an opaque IR that can be formatted for display
-#[must_use]
-pub fn ast_to_ir(ast: &File) -> predoc::IR {
+pub(crate) fn ast_to_ir(ast: &File) -> predoc::IR {
     let mut doc = predoc::Doc::new();
     ast.pretty(&mut doc);
-    let doc = predoc::fixup(doc);
-    predoc::IR(doc)
+    predoc::IR(predoc::fixup(doc))
 }
 
 /// Format AST as colored debug output (for --ast mode).
 ///
 /// # Errors
 /// See [`parse`].
+#[doc(hidden)]
 pub fn format_ast(source: &str) -> Result<String> {
     use pretty_simple::PrettySimple;
     let ast = parse(source)?;
@@ -97,6 +112,7 @@ pub fn format_ast(source: &str) -> Result<String> {
 ///
 /// # Errors
 /// See [`parse`].
+#[doc(hidden)]
 pub fn format_ir(source: &str) -> Result<String> {
     use pretty_simple::PrettySimple;
     let ast = parse(source)?;

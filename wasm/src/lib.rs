@@ -28,7 +28,8 @@ pub fn format(source: &str) -> Result<String, JsError> {
 /// See [`format`].
 #[wasm_bindgen]
 pub fn format_with(source: &str, width: usize, indent: usize) -> Result<String, JsError> {
-    nixfmt_rs::format_with(source, width, indent).map_err(|e| {
+    let opts = nixfmt_rs::Options { width, indent };
+    nixfmt_rs::format_with(source, &opts).map_err(|e| {
         let pretty = nixfmt_rs::format_error(source, None, &e);
         JsError::new(&strip_ansi(&pretty))
     })

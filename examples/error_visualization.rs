@@ -4,9 +4,7 @@
 //! This example shows what error messages look like for common parsing errors.
 //! Run with: cargo run --example `error_visualization`
 
-use nixfmt_rs::error::context::ErrorContext;
-use nixfmt_rs::error::format::ErrorFormatter;
-use nixfmt_rs::parse;
+use nixfmt_rs::{format_error, parse};
 
 /// A test case with intentionally broken Nix code
 struct ErrorExample {
@@ -255,10 +253,7 @@ in result",
             Err(error) => {
                 println!("{}", "┌".to_owned() + &"─".repeat(78));
 
-                // Use the new ErrorFormatter for beautiful output
-                let context = ErrorContext::new(example.code, Some("<input>"));
-                let formatter = ErrorFormatter::new(&context);
-                let rendered = formatter.format(&error);
+                let rendered = format_error(example.code, Some("<input>"), &error);
 
                 for line in rendered.lines() {
                     println!("│ {line}");

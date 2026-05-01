@@ -16,9 +16,9 @@ pub struct ParseError {
     pub kind: ErrorKind,
 }
 
+#[allow(clippy::unnecessary_box_returns)] // returned straight into Result<_, Box<ParseError>>
 impl ParseError {
-    /// Build a boxed [`ErrorKind::UnexpectedToken`] error.
-    pub fn unexpected(
+    pub(crate) fn unexpected(
         span: Span,
         expected: impl Into<Vec<String>>,
         found: impl Into<String>,
@@ -32,8 +32,11 @@ impl ParseError {
         })
     }
 
-    /// Build a boxed [`ErrorKind::InvalidSyntax`] error.
-    pub fn invalid(span: Span, description: impl Into<String>, hint: Option<String>) -> Box<Self> {
+    pub(crate) fn invalid(
+        span: Span,
+        description: impl Into<String>,
+        hint: Option<String>,
+    ) -> Box<Self> {
         Box::new(Self {
             span,
             kind: ErrorKind::InvalidSyntax {
@@ -43,9 +46,8 @@ impl ParseError {
         })
     }
 
-    /// Build a boxed [`ErrorKind::UnclosedDelimiter`] error.
     #[must_use]
-    pub fn unclosed(span: Span, delimiter: char, opening_span: Span) -> Box<Self> {
+    pub(crate) fn unclosed(span: Span, delimiter: char, opening_span: Span) -> Box<Self> {
         Box::new(Self {
             span,
             kind: ErrorKind::UnclosedDelimiter {
@@ -55,9 +57,8 @@ impl ParseError {
         })
     }
 
-    /// Build a boxed [`ErrorKind::MissingToken`] error.
     #[must_use]
-    pub fn missing(span: Span, token: &str, after: &str) -> Box<Self> {
+    pub(crate) fn missing(span: Span, token: &str, after: &str) -> Box<Self> {
         Box::new(Self {
             span,
             kind: ErrorKind::MissingToken {
