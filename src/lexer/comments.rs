@@ -106,10 +106,16 @@ fn is_valid_language_identifier(s: &str) -> bool {
 }
 
 /// Split text into lines, normalize line endings, and drop trailing empty lines
-/// This matches nixfmt's splitLines function which does `dropWhileEnd Text.null`
+/// This matches nixfmt's splitLines function which does `dropWhileEnd Text.null`.
+///
+/// Unlike upstream nixfmt we also split on a bare `\r`: Nix (and our lexer)
+/// treats `\r` as a line terminator, so a block-comment body that contains one
+/// is *not* single-line and must not be rewritten to a `#` comment, or the
+/// bytes after the `\r` re-lex as code.
 pub(super) fn split_lines(text: &str) -> Vec<String> {
     let lines: Vec<String> = text
         .replace("\r\n", "\n")
+        .replace('\r', "\n")
         .lines()
         .map(|line| line.trim_end().to_string())
         .collect();
