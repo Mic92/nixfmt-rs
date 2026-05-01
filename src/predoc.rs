@@ -456,7 +456,7 @@ fn unexpand_spacing(chain: &[&[DocE]]) -> Doc {
 fn has_priority_groups(doc: &[DocE]) -> bool {
     doc.iter().any(|e| match e {
         DocE::Group(GroupAnn::Priority, _) => true,
-        DocE::Group(GroupAnn::Transparent, ys) => has_priority_groups(ys),
+        DocE::Group(GroupAnn::Transparent, body) => has_priority_groups(body),
         _ => false,
     })
 }
@@ -473,72 +473,75 @@ pub fn fixup(mut doc: Doc) -> Doc {
 /// Cheap placeholder used to vacate a slot during the read/write compaction.
 const HOLE: DocE = DocE::Spacing(Spacing::Softbreak);
 
-/// In-place `fixup`. Walks `doc` with a read index `r` and write index `w`
-/// (`w <= r`), recursing into group bodies via `&mut` so the existing `Vec`
-/// allocations are reused. Mirrors Haskell `fixup` clause-by-clause; see the
-/// per-arm comments for the corresponding rule.
-fn fixup_mut(doc: &mut Vec<DocE>, mut nacc: isize, mut oacc: isize) {
-    let mut r = 0usize;
-    let mut w = 0usize;
-    while r < doc.len() {
-        let elem = std::mem::replace(&mut doc[r], HOLE);
-        r += 1;
+/// In-place `fixup`. Walks `doc` with a read index and write index
+/// (`write_idx <= read_idx`), recursing into group bodies via `&mut` so the
+/// existing `Vec` allocations are reused. Mirrors Haskell `fixup`
+/// clause-by-clause; see the per-arm comments for the corresponding rule.
+fn fixup_mut(doc: &mut Vec<DocE>, mut nest_acc: isize, mut offset_acc: isize) {
+    let mut read_idx = 0usize;
+    let mut write_idx = 0usize;
+    while read_idx < doc.len() {
+        let elem = std::mem::replace(&mut doc[read_idx], HOLE);
+        read_idx += 1;
         match elem {
             DocE::Nest(dn, doff) => {
-                nacc += dn;
-                oacc += doff;
+                nest_acc += dn;
+                offset_acc += doff;
             }
 
             // `Spacing a : Spacing b : ys` — fold into the next slot, or into
             // the previous written slot when a `Nest` marker sat in between.
             DocE::Spacing(a) => {
-                if let Some(DocE::Spacing(b)) = doc.get(r) {
-                    doc[r] = DocE::Spacing(merge_spacings(a, *b));
-                } else if matches!(w.checked_sub(1).map(|i| &doc[i]), Some(DocE::Spacing(_))) {
-                    if let DocE::Spacing(b) = &mut doc[w - 1] {
+                if let Some(DocE::Spacing(b)) = doc.get(read_idx) {
+                    doc[read_idx] = DocE::Spacing(merge_spacings(a, *b));
+                } else if matches!(
+                    write_idx.checked_sub(1).map(|i| &doc[i]),
+                    Some(DocE::Spacing(_))
+                ) {
+                    if let DocE::Spacing(b) = &mut doc[write_idx - 1] {
                         *b = merge_spacings(*b, a);
                     }
                 } else {
-                    doc[w] = DocE::Spacing(a);
-                    w += 1;
+                    doc[write_idx] = DocE::Spacing(a);
+                    write_idx += 1;
                 }
             }
 
             // `Text ann a : Text ann b : ys` — concatenate into the previous
             // written slot, keeping the first text's (already baked) indent.
-            DocE::Text(l, o, ann, txt) => {
-                if w > 0
-                    && let DocE::Text(_, _, ann2, b) = &mut doc[w - 1]
-                    && ann == *ann2
+            DocE::Text(nest, offset, ann, txt) => {
+                if write_idx > 0
+                    && let DocE::Text(_, _, prev_ann, prev_txt) = &mut doc[write_idx - 1]
+                    && ann == *prev_ann
                 {
-                    b.push_str(&txt);
+                    prev_txt.push_str(&txt);
                     continue;
                 }
-                let l = l.cast_signed() + nacc;
-                let o = o.cast_signed() + oacc;
-                debug_assert!(l >= 0 && o >= 0, "unbalanced Nest deltas");
-                let (l, o) = (l.cast_unsigned(), o.cast_unsigned());
-                doc[w] = DocE::Text(l, o, ann, txt);
-                w += 1;
+                let nest = nest.cast_signed() + nest_acc;
+                let offset = offset.cast_signed() + offset_acc;
+                debug_assert!(nest >= 0 && offset >= 0, "unbalanced Nest deltas");
+                doc[write_idx] = DocE::Text(nest.cast_unsigned(), offset.cast_unsigned(), ann, txt);
+                write_idx += 1;
             }
 
             DocE::Group(ann, mut body) => {
                 // `Spacing Hardspace : Group ann xs : ys` — pull a just-written
                 // hardspace into the group so it can merge with a leading soft
                 // spacing during the recursive fixup.
-                if w > 0 && matches!(doc[w - 1], DocE::Spacing(Spacing::Hardspace)) {
-                    w -= 1;
-                    doc[w] = HOLE;
+                if write_idx > 0 && matches!(doc[write_idx - 1], DocE::Spacing(Spacing::Hardspace))
+                {
+                    write_idx -= 1;
+                    doc[write_idx] = HOLE;
                     body.insert(0, DocE::Spacing(Spacing::Hardspace));
                 }
-                fixup_mut(&mut body, nacc, oacc);
+                fixup_mut(&mut body, nest_acc, offset_acc);
 
                 let (pre_end, post_start) = lift_bounds(&body);
 
                 if pre_end == 0 && post_start == body.len() && !body.is_empty() {
                     // Fast path: nothing to lift.
-                    doc[w] = DocE::Group(ann, simplify_group(ann, body));
-                    w += 1;
+                    doc[write_idx] = DocE::Group(ann, simplify_group(ann, body));
+                    write_idx += 1;
                     continue;
                 }
 
@@ -553,70 +556,70 @@ fn fixup_mut(doc: &mut Vec<DocE>, mut nacc: isize, mut oacc: isize) {
                     // already carry the baked indent, so wrap with a `Nest`
                     // that cancels the running accumulator for the reprocess.
                     let mut lifted = Vec::with_capacity(pre.len() + post.len() + 2);
-                    lifted.push(DocE::Nest(-nacc, -oacc));
+                    lifted.push(DocE::Nest(-nest_acc, -offset_acc));
                     lifted.extend(pre);
                     lifted.extend(post);
-                    lifted.push(DocE::Nest(nacc, oacc));
-                    doc.splice(w..r, lifted);
+                    lifted.push(DocE::Nest(nest_acc, offset_acc));
+                    doc.splice(write_idx..read_idx, lifted);
                 } else {
                     let core = simplify_group(ann, core);
                     // `fixup (a : pre)`: the lifted prefix is already fixed
                     // internally, so the only remaining rewrite is a possible
-                    // spacing merge across the boundary with `doc[w-1]`.
-                    if w > 0
-                        && matches!(doc[w - 1], DocE::Spacing(_))
+                    // spacing merge across the boundary with `doc[write_idx-1]`.
+                    if write_idx > 0
+                        && matches!(doc[write_idx - 1], DocE::Spacing(_))
                         && let (DocE::Spacing(a), Some(DocE::Spacing(b))) =
-                            (&doc[w - 1], pre.first())
+                            (&doc[write_idx - 1], pre.first())
                     {
-                        doc[w - 1] = DocE::Spacing(merge_spacings(*a, *b));
+                        doc[write_idx - 1] = DocE::Spacing(merge_spacings(*a, *b));
                         pre.remove(0);
                     }
                     let pre_len = pre.len();
                     // Finalise `pre ++ [Group ann core]` into the write side
                     // and leave `post` on the read side for `fixup (post ++ ys)`.
                     doc.splice(
-                        w..r,
+                        write_idx..read_idx,
                         pre.into_iter()
                             .chain(std::iter::once(DocE::Group(ann, core)))
                             .chain(post),
                     );
-                    w += pre_len + 1;
+                    write_idx += pre_len + 1;
                 }
-                r = w;
+                read_idx = write_idx;
             }
         }
     }
-    doc.truncate(w);
+    doc.truncate(write_idx);
 }
 
 /// Shared engine for `fits` / `fits_width`. Mirrors `fits` in Nixfmt/Predoc.hs.
 ///
-/// `ni` is the next-line indentation delta used only by the trailing-comment
-/// rule; `c` is the remaining width budget. Groups are flattened in place so
-/// adjacent spacings across a group boundary merge exactly as in the Haskell
-/// `ys ++ xs` recursion, and so comment text inside a group never gets
-/// double-counted against `c`.
+/// `next_indent_delta` is the next-line indentation delta used only by the
+/// trailing-comment rule; `budget` is the remaining width budget. Groups are
+/// flattened in place so adjacent spacings across a group boundary merge
+/// exactly as in the Haskell `ys ++ xs` recursion, and so comment text inside
+/// a group never gets double-counted against `budget`.
 ///
 /// `WRITE` selects whether the compact rendering is appended to `out` (and
 /// rolled back on failure). Monomorphised so the width-only path carries no
 /// branch or `&mut String` overhead.
 #[inline]
 fn fits_impl<const WRITE: bool>(
-    mut ni: isize,
-    mut c: isize,
+    mut next_indent_delta: isize,
+    mut budget: isize,
     chain: &[&[DocE]],
     out: &mut String,
 ) -> Option<usize> {
     let mark = out.len();
     let mut width = 0usize;
-    if c < 0 {
+    if budget < 0 {
         return None;
     }
 
     let mut stack: Vec<std::slice::Iter<'_, DocE>> = Vec::with_capacity(chain.len() + 4);
-    for s in chain.iter().rev() {
-        if !s.is_empty() {
-            stack.push(s.iter());
+    for slice in chain.iter().rev() {
+        if !slice.is_empty() {
+            stack.push(slice.iter());
         }
     }
     let mut pending: Option<Spacing> = None;
@@ -632,11 +635,11 @@ fn fits_impl<const WRITE: bool>(
 
     loop {
         let elem = loop {
-            let Some(it) = stack.last_mut() else {
+            let Some(iter) = stack.last_mut() else {
                 break None;
             };
-            match it.next() {
-                Some(DocE::Group(_, ys)) => stack.push(ys.iter()),
+            match iter.next() {
+                Some(DocE::Group(_, body)) => stack.push(body.iter()),
                 Some(e) => break Some(e),
                 None => {
                     stack.pop();
@@ -649,17 +652,17 @@ fn fits_impl<const WRITE: bool>(
             continue;
         }
 
-        if let Some(sp) = pending.take() {
-            match sp {
+        if let Some(spacing) = pending.take() {
+            match spacing {
                 Spacing::Softbreak | Spacing::Break => {}
                 Spacing::Softspace | Spacing::Space | Spacing::Hardspace => {
                     if WRITE {
                         out.push(' ');
                     }
                     width += 1;
-                    c -= 1;
-                    ni -= 1;
-                    if c < 0 {
+                    budget -= 1;
+                    next_indent_delta -= 1;
+                    if budget < 0 {
                         fail!();
                     }
                 }
@@ -670,14 +673,14 @@ fn fits_impl<const WRITE: bool>(
         match elem {
             None => return Some(width),
             Some(DocE::Text(_, _, TextAnn::RegularT, t)) => {
-                let w = text_width(t);
+                let len = text_width(t);
                 if WRITE {
                     out.push_str(t);
                 }
-                width += w;
-                c -= w.cast_signed();
-                ni -= w.cast_signed();
-                if c < 0 {
+                width += len;
+                budget -= len.cast_signed();
+                next_indent_delta -= len.cast_signed();
+                if budget < 0 {
                     fail!();
                 }
             }
@@ -688,7 +691,7 @@ fn fits_impl<const WRITE: bool>(
                 width += text_width(t);
             }
             Some(DocE::Text(_, _, TextAnn::TrailingComment, t)) => {
-                if ni == 0 {
+                if next_indent_delta == 0 {
                     if WRITE {
                         out.push(' ');
                     }
@@ -707,27 +710,32 @@ fn fits_impl<const WRITE: bool>(
 
 /// Try to render `chain` compactly into `out`; on failure `out` is restored.
 #[inline]
-fn fits(ni: isize, c: isize, chain: &[&[DocE]], out: &mut String) -> Option<usize> {
-    fits_impl::<true>(ni, c, chain, out)
+fn fits(
+    next_indent_delta: isize,
+    budget: isize,
+    chain: &[&[DocE]],
+    out: &mut String,
+) -> Option<usize> {
+    fits_impl::<true>(next_indent_delta, budget, chain, out)
 }
 
 /// Width-only variant used by `first_line_fits`.
 #[inline]
-fn fits_width(c: isize, doc: &[DocE]) -> Option<usize> {
+fn fits_width(budget: isize, doc: &[DocE]) -> Option<usize> {
     let mut sink = String::new();
-    fits_impl::<false>(0, c, &[doc], &mut sink)
+    fits_impl::<false>(0, budget, &[doc], &mut sink)
 }
 
 /// Find the width of the first line in a document
 /// Mirrors `firstLineWidth` in Nixfmt/Predoc.hs.
 fn first_line_width(chain: Look<'_>) -> usize {
     let mut width = 0;
-    let mut it = LookIter::new(chain);
+    let mut iter = LookIter::new(chain);
     let mut pending: Option<Spacing> = None;
     loop {
         let elem = loop {
-            match it.next() {
-                Some(DocE::Group(_, xs)) => it.push_front(xs),
+            match iter.next() {
+                Some(DocE::Group(_, body)) => iter.push_front(body),
                 e => break e,
             }
         };
@@ -735,8 +743,8 @@ fn first_line_width(chain: Look<'_>) -> usize {
             pending = Some(pending.map_or(*s, |p| merge_spacings(p, *s)));
             continue;
         }
-        if let Some(sp) = pending.take() {
-            if sp == Spacing::Hardspace {
+        if let Some(spacing) = pending.take() {
+            if spacing == Spacing::Hardspace {
                 width += 1;
             } else {
                 return width;
@@ -755,40 +763,40 @@ fn first_line_width(chain: Look<'_>) -> usize {
 fn first_line_fits(target_width: usize, max_width: usize, chain: Look<'_>) -> bool {
     let max = max_width.cast_signed();
     let target = target_width.cast_signed();
-    let mut c = max;
-    let mut it = LookIter::new(chain);
+    let mut budget = max;
+    let mut iter = LookIter::new(chain);
     let mut pending: Option<Spacing> = None;
     let mut rest: Vec<&[DocE]> = Vec::new();
     loop {
-        if c < 0 {
+        if budget < 0 {
             return false;
         }
-        let elem = it.next();
+        let elem = iter.next();
         if let Some(DocE::Spacing(s)) = elem {
             pending = Some(pending.map_or(*s, |p| merge_spacings(p, *s)));
             continue;
         }
-        if let Some(sp) = pending.take() {
-            if sp == Spacing::Hardspace {
-                c -= 1;
-                if c < 0 {
+        if let Some(spacing) = pending.take() {
+            if spacing == Spacing::Hardspace {
+                budget -= 1;
+                if budget < 0 {
                     return false;
                 }
             } else {
-                return max - c <= target;
+                return max - budget <= target;
             }
         }
         match elem {
-            None => return max - c <= target,
-            Some(DocE::Text(_, _, TextAnn::RegularT, t)) => c -= text_width(t).cast_signed(),
+            None => return max - budget <= target,
+            Some(DocE::Text(_, _, TextAnn::RegularT, t)) => budget -= text_width(t).cast_signed(),
             Some(DocE::Text(..) | DocE::Nest(..)) => {}
-            Some(DocE::Group(_, ys)) => {
+            Some(DocE::Group(_, body)) => {
                 rest.clear();
-                rest.extend(it.stack.iter().rev().map(|(s, i)| &s[*i..]));
+                rest.extend(iter.stack.iter().rev().map(|(s, i)| &s[*i..]));
                 let rest_width = first_line_width(&rest);
-                match fits_width(c - rest_width.cast_signed(), ys) {
-                    Some(w) => c -= w.cast_signed(),
-                    None => it.push_front(ys),
+                match fits_width(budget - rest_width.cast_signed(), body) {
+                    Some(w) => budget -= w.cast_signed(),
+                    None => iter.push_front(body),
                 }
             }
             Some(DocE::Spacing(_)) => unreachable!(),
@@ -798,11 +806,11 @@ fn first_line_fits(target_width: usize, max_width: usize, chain: Look<'_>) -> bo
 
 /// Mirrors `nextIndent` in Nixfmt/Predoc.hs.
 fn next_indent(chain: Look<'_>) -> (usize, usize) {
-    for s in chain {
-        for elem in *s {
+    for slice in chain {
+        for elem in *slice {
             match elem {
-                DocE::Text(i, o, _, _) => return (*i, *o),
-                DocE::Group(_, xs) => return next_indent(&[xs]),
+                DocE::Text(nest, offset, _, _) => return (*nest, *offset),
+                DocE::Group(_, body) => return next_indent(&[body]),
                 DocE::Spacing(_) | DocE::Nest(..) => {}
             }
         }
@@ -820,12 +828,12 @@ fn priority_groups(doc: &[DocE]) -> Vec<(Chain<'_>, Chain<'_>, Chain<'_>)> {
         let mut i = 0;
         while i < doc.len() {
             match &doc[i] {
-                DocE::Group(GroupAnn::Priority, ys) => {
-                    out.push((true, ys));
+                DocE::Group(GroupAnn::Priority, body) => {
+                    out.push((true, body));
                     i += 1;
                 }
-                DocE::Group(GroupAnn::Transparent, ys) => {
-                    segments(ys, out);
+                DocE::Group(GroupAnn::Transparent, body) => {
+                    segments(body, out);
                     i += 1;
                 }
                 _ => {
@@ -859,26 +867,52 @@ fn priority_groups(doc: &[DocE]) -> Vec<(Chain<'_>, Chain<'_>, Chain<'_>)> {
     result
 }
 
-/// State for layout algorithm
-/// (`current_column`, `indent_stack`)
-/// `indent_stack`: Vec<(`current_indent`, `nesting_level`)>
-type LayoutState = (usize, Vec<(usize, usize)>);
+/// One frame of the indentation stack: the column to indent to (`indent`) for
+/// text at nesting level `nest`.
+#[derive(Debug, Clone, Copy)]
+struct IndentEntry {
+    indent: usize,
+    nest: usize,
+}
+
+/// Mutable layout state plus configuration. The `render_*` free functions of
+/// the original port are methods here so the output buffer, column, indent
+/// stack, and width settings no longer have to be threaded through every call.
+struct Renderer {
+    /// Output buffer.
+    out: String,
+    /// Current column (0 = at start of line, indentation not yet emitted).
+    col: usize,
+    /// Indentation stack; never empty.
+    indents: Vec<IndentEntry>,
+    /// Target line width.
+    target_width: usize,
+    /// Indent width in spaces.
+    indent_width: usize,
+}
+
+/// Snapshot of the mutable parts of `Renderer` for trial-and-rollback in
+/// `render_group` (mirrors Haskell's `StateT St Maybe`).
+struct Checkpoint {
+    out_len: usize,
+    col: usize,
+    indents: Vec<IndentEntry>,
+}
 
 /// Main layout algorithm
 fn layout_greedy(target_width: usize, indent_width: usize, doc: Doc) -> String {
     let doc = vec![DocE::Group(GroupAnn::RegularG, fixup(doc))];
 
-    let mut state: LayoutState = (0, vec![(0, 0)]);
-    let mut result = String::new();
-    render_doc(
-        &mut result,
-        &doc,
-        &[],
-        &mut state,
+    let mut renderer = Renderer {
+        out: String::new(),
+        col: 0,
+        indents: vec![IndentEntry { indent: 0, nest: 0 }],
         target_width,
         indent_width,
-    );
+    };
+    renderer.render_doc(&doc, &[]);
 
+    let mut result = renderer.out;
     let end = result.trim_end().len();
     result.truncate(end);
     let start = result.len() - result.trim_start().len();
@@ -889,340 +923,331 @@ fn layout_greedy(target_width: usize, indent_width: usize, doc: Doc) -> String {
     result
 }
 
-/// Render a document with state tracking
-fn render_doc(
-    out: &mut String,
-    doc: &[DocE],
-    lookahead: Look<'_>,
-    state: &mut LayoutState,
-    tw: usize,
-    iw: usize,
-) {
-    let mut chain: Vec<&[DocE]> = Vec::with_capacity(1 + lookahead.len());
-    for (i, elem) in doc.iter().enumerate() {
-        // Only Group and the soft spacings consult the lookahead; for the
-        // common Text/hard-spacing case skip even the small chain rebuild.
-        let needs_rest = match elem {
-            DocE::Group(_, _) => true,
-            DocE::Spacing(Spacing::Softbreak | Spacing::Softspace) => state.0 != 0,
-            DocE::Text(_, _, TextAnn::TrailingComment, _) => state.0 == 2,
-            _ => false,
-        };
-        if needs_rest {
-            chain.clear();
-            chain.push(&doc[i + 1..]);
-            chain.extend_from_slice(lookahead);
-            render_elem(out, elem, &chain, state, tw, iw);
-        } else {
-            render_elem(out, elem, &[], state, tw, iw);
+impl Renderer {
+    fn checkpoint(&self) -> Checkpoint {
+        Checkpoint {
+            out_len: self.out.len(),
+            col: self.col,
+            indents: self.indents.clone(),
         }
     }
-}
 
-/// Render a single element
-fn render_elem(
-    out: &mut String,
-    elem: &DocE,
-    lookahead: Look<'_>,
-    state: &mut LayoutState,
-    tw: usize,
-    iw: usize,
-) {
-    let (cc, _indents) = state;
-    let needs_indent = *cc == 0;
+    fn restore(&mut self, checkpoint: &Checkpoint) {
+        self.out.truncate(checkpoint.out_len);
+        self.col = checkpoint.col;
+        self.indents.clone_from(&checkpoint.indents);
+    }
 
-    match elem {
-        // `goOne` special case: shift a trailing comment by one column so the
-        // re-parser associates it with the same opener token (idempotency).
-        DocE::Text(_, _, TextAnn::TrailingComment, t)
-            if *cc == 2 && {
-                let line_nl = state.1.last().map_or(0, |(_, l)| *l);
-                next_indent(lookahead).0 > line_nl
-            } =>
-        {
-            let (cc, _) = state;
-            *cc += 1 + text_width(t);
-            out.push(' ');
-            out.push_str(t);
+    /// Nesting level of the current line (top of the indent stack).
+    fn line_nest(&self) -> usize {
+        self.indents.last().map_or(0, |e| e.nest)
+    }
+
+    /// Render a document with state tracking.
+    fn render_doc(&mut self, doc: &[DocE], lookahead: Look<'_>) {
+        let mut chain: Vec<&[DocE]> = Vec::with_capacity(1 + lookahead.len());
+        for (i, elem) in doc.iter().enumerate() {
+            // Only Group and the soft spacings consult the lookahead; for the
+            // common Text/hard-spacing case skip even the small chain rebuild.
+            let needs_rest = match elem {
+                DocE::Group(_, _) => true,
+                DocE::Spacing(Spacing::Softbreak | Spacing::Softspace) => self.col != 0,
+                DocE::Text(_, _, TextAnn::TrailingComment, _) => self.col == 2,
+                _ => false,
+            };
+            if needs_rest {
+                chain.clear();
+                chain.push(&doc[i + 1..]);
+                chain.extend_from_slice(lookahead);
+                self.render_elem(elem, &chain);
+            } else {
+                self.render_elem(elem, &[]);
+            }
         }
+    }
 
-        DocE::Text(nl, off, _ann, t) => render_text(out, *nl, *off, t, state, iw),
+    /// Render a single element.
+    fn render_elem(&mut self, elem: &DocE, lookahead: Look<'_>) {
+        let at_line_start = self.col == 0;
 
-        // At start of line drop any spacing; the next Text emits indentation.
-        DocE::Spacing(_) if needs_indent => {}
+        match elem {
+            // `goOne` special case: shift a trailing comment by one column so
+            // the re-parser associates it with the same opener token
+            // (idempotency).
+            DocE::Text(_, _, TextAnn::TrailingComment, t)
+                if self.col == 2 && next_indent(lookahead).0 > self.line_nest() =>
+            {
+                self.col += 1 + text_width(t);
+                self.out.push(' ');
+                self.out.push_str(t);
+            }
 
-        DocE::Spacing(sp) => match sp {
-            Spacing::Break | Spacing::Space | Spacing::Hardline => {
-                *cc = 0;
-                out.push('\n');
-            }
-            Spacing::Hardspace => {
-                *cc += 1;
-                out.push(' ');
-            }
-            Spacing::Emptyline => {
-                *cc = 0;
-                out.push_str("\n\n");
-            }
-            Spacing::Newlines(n) => {
-                *cc = 0;
-                for _ in 0..*n {
-                    out.push('\n');
+            DocE::Text(nest, offset, _ann, t) => self.render_text(*nest, *offset, t),
+
+            // At start of line drop any spacing; the next Text emits indentation.
+            DocE::Spacing(_) if at_line_start => {}
+
+            DocE::Spacing(spacing) => match spacing {
+                Spacing::Break | Spacing::Space | Spacing::Hardline => {
+                    self.col = 0;
+                    self.out.push('\n');
                 }
-            }
-            Spacing::Softbreak => {
-                if !first_line_fits(tw - *cc, tw, lookahead) {
-                    *cc = 0;
-                    out.push('\n');
+                Spacing::Hardspace => {
+                    self.col += 1;
+                    self.out.push(' ');
                 }
-            }
-            Spacing::Softspace => {
-                let available = tw.saturating_sub(*cc).saturating_sub(1);
-                if first_line_fits(available, tw, lookahead) {
-                    *cc += 1;
-                    out.push(' ');
-                } else {
-                    *cc = 0;
-                    out.push('\n');
+                Spacing::Emptyline => {
+                    self.col = 0;
+                    self.out.push_str("\n\n");
                 }
-            }
-        },
+                Spacing::Newlines(n) => {
+                    self.col = 0;
+                    for _ in 0..*n {
+                        self.out.push('\n');
+                    }
+                }
+                Spacing::Softbreak => {
+                    if !first_line_fits(self.target_width - self.col, self.target_width, lookahead)
+                    {
+                        self.col = 0;
+                        self.out.push('\n');
+                    }
+                }
+                Spacing::Softspace => {
+                    let available = self.target_width.saturating_sub(self.col).saturating_sub(1);
+                    if first_line_fits(available, self.target_width, lookahead) {
+                        self.col += 1;
+                        self.out.push(' ');
+                    } else {
+                        self.col = 0;
+                        self.out.push('\n');
+                    }
+                }
+            },
 
-        DocE::Group(ann, ys) => render_group(out, *ann, ys, lookahead, state, tw, iw),
+            DocE::Group(ann, body) => self.render_group(*ann, body, lookahead),
 
-        DocE::Nest(..) => unreachable!("Nest consumed by fixup"),
-    }
-}
-
-/// Compute the current-indent column `render_text` would use for `text_nl` at
-/// the start of a line, without mutating the indent stack.
-fn indent_for(text_nl: usize, indents: &[(usize, usize)], iw: usize) -> usize {
-    let mut top = indents.len();
-    while top > 0 && text_nl < indents[top - 1].1 {
-        top -= 1;
-    }
-    match indents[..top].last() {
-        Some(&(ci, nl)) if text_nl > nl => ci + iw,
-        Some(&(ci, _)) => ci,
-        None => 0,
-    }
-}
-
-/// Apply the indent-stack mutation `render_text` would perform for `text_nl`
-/// at the start of a line (cc == 0).
-fn apply_indent(text_nl: usize, state: &mut LayoutState, iw: usize) {
-    let indents = &mut state.1;
-    while let Some(&(ci, nl)) = indents.last() {
-        match text_nl.cmp(&nl) {
-            std::cmp::Ordering::Greater => {
-                indents.push((ci + iw, text_nl));
-                return;
-            }
-            std::cmp::Ordering::Less => {
-                indents.pop();
-            }
-            std::cmp::Ordering::Equal => return,
-        }
-    }
-}
-
-/// Render text with proper indentation
-fn render_text(
-    out: &mut String,
-    text_nl: usize,
-    text_offset: usize,
-    text: &str,
-    state: &mut LayoutState,
-    iw: usize,
-) {
-    let (cc, indents) = state;
-
-    // Manage indentation stack
-    while let Some(&(ci, nl)) = indents.last() {
-        match text_nl.cmp(&nl) {
-            std::cmp::Ordering::Greater => {
-                let new_indent = if *cc == 0 { ci + iw } else { ci };
-                indents.push((new_indent, text_nl));
-                break;
-            }
-            std::cmp::Ordering::Less => {
-                indents.pop();
-            }
-            std::cmp::Ordering::Equal => break,
+            DocE::Nest(..) => unreachable!("Nest consumed by fixup"),
         }
     }
 
-    let (ci, _) = indents.last().unwrap_or(&(0, 0));
-    let total_indent = ci + text_offset;
-
-    let w = text_width(text);
-    if *cc == 0 {
-        for _ in 0..total_indent {
-            out.push(' ');
+    /// Compute the indent column `render_text` would use for `text_nest` at
+    /// the start of a line, without mutating the indent stack.
+    fn indent_for(&self, text_nest: usize) -> usize {
+        let mut top = self.indents.len();
+        while top > 0 && text_nest < self.indents[top - 1].nest {
+            top -= 1;
+        }
+        match self.indents[..top].last() {
+            Some(e) if text_nest > e.nest => e.indent + self.indent_width,
+            Some(e) => e.indent,
+            None => 0,
         }
     }
-    *cc += w;
-    out.push_str(text);
-}
 
-/// Render a chain of slices as one document, threading lookahead so each
-/// slice sees the remaining slices plus the outer lookahead.
-fn render_chain(
-    out: &mut String,
-    chain: &[&[DocE]],
-    lookahead: Look<'_>,
-    state: &mut LayoutState,
-    tw: usize,
-    iw: usize,
-) {
-    let mut la: Vec<&[DocE]> = Vec::with_capacity(chain.len() + lookahead.len());
-    for i in 0..chain.len() {
-        la.clear();
-        la.extend_from_slice(&chain[i + 1..]);
-        la.extend_from_slice(lookahead);
-        render_doc(out, chain[i], &la, state, tw, iw);
-    }
-}
-
-/// Try to render a group compactly. On success, appends to `out` and updates
-/// `state` in place; on failure leaves both untouched.
-fn try_render_group(
-    out: &mut String,
-    grp: &[&[DocE]],
-    lookahead: Look<'_>,
-    state: &mut LayoutState,
-    tw: usize,
-    iw: usize,
-) -> bool {
-    // Mirrors `goGroup` in Nixfmt/Predoc.hs.
-    if grp.iter().all(|s| s.is_empty()) {
-        return true;
-    }
-
-    let (cc, indents) = (state.0, &state.1);
-
-    if cc == 0 {
-        // At start of line - drop leading whitespace.
-        let mut h = 0;
-        while h < grp.len() && grp[h].is_empty() {
-            h += 1;
-        }
-        let grp = &grp[h..];
-        let adj_storage: Vec<&[DocE]>;
-        let grp: &[&[DocE]] = match grp[0].first() {
-            Some(DocE::Spacing(_)) => {
-                adj_storage = std::iter::once(&grp[0][1..])
-                    .chain(grp[1..].iter().copied())
-                    .collect();
-                &adj_storage
-            }
-            Some(DocE::Group(ann, inner)) if matches!(inner.first(), Some(DocE::Spacing(_))) => {
-                // Rare: leading subgroup itself starts with spacing. Rebuild
-                // that one element; the rest stays borrowed.
-                let owned = vec![DocE::Group(*ann, inner[1..].to_vec())];
-                let mut new: Vec<&[DocE]> = Vec::with_capacity(grp.len() + 1);
-                new.push(&owned);
-                new.push(&grp[0][1..]);
-                new.extend_from_slice(&grp[1..]);
-                return try_render_group(out, &new, lookahead, state, tw, iw);
-            }
-            _ => grp,
-        };
-
-        let (nl, off) = next_indent(grp);
-        // Haskell `goGroup` (cc == 0): the budget is `tw - firstLineWidth rest`;
-        // the pending indentation is *not* subtracted here, so a compact group
-        // at the start of a line may overshoot by its indent. This matches the
-        // reference layout engine exactly.
-        let last_line_nl = indents.last().map_or(0, |(_, l)| *l);
-        let line_nl = last_line_nl + if nl > last_line_nl { iw } else { 0 };
-        let will_increase = if next_indent(lookahead).0 > line_nl {
-            iw
-        } else {
-            0
-        };
-
-        let budget = tw.cast_signed() - first_line_width(lookahead).cast_signed();
-        let mark = out.len();
-        let total_indent = indent_for(nl, &state.1, iw) + off;
-        for _ in 0..total_indent {
-            out.push(' ');
-        }
-        if let Some(w) = fits(will_increase.cast_signed(), budget, grp, out) {
-            apply_indent(nl, state, iw);
-            state.0 += w;
-            true
-        } else {
-            out.truncate(mark);
-            false
-        }
-    } else {
-        let line_nl = indents.last().map_or(0, |(_, l)| *l);
-        let will_increase = if next_indent(lookahead).0 > line_nl {
-            iw.cast_signed()
-        } else {
-            0
-        };
-
-        let budget =
-            tw.cast_signed() - cc.cast_signed() - first_line_width(lookahead).cast_signed();
-        match fits(will_increase - cc.cast_signed(), budget, grp, out) {
-            Some(w) => {
-                state.0 += w;
-                true
-            }
-            None => false,
-        }
-    }
-}
-
-/// Render a group (try compact first, then expand)
-fn render_group(
-    out: &mut String,
-    ann: GroupAnn,
-    ys: &[DocE],
-    lookahead: Look<'_>,
-    state: &mut LayoutState,
-    tw: usize,
-    iw: usize,
-) {
-    // Try to fit group compactly
-    if try_render_group(out, &[ys], lookahead, state, tw, iw) {
-        return;
-    }
-
-    // Try priority groups if not transparent
-    if ann != GroupAnn::Transparent && has_priority_groups(ys) {
-        let state_backup = state.clone();
-        let out_len = out.len();
-        for (pre, prio, post) in priority_groups(ys).into_iter().rev() {
-            let mut pre_lookahead: Vec<&[DocE]> =
-                Vec::with_capacity(prio.len() + post.len() + lookahead.len());
-            pre_lookahead.extend_from_slice(&prio);
-            pre_lookahead.extend_from_slice(&post);
-            pre_lookahead.extend_from_slice(lookahead);
-            if try_render_group(out, &pre, &pre_lookahead, state, tw, iw) {
-                // Render prio expanded
-                let unexpanded_post = unexpand_spacing(&post);
-                let mut prio_lookahead: Vec<&[DocE]> = Vec::with_capacity(1 + lookahead.len());
-                prio_lookahead.push(&unexpanded_post);
-                prio_lookahead.extend_from_slice(lookahead);
-                render_chain(out, &prio, &prio_lookahead, state, tw, iw);
-
-                if try_render_group(out, &post, lookahead, state, tw, iw) {
+    /// Apply the indent-stack mutation `render_text` would perform for
+    /// `text_nest` at the start of a line (col == 0).
+    fn apply_indent(&mut self, text_nest: usize) {
+        while let Some(&top) = self.indents.last() {
+            match text_nest.cmp(&top.nest) {
+                std::cmp::Ordering::Greater => {
+                    self.indents.push(IndentEntry {
+                        indent: top.indent + self.indent_width,
+                        nest: text_nest,
+                    });
                     return;
                 }
+                std::cmp::Ordering::Less => {
+                    self.indents.pop();
+                }
+                std::cmp::Ordering::Equal => return,
             }
-            // Attempt failed: discard any mutations from the trial run before
-            // trying the next priority group or falling back to full expansion.
-            // Haskell threads this via `StateT St Maybe`, which simply drops
-            // the state on `Nothing`.
-            state.0 = state_backup.0;
-            state.1.clone_from(&state_backup.1);
-            out.truncate(out_len);
         }
     }
 
-    // Fully expand group
-    render_doc(out, ys, lookahead, state, tw, iw);
+    /// Render text with proper indentation.
+    fn render_text(&mut self, text_nest: usize, text_offset: usize, text: &str) {
+        // Manage indentation stack.
+        while let Some(&top) = self.indents.last() {
+            match text_nest.cmp(&top.nest) {
+                std::cmp::Ordering::Greater => {
+                    let new_indent = if self.col == 0 {
+                        top.indent + self.indent_width
+                    } else {
+                        top.indent
+                    };
+                    self.indents.push(IndentEntry {
+                        indent: new_indent,
+                        nest: text_nest,
+                    });
+                    break;
+                }
+                std::cmp::Ordering::Less => {
+                    self.indents.pop();
+                }
+                std::cmp::Ordering::Equal => break,
+            }
+        }
+
+        let cur_indent = self.indents.last().map_or(0, |e| e.indent);
+        let total_indent = cur_indent + text_offset;
+
+        if self.col == 0 {
+            for _ in 0..total_indent {
+                self.out.push(' ');
+            }
+        }
+        self.col += text_width(text);
+        self.out.push_str(text);
+    }
+
+    /// Render a chain of slices as one document, threading lookahead so each
+    /// slice sees the remaining slices plus the outer lookahead.
+    fn render_chain(&mut self, chain: &[&[DocE]], lookahead: Look<'_>) {
+        let mut lookahead_buf: Vec<&[DocE]> = Vec::with_capacity(chain.len() + lookahead.len());
+        for i in 0..chain.len() {
+            lookahead_buf.clear();
+            lookahead_buf.extend_from_slice(&chain[i + 1..]);
+            lookahead_buf.extend_from_slice(lookahead);
+            self.render_doc(chain[i], &lookahead_buf);
+        }
+    }
+
+    /// Try to render a group compactly. On success, appends to `out` and
+    /// updates state in place; on failure leaves both untouched.
+    /// Mirrors `goGroup` in Nixfmt/Predoc.hs.
+    fn try_render_group(&mut self, grp: &[&[DocE]], lookahead: Look<'_>) -> bool {
+        if grp.iter().all(|s| s.is_empty()) {
+            return true;
+        }
+
+        if self.col == 0 {
+            // At start of line - drop leading whitespace.
+            let mut head_idx = 0;
+            while head_idx < grp.len() && grp[head_idx].is_empty() {
+                head_idx += 1;
+            }
+            let grp = &grp[head_idx..];
+            let adj_storage: Vec<&[DocE]>;
+            let grp: &[&[DocE]] = match grp[0].first() {
+                Some(DocE::Spacing(_)) => {
+                    adj_storage = std::iter::once(&grp[0][1..])
+                        .chain(grp[1..].iter().copied())
+                        .collect();
+                    &adj_storage
+                }
+                Some(DocE::Group(ann, inner))
+                    if matches!(inner.first(), Some(DocE::Spacing(_))) =>
+                {
+                    // Rare: leading subgroup itself starts with spacing.
+                    // Rebuild that one element; the rest stays borrowed.
+                    let owned = vec![DocE::Group(*ann, inner[1..].to_vec())];
+                    let mut new: Vec<&[DocE]> = Vec::with_capacity(grp.len() + 1);
+                    new.push(&owned);
+                    new.push(&grp[0][1..]);
+                    new.extend_from_slice(&grp[1..]);
+                    return self.try_render_group(&new, lookahead);
+                }
+                _ => grp,
+            };
+
+            let (nest, offset) = next_indent(grp);
+            // Haskell `goGroup` (cc == 0): the budget is
+            // `tw - firstLineWidth rest`; the pending indentation is *not*
+            // subtracted here, so a compact group at the start of a line may
+            // overshoot by its indent. This matches the reference layout
+            // engine exactly.
+            let last_line_nest = self.line_nest();
+            let line_nest = last_line_nest
+                + if nest > last_line_nest {
+                    self.indent_width
+                } else {
+                    0
+                };
+            let will_increase = if next_indent(lookahead).0 > line_nest {
+                self.indent_width
+            } else {
+                0
+            };
+
+            let budget =
+                self.target_width.cast_signed() - first_line_width(lookahead).cast_signed();
+            let mark = self.out.len();
+            let total_indent = self.indent_for(nest) + offset;
+            for _ in 0..total_indent {
+                self.out.push(' ');
+            }
+            if let Some(width) = fits(will_increase.cast_signed(), budget, grp, &mut self.out) {
+                self.apply_indent(nest);
+                self.col += width;
+                true
+            } else {
+                self.out.truncate(mark);
+                false
+            }
+        } else {
+            let line_nest = self.line_nest();
+            let will_increase = if next_indent(lookahead).0 > line_nest {
+                self.indent_width.cast_signed()
+            } else {
+                0
+            };
+
+            let budget = self.target_width.cast_signed()
+                - self.col.cast_signed()
+                - first_line_width(lookahead).cast_signed();
+            match fits(
+                will_increase - self.col.cast_signed(),
+                budget,
+                grp,
+                &mut self.out,
+            ) {
+                Some(width) => {
+                    self.col += width;
+                    true
+                }
+                None => false,
+            }
+        }
+    }
+
+    /// Render a group (try compact first, then expand).
+    fn render_group(&mut self, ann: GroupAnn, body: &[DocE], lookahead: Look<'_>) {
+        // Try to fit group compactly.
+        if self.try_render_group(&[body], lookahead) {
+            return;
+        }
+
+        // Try priority groups if not transparent.
+        if ann != GroupAnn::Transparent && has_priority_groups(body) {
+            let checkpoint = self.checkpoint();
+            for (pre, prio, post) in priority_groups(body).into_iter().rev() {
+                let mut pre_lookahead: Vec<&[DocE]> =
+                    Vec::with_capacity(prio.len() + post.len() + lookahead.len());
+                pre_lookahead.extend_from_slice(&prio);
+                pre_lookahead.extend_from_slice(&post);
+                pre_lookahead.extend_from_slice(lookahead);
+                if self.try_render_group(&pre, &pre_lookahead) {
+                    // Render prio expanded.
+                    let unexpanded_post = unexpand_spacing(&post);
+                    let mut prio_lookahead: Vec<&[DocE]> = Vec::with_capacity(1 + lookahead.len());
+                    prio_lookahead.push(&unexpanded_post);
+                    prio_lookahead.extend_from_slice(lookahead);
+                    self.render_chain(&prio, &prio_lookahead);
+
+                    if self.try_render_group(&post, lookahead) {
+                        return;
+                    }
+                }
+                // Attempt failed: discard any mutations from the trial run
+                // before trying the next priority group or falling back to
+                // full expansion. Haskell threads this via `StateT St Maybe`,
+                // which simply drops the state on `Nothing`.
+                self.restore(&checkpoint);
+            }
+        }
+
+        // Fully expand group.
+        self.render_doc(body, lookahead);
+    }
 }
