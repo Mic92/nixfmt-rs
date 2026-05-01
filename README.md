@@ -112,6 +112,43 @@ outputs = { nixpkgs, nixfmt-rs, ... }:
 
 [treefmt-nix]: https://github.com/numtide/treefmt-nix
 
+## Editor integration
+
+The binary is named `nixfmt` and accepts the same flags and stdin/stdout
+contract as upstream, so any existing nixfmt integration works unchanged once
+this package is on `$PATH` (or pointed at explicitly).
+
+<details>
+<summary>Examples</summary>
+
+**VS Code** ([jnoortheen.nix-ide](https://marketplace.visualstudio.com/items?itemName=jnoortheen.nix-ide)):
+
+```json
+"nix.formatterPath": "nixfmt"
+```
+
+**Neovim** ([conform.nvim](https://github.com/stevearc/conform.nvim)):
+
+```lua
+require("conform").setup({ formatters_by_ft = { nix = { "nixfmt" } } })
+```
+
+**Helix** (`languages.toml`):
+
+```toml
+[[language]]
+name = "nix"
+formatter = { command = "nixfmt" }
+```
+
+**Emacs** ([apheleia](https://github.com/radian-software/apheleia)): `nixfmt`
+is built in; just ensure the binary resolves to this one.
+
+**Anything else**: pipe the buffer through `nixfmt` (reads stdin, writes
+stdout, exit 1 on parse error).
+
+</details>
+
 ## Testing
 
 ```bash
