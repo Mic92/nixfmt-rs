@@ -99,21 +99,27 @@
   (
     if
       (
-        if (if (if a then b else c) then (if a then b else c) else (if a then b else c)) then
+        if
+          (if (if a then b else c) then (if a then b else c) else (if a then b else c))
+        then
           (if (if a then b else c) then (if a then b else c) else (if a then b else c))
         else
           (if (if a then b else c) then (if a then b else c) else (if a then b else c))
       )
     then
       (
-        if (if (if a then b else c) then (if a then b else c) else (if a then b else c)) then
+        if
+          (if (if a then b else c) then (if a then b else c) else (if a then b else c))
+        then
           (if (if a then b else c) then (if a then b else c) else (if a then b else c))
         else
           (if (if a then b else c) then (if a then b else c) else (if a then b else c))
       )
     else
       (
-        if (if (if a then b else c) then (if a then b else c) else (if a then b else c)) then
+        if
+          (if (if a then b else c) then (if a then b else c) else (if a then b else c))
+        then
           (if (if a then b else c) then (if a then b else c) else (if a then b else c))
         else
           (if (if a then b else c) then (if a then b else c) else (if a then b else c))

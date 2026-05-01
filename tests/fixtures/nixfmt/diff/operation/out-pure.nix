@@ -182,7 +182,10 @@
     + ddddddddddddddddddddddd * eeeeeeeeeeeeeeeeeeeeeeee
     +
       ffffffffffffffffffffffffff
-      * gggggggggggggggggggggggg ++ hhhhhhhhhhhhhhhhhhhhhhhhhhh ++ iiiiiiiiiiiiiiiiiiiiiiiiiiiiiiii
+      *
+        gggggggggggggggggggggggg
+        ++ hhhhhhhhhhhhhhhhhhhhhhhhhhh
+        ++ iiiiiiiiiiiiiiiiiiiiiiiiiiiiiiii
       * jjjjjjjjjjjjjjjjjjjjj
   )
 
@@ -204,7 +207,11 @@
       [ ]
     else if
       aaaaaaaaaaaaaa && bbbbbbbbbbbb && aaaaaaaaaaaaaa && bbbbbbbbbbbb
-      || cccccccccccccccccccc && ddddddddddddddddd && cccccccccccccccccccc && ddddddddddddddddd
+      ||
+        cccccccccccccccccccc
+        && ddddddddddddddddd
+        && cccccccccccccccccccc
+        && ddddddddddddddddd
       ||
         eeeeeeeeeeeeeeeeeeee
         && fffffffffffffffffffffffffff
@@ -272,28 +279,52 @@
   # Single pipe: stays on one line if it fits
   (a |> b)
   # Single pipe that doesn't fit on one line: expands
-  (a |> b c d "very long argument should justify splitting this over multiple lines")
+  (
+    a
+    |> b c d "very long argument should justify splitting this over multiple lines"
+  )
 
   # Chain of 2 pipes stays on one line if it fits
   (a |> b |> c)
 
   # Chain of 3+ pipes always expands
-  (x |> f |> g |> h)
+  (
+    x
+    |> f
+    |> g
+    |> h
+  )
 
   # Long chain
   (
-    1 |> (n: n + 1) |> (n: n + 1) |> (n: n + 1) |> (n: n + 1) |> (n: n + 1) |> (n: n + 1) |> (n: n + 1)
+    1
+    |> (n: n + 1)
+    |> (n: n + 1)
+    |> (n: n + 1)
+    |> (n: n + 1)
+    |> (n: n + 1)
+    |> (n: n + 1)
+    |> (n: n + 1)
   )
 
   # Pipes in a binding
   {
     foo = a |> b;
     bar = a |> b |> c;
-    pipeExample = 1 |> (n: n + 1) |> (n: n + 1) |> (n: n + 1);
+    pipeExample =
+      1
+      |> (n: n + 1)
+      |> (n: n + 1)
+      |> (n: n + 1);
   }
 
   # Pipes with function application
-  (a |> f x |> g y z |> h)
+  (
+    a
+    |> f x
+    |> g y z
+    |> h
+  )
 
   # Backward pipes
   (c <| b <| a)
@@ -324,7 +355,11 @@
     let
       y = a |> b;
       z = a |> b |> c;
-      x = a |> f |> g |> h;
+      x =
+        a
+        |> f
+        |> g
+        |> h;
     in
     x <| y <| z
   )

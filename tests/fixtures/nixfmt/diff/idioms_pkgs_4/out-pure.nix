@@ -209,7 +209,8 @@ in
       inherit (prevStage.stdenv) cc fetchurl;
       extraPath = [ prevStage.xz ];
       overrides = self: super: { inherit (prevStage) xz; };
-      extraNativeBuildInputs = if localSystem.isLinux then [ prevStage.patchelf ] else [ ];
+      extraNativeBuildInputs =
+        if localSystem.isLinux then [ prevStage.patchelf ] else [ ];
     };
   })
 

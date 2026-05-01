@@ -6,13 +6,13 @@
   '';
 
   # With extra whitespace
-  jsCode = /* javascript */ ''
+  jsCode = /*   javascript   */ ''
     console.log("Hello from JS");
     const x = 42;
   '';
 
   # missing whitespace after comment
-  noSpace = /* python */ ''
+  noSpace = /*python*/''
     print("No space after comment")
   '';
 
@@ -32,23 +32,18 @@
   ";
 
   # Multiple block comments in sequence
-  sequentialComments = # first
-    /* second */ ''
-      some content
-    '';
+  sequentialComments = /* first */ /* second */ ''
+    some content
+  '';
 
   # Block comment with line breaks
-  multilineBlockComment =
-    /*
-      this is a
-      multiline comment
-    */
-    ''
-      content
-    '';
+  multilineBlockComment = /* this is a
+                             multiline comment */ ''
+    content
+  '';
 
   # Mixed comment styles
-  mixedComments = # inline line comment
+  mixedComments = /* inline */ # line comment
     ''
       content
     '';
@@ -71,26 +66,25 @@
       print("Script 2")
     ''
     /* ruby */ "puts 'Script 3'"
-    /* js */ "console.log('Script 4');"
+    /* js */
+    "console.log('Script 4');"
   ];
 
   # Language annotation in list on function argument
-  runScripts = (
-    lib.mkSomething
-      [
-        /* bash */ ''
-          echo "Script A"
-        ''
-      ]
-      [
-        /* python */ ''
-          print("Script B")
-        ''
-        /* ruby */ "puts 'Script C'"
-      ]
-  );
+  runScripts = (lib.mkSomething [
+    /* bash */ ''
+      echo "Script A"
+    ''
+  ][
+    /* python */ ''
+      print("Script B")
+    ''
+      /* ruby */ "puts 'Script C'"
+  ]);
 
-  aboveString = /* bash */ "echo 'Above string'";
+  aboveString = 
+    /* bash */
+    "echo 'Above string'";
 
   # Language annotation in attribute set
   languages = {
@@ -103,7 +97,7 @@
   };
 
   # Edge case: empty language annotation
-  emptyAnnotation = ''
+  emptyAnnotation = /**/ ''
     content without annotation
   '';
 
@@ -117,27 +111,22 @@
   '';
 
   # Edge case: very long language annotation
-  longAnnotation = # this-is-a-very-long-language-annotation-that-might-affect-line-length
-    ''
-      content
-    '';
+  longAnnotation = /* this-is-a-very-long-language-annotation-that-might-affect-line-length */ ''
+    content
+  '';
 
   # Language annotation not followed by string
-  object = # json
-    {
-      key = "value";
-    };
-  fn = # foo
-    x: x + 1;
-  fnCall = # foo
-    fnName "bar";
+  object = /* json */ { key = "value"; };
+  fn = /* foo */ x: x + 1;
+  fnCall =  /* foo */ fnName "bar";
 
   # Language annotation followed by line break
-  lineBreak = # python
+  lineBreak = /* python */
 
     ''
       print("Line break after annotation")
     '';
+
 
   # Language annotation with interpolated expressions
   interpolatedExpr = /* bash */ ''
@@ -145,13 +134,11 @@
   '';
 
   # Language annotation in let expression
-  letExpr =
-    let
-      code = /* python */ ''
-        print("In let")
-      '';
-    in
-    code;
+  letExpr = let
+    code = /* python */ ''
+      print("In let")
+    '';
+  in code;
 
   # Language annotation in function definition
   mkScript = lang: content: /* lang */ ''

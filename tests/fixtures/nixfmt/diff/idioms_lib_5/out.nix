@@ -16,9 +16,13 @@ let
   showWarnings = config.showDerivationWarnings;
 
   getName =
-    attrs: attrs.name or ("${attrs.pname or "«name-missing»"}-${attrs.version or "«version-missing»"}");
+    attrs:
+    attrs.name or (
+      "${attrs.pname or "«name-missing»"}-${attrs.version or "«version-missing»"}"
+    );
 
-  allowUnfree = config.allowUnfree || builtins.getEnv "NIXPKGS_ALLOW_UNFREE" == "1";
+  allowUnfree =
+    config.allowUnfree || builtins.getEnv "NIXPKGS_ALLOW_UNFREE" == "1";
 
   allowNonSource =
     let
@@ -41,24 +45,32 @@ let
     assert areLicenseListsValid;
     attrs:
     hasLicense attrs
-    && lib.lists.any (l: builtins.elem l allowlist) (lib.lists.toList attrs.meta.license);
+    && lib.lists.any (l: builtins.elem l allowlist) (
+      lib.lists.toList attrs.meta.license
+    );
 
   hasBlocklistedLicense =
     assert areLicenseListsValid;
     attrs:
     hasLicense attrs
-    && lib.lists.any (l: builtins.elem l blocklist) (lib.lists.toList attrs.meta.license);
+    && lib.lists.any (l: builtins.elem l blocklist) (
+      lib.lists.toList attrs.meta.license
+    );
 
-  allowBroken = config.allowBroken || builtins.getEnv "NIXPKGS_ALLOW_BROKEN" == "1";
+  allowBroken =
+    config.allowBroken || builtins.getEnv "NIXPKGS_ALLOW_BROKEN" == "1";
 
   allowUnsupportedSystem =
-    config.allowUnsupportedSystem || builtins.getEnv "NIXPKGS_ALLOW_UNSUPPORTED_SYSTEM" == "1";
+    config.allowUnsupportedSystem
+    || builtins.getEnv "NIXPKGS_ALLOW_UNSUPPORTED_SYSTEM" == "1";
 
   isUnfree = licenses: lib.lists.any (l: !l.free or true) licenses;
 
-  hasUnfreeLicense = attrs: hasLicense attrs && isUnfree (lib.lists.toList attrs.meta.license);
+  hasUnfreeLicense =
+    attrs: hasLicense attrs && isUnfree (lib.lists.toList attrs.meta.license);
 
-  hasNoMaintainers = attrs: attrs ? meta.maintainers && (lib.length attrs.meta.maintainers) == 0;
+  hasNoMaintainers =
+    attrs: attrs ? meta.maintainers && (lib.length attrs.meta.maintainers) == 0;
 
   isMarkedBroken = attrs: attrs.meta.broken or false;
 
@@ -83,7 +95,8 @@ let
 
   allowInsecureDefaultPredicate =
     x: builtins.elem (getName x) (config.permittedInsecurePackages or [ ]);
-  allowInsecurePredicate = x: (config.allowInsecurePredicate or allowInsecureDefaultPredicate) x;
+  allowInsecurePredicate =
+    x: (config.allowInsecurePredicate or allowInsecureDefaultPredicate) x;
 
   hasAllowedInsecure =
     attrs:
@@ -94,7 +107,8 @@ let
   isNonSource = sourceTypes: lib.lists.any (t: !t.isSource) sourceTypes;
 
   hasNonSourceProvenance =
-    attrs: (attrs ? meta.sourceProvenance) && isNonSource attrs.meta.sourceProvenance;
+    attrs:
+    (attrs ? meta.sourceProvenance) && isNonSource attrs.meta.sourceProvenance;
 
   # Allow granular checks to allow only some non-source-built packages
   # Example:
@@ -109,7 +123,10 @@ let
   # package has non-source provenance and is not explicitly allowed by the
   # `allowNonSourcePredicate` function.
   hasDeniedNonSourceProvenance =
-    attrs: hasNonSourceProvenance attrs && !allowNonSource && !allowNonSourcePredicate attrs;
+    attrs:
+    hasNonSourceProvenance attrs
+    && !allowNonSource
+    && !allowNonSourcePredicate attrs;
 
   showLicenseOrSourceType =
     value: toString (map (v: v.shortName or "unknown") (lib.lists.toList value));
@@ -119,8 +136,12 @@ let
   pos_str = meta: meta.position or "«unknown-file»";
 
   remediation = {
-    unfree = remediate_allowlist "Unfree" (remediate_predicate "allowUnfreePredicate");
-    non-source = remediate_allowlist "NonSource" (remediate_predicate "allowNonSourcePredicate");
+    unfree = remediate_allowlist "Unfree" (
+      remediate_predicate "allowUnfreePredicate"
+    );
+    non-source = remediate_allowlist "NonSource" (
+      remediate_predicate "allowNonSourcePredicate"
+    );
     broken = remediate_allowlist "Broken" (x: "");
     unsupported = remediate_allowlist "UnsupportedSystem" (x: "");
     blocklisted = x: "";
@@ -184,7 +205,9 @@ let
 
       Known issues:
     ''
-    + (lib.concatStrings (map (issue: " - ${issue}\n") attrs.meta.knownVulnerabilities))
+    + (lib.concatStrings (
+      map (issue: " - ${issue}\n") attrs.meta.knownVulnerabilities
+    ))
     + ''
 
       You can install it anyway by allowing this package, using the
@@ -222,7 +245,9 @@ let
     let
       expectedOutputs = attrs.meta.outputsToInstall or [ ];
       actualOutputs = attrs.outputs or [ "out" ];
-      missingOutputs = builtins.filter (output: !builtins.elem output actualOutputs) expectedOutputs;
+      missingOutputs = builtins.filter (
+        output: !builtins.elem output actualOutputs
+      ) expectedOutputs;
     in
     ''
       The package ${getName attrs} has set meta.outputsToInstall to: ${builtins.concatStringsSep ", " expectedOutputs}
@@ -251,7 +276,8 @@ let
           ''
           + (builtins.getAttr reason remediation) attrs;
 
-      handler = if config ? handleEvalIssue then config.handleEvalIssue reason else throw;
+      handler =
+        if config ? handleEvalIssue then config.handleEvalIssue reason else throw;
     in
     handler msg;
 
@@ -363,14 +389,19 @@ let
         lib.concatMapStringsSep ", " (x: "'${x}'") (lib.attrNames metaTypes)
       }]";
   checkMeta =
-    meta: lib.optionals config.checkMeta (lib.remove null (lib.mapAttrsToList checkMetaAttr meta));
+    meta:
+    lib.optionals config.checkMeta (
+      lib.remove null (lib.mapAttrsToList checkMetaAttr meta)
+    );
 
   checkOutputsToInstall =
     attrs:
     let
       expectedOutputs = attrs.meta.outputsToInstall or [ ];
       actualOutputs = attrs.outputs or [ "out" ];
-      missingOutputs = builtins.filter (output: !builtins.elem output actualOutputs) expectedOutputs;
+      missingOutputs = builtins.filter (
+        output: !builtins.elem output actualOutputs
+      ) expectedOutputs;
     in
     if config.checkMeta then builtins.length missingOutputs > 0 else false;
 
@@ -393,7 +424,9 @@ let
       {
         valid = "no";
         reason = "unknown-meta";
-        errormsg = "has an invalid meta attrset:${lib.concatMapStrings (x: "\n  - " + x) res}\n";
+        errormsg = "has an invalid meta attrset:${
+          lib.concatMapStrings (x: "\n  - " + x) res
+        }\n";
         unfree = false;
         nonSource = false;
         broken = false;

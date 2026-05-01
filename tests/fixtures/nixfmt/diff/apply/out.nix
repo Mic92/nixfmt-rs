@@ -230,11 +230,21 @@
     name___________ = sanitizeDerivationName (builtins.substring 33 (-1) (path'));
     name____________ = sanitizeDerivationName (builtins.substring 33 (-1) (path'));
     name_____________ = sanitizeDerivationName (builtins.substring 33 (-1) (path'));
-    name______________ = sanitizeDerivationName (builtins.substring 33 (-1) (path'));
-    name_______________ = sanitizeDerivationName (builtins.substring 33 (-1) (path'));
-    name________________ = sanitizeDerivationName (builtins.substring 33 (-1) (path'));
-    name_________________ = sanitizeDerivationName (builtins.substring 33 (-1) (path'));
-    name__________________ = sanitizeDerivationName (builtins.substring 33 (-1) (path'));
+    name______________ = sanitizeDerivationName (
+      builtins.substring 33 (-1) (path')
+    );
+    name_______________ = sanitizeDerivationName (
+      builtins.substring 33 (-1) (path')
+    );
+    name________________ = sanitizeDerivationName (
+      builtins.substring 33 (-1) (path')
+    );
+    name_________________ = sanitizeDerivationName (
+      builtins.substring 33 (-1) (path')
+    );
+    name__________________ = sanitizeDerivationName (
+      builtins.substring 33 (-1) (path')
+    );
   }
   # Same but without binders
   [
@@ -247,16 +257,36 @@
     (sanitizeDerivationName______ (builtins.substring 33 (-1) (baseNameOf path')))
     (sanitizeDerivationName_______ (builtins.substring 33 (-1) (baseNameOf path')))
     (sanitizeDerivationName________ (builtins.substring 33 (-1) (baseNameOf path')))
-    (sanitizeDerivationName_________ (builtins.substring 33 (-1) (baseNameOf path')))
-    (sanitizeDerivationName__________ (builtins.substring 33 (-1) (baseNameOf path')))
-    (sanitizeDerivationName___________ (builtins.substring 33 (-1) (baseNameOf path')))
-    (sanitizeDerivationName____________ (builtins.substring 33 (-1) (baseNameOf path')))
-    (sanitizeDerivationName_____________ (builtins.substring 33 (-1) (baseNameOf path')))
-    (sanitizeDerivationName______________ (builtins.substring 33 (-1) (baseNameOf path')))
-    (sanitizeDerivationName_______________ (builtins.substring 33 (-1) (baseNameOf path')))
-    (sanitizeDerivationName________________ (builtins.substring 33 (-1) (baseNameOf path')))
-    (sanitizeDerivationName_________________ (builtins.substring 33 (-1) (baseNameOf path')))
-    (sanitizeDerivationName__________________ (builtins.substring 33 (-1) (baseNameOf path')))
+    (sanitizeDerivationName_________ (
+      builtins.substring 33 (-1) (baseNameOf path')
+    ))
+    (sanitizeDerivationName__________ (
+      builtins.substring 33 (-1) (baseNameOf path')
+    ))
+    (sanitizeDerivationName___________ (
+      builtins.substring 33 (-1) (baseNameOf path')
+    ))
+    (sanitizeDerivationName____________ (
+      builtins.substring 33 (-1) (baseNameOf path')
+    ))
+    (sanitizeDerivationName_____________ (
+      builtins.substring 33 (-1) (baseNameOf path')
+    ))
+    (sanitizeDerivationName______________ (
+      builtins.substring 33 (-1) (baseNameOf path')
+    ))
+    (sanitizeDerivationName_______________ (
+      builtins.substring 33 (-1) (baseNameOf path')
+    ))
+    (sanitizeDerivationName________________ (
+      builtins.substring 33 (-1) (baseNameOf path')
+    ))
+    (sanitizeDerivationName_________________ (
+      builtins.substring 33 (-1) (baseNameOf path')
+    ))
+    (sanitizeDerivationName__________________ (
+      builtins.substring 33 (-1) (baseNameOf path')
+    ))
   ]
   # Function calls with lambdas as last argument
   {

@@ -5,6 +5,5 @@
     # Message that should be traced
     msg:
     # Value to return
-    x:
-    if pred then trace msg x else x;
+    x: if pred then trace msg x else x;
 }
