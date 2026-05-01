@@ -11,8 +11,11 @@ Coverage-guided fuzzing for the parser and formatter via
 | `fuzz_roundtrip`  | `parse → format → parse` succeeds and yields the same AST modulo trivia.  |
 | `fuzz_idempotent` | `format` converges: `format²(x) == format³(x)` (and `format(x)` reparses).|
 
-All targets are seeded from `tests/fixtures/nixfmt/`. Run
-`./fuzz/seed-corpus.sh` once to populate `fuzz/corpus/<target>/`.
+All targets are seeded from `tests/fixtures/nixfmt/` plus `fuzz/seeds/`. Run
+`./fuzz/seed-corpus.sh` once to populate `fuzz/corpus/<target>/`. The files in
+`fuzz/seeds/` are hand-written to exercise parser/printer branches the upstream
+fixtures miss (bare URI literals, `~` paths, the legacy `let { }` form,
+single-line indented strings, etc.); add more there when coverage shows a gap.
 
 ## Running
 
