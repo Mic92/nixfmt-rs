@@ -17,19 +17,27 @@ repository = "https://github.com/joerg/nixfmt-rs"
 [[bin]]
 name = "nixfmt"
 path = "src/main.rs"
+required-features = ["cli"]
 
 [lib]
 name = "nixfmt_rs"
 path = "src/lib.rs"
 
+[features]
+# Pulls in the directory walker and mimalloc allocator used by the `nixfmt`
+# binary. Library consumers can disable default features to depend on the
+# formatter alone (memchr + compact_str only).
+default = ["cli"]
+cli = ["dep:ignore", "dep:mimalloc"]
+
 [dependencies]
 memchr = "2"
 compact_str = "0.9"
 
-# Binary-only deps; none of these support wasm32-unknown-unknown.
+# Binary-only deps; neither supports wasm32-unknown-unknown.
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
-ignore = "0.4"
-mimalloc = { version = "0.1", default-features = false }
+ignore = { version = "0.4", optional = true }
+mimalloc = { version = "0.1", default-features = false, optional = true }
 
 [dev-dependencies]
 criterion = "0.8"

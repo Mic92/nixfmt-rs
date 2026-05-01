@@ -12,6 +12,7 @@ libfuzzer-sys = "0.4"
 
 [dependencies.nixfmt_rs]
 path = ".."
+default-features = false
 
 [[bin]]
 name = "fuzz_parse"
