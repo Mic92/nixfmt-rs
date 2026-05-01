@@ -28,13 +28,15 @@ compact_str = "0.9"
 
 # Binary-only deps; none of these support wasm32-unknown-unknown.
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
-rayon = "1"
-walkdir = "2"
+ignore = "0.4"
 mimalloc = { version = "0.1", default-features = false }
 
 [dev-dependencies]
 criterion = "0.8"
 tempfile = "3"
+# examples/diff_sweep.rs only:
+rayon = "1"
+walkdir = "2"
 
 [[bench]]
 name = "parser_benchmark"
