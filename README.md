@@ -12,7 +12,7 @@ Try it in your browser: <https://mic92.github.io/nixfmt-rs/> (WebAssembly build,
 
 - Byte-identical output across the entire nixpkgs tree
   (`LIMIT=0 cargo run --release --example diff_sweep`).
-- Formats all of nixpkgs in ≈2 s — see [Benchmarks](#benchmarks).
+- Formats all of nixpkgs in <2 s — see [Benchmarks](#benchmarks).
 
 See [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) for how the pieces fit
 together.
@@ -93,23 +93,24 @@ of diagnostics on intentionally broken inputs.
 
 ## Benchmarks
 
-`--check` over a full nixpkgs checkout (42 954 `.nix` files), Apple M3
-8-core / 16 GB, nixfmt 1.2.0, treefmt 2.5.0. treefmt runs use
-`--no-cache` so every file is actually processed:
+`--check` over a full nixpkgs checkout (42 942 `.nix` files), AMD EPYC
+7713P 64-core, nixfmt 1.2.0, treefmt 2.5.0. treefmt runs use `--no-cache`
+so every file is actually processed:
 
 | command                           | wall time  | user time | vs nixfmt-rs |
 | --------------------------------- | ---------- | --------- | ------------ |
-| `nixfmt-rs --check .`             | **2.10 s** | 5.08 s    | 1.00×        |
-| `treefmt` driving nixfmt-rs       | 2.83 s     | 6.35 s    | 1.35×        |
-| `nixfmt-tree` (treefmt + Haskell) | 32.35 s    | 152.9 s   | 15.4×        |
-| `nixfmt --check .` (Haskell)      | 69.03 s    | 64.1 s    | 32.9×        |
+| `nixfmt-rs --check .`             | **1.68 s** | 9.34 s    | 1.00×        |
+| `treefmt` driving nixfmt-rs       | 3.35 s     | 10.14 s   | 1.99×        |
+| `nixfmt-tree` (treefmt + Haskell) | 38.89 s    | 216.2 s   | 23.2×        |
+| `nixfmt --check .` (Haskell)      | 220.67 s   | 214.4 s   | 131×         |
 
-Single large file (`all-packages.nix`, ~12 k lines): 22.5 ms vs 416.8 ms
-(18.5×).
+Single large file (`all-packages.nix`, ~12 k lines): 36.8 ms vs 762.7 ms
+(20.7×).
 
-Reproduce with [`scripts/bench.sh`](scripts/bench.sh) (needs `hyperfine`
-and a nixpkgs checkout; runs against a throwaway rsync copy so your tree
-is not modified).
+Reproduce with [`scripts/bench.sh`](scripts/bench.sh); the dev shell
+provides `hyperfine` and the script defaults to the nixpkgs revision
+pinned in `flake.lock`, so `nix develop -c scripts/bench.sh` is
+self-contained.
 
 ## Design goals
 
