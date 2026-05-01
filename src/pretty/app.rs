@@ -8,6 +8,14 @@ use super::absorb::{is_absorbable_term, push_absorb_paren};
 use super::term::{push_pretty_term, push_pretty_term_wide, push_render_list};
 use super::util::{has_trivia, is_simple_expression, is_simple_term};
 
+const fn is_list_arg(e: &Expression) -> bool {
+    matches!(e, Expression::Term(Term::List(_, _, _)))
+}
+
+const fn is_selection_arg(e: &Expression) -> bool {
+    matches!(e, Expression::Term(Term::Selection(_, _, _)))
+}
+
 /// `absorbInner` from Pretty.hs: short lists of simple terms get a soft `line`
 /// separator so they may stay on one line; everything else falls back to `pretty`.
 fn push_absorb_inner(doc: &mut Doc, arg: &Expression) {
@@ -50,75 +58,62 @@ fn strip_first_comment(expr: &Expression) -> Expression {
 
 /// Walk the function-call chain. Mirrors Haskell `absorbApp` (Pretty.hs).
 fn push_absorb_app(doc: &mut Doc, expr: &Expression, indent_function: bool, comment: &Trivia) {
-    match expr {
-        // Selections must not priority-expand: only the `.`-suffix would move,
-        // which looks odd.
-        Expression::Application(f, a)
-            if matches!(**a, Expression::Term(Term::Selection(_, _, _))) =>
-        {
-            push_group_ann(doc, GroupAnn::Transparent, |g| {
-                push_absorb_app(g, f, indent_function, comment);
-            });
-            doc.push(line());
-            push_nested(doc, |n| {
-                push_group_ann(n, GroupAnn::RegularG, |g| push_absorb_inner(g, a));
-            });
-        }
-        // Two consecutive list arguments stay together: if one wraps, both wrap.
-        Expression::Application(f, l2)
-            if matches!(**l2, Expression::Term(Term::List(_, _, _)))
-                && matches!(
-                    **f,
-                    Expression::Application(_, ref l1)
-                        if matches!(**l1, Expression::Term(Term::List(_, _, _)))
-                ) =>
-        {
-            let Expression::Application(f2, l1) = &**f else {
-                unreachable!()
-            };
-            push_group_ann(doc, GroupAnn::Transparent, |outer| {
-                push_group_ann(outer, GroupAnn::Transparent, |g| {
-                    push_absorb_app(g, f2, indent_function, comment);
-                });
-                push_nested(outer, |n| {
-                    push_group_ann(n, GroupAnn::RegularG, |g| {
-                        g.push(line());
-                        push_group(g, |inner| push_absorb_inner(inner, l1));
-                        g.push(line());
-                        push_group(g, |inner| push_absorb_inner(inner, l2));
-                    });
-                });
-            });
-        }
-        Expression::Application(f, a) => {
-            push_group_ann(doc, GroupAnn::Transparent, |g| {
-                push_absorb_app(g, f, indent_function, comment);
-            });
-            doc.push(line());
-            push_nested(doc, |n| {
-                push_group_ann(n, GroupAnn::Priority, |g| push_absorb_inner(g, a));
-            });
-        }
+    let recurse_head = |doc: &mut Doc, head: &Expression| {
+        push_group_ann(doc, GroupAnn::Transparent, |g| {
+            push_absorb_app(g, head, indent_function, comment);
+        });
+    };
+
+    let Expression::Application(f, a) = expr else {
         // Base case: the function expression itself. The first token's
         // pre-trivia/trailing comment was already emitted by `push_pretty_app`,
         // so render the head with that trivia stripped.
-        _ => {
-            if comment.is_empty() {
-                if indent_function {
-                    push_nested(doc, |n| {
-                        push_group_ann(n, GroupAnn::RegularG, |g| {
-                            g.push(line_prime());
-                            expr.pretty(g);
-                        });
-                    });
-                } else {
-                    expr.pretty(doc);
-                }
-            } else {
-                strip_first_comment(expr).pretty(doc);
-            }
+        if !comment.is_empty() {
+            strip_first_comment(expr).pretty(doc);
+        } else if indent_function {
+            push_nested(doc, |n| {
+                push_group(n, |g| {
+                    g.push(line_prime());
+                    expr.pretty(g);
+                });
+            });
+        } else {
+            expr.pretty(doc);
         }
+        return;
+    };
+
+    // Two consecutive list arguments stay together: if one wraps, both wrap.
+    if is_list_arg(a)
+        && let Expression::Application(f2, l1) = &**f
+        && is_list_arg(l1)
+    {
+        push_group_ann(doc, GroupAnn::Transparent, |outer| {
+            recurse_head(outer, f2);
+            push_nested(outer, |n| {
+                push_group(n, |g| {
+                    g.push(line());
+                    push_group(g, |inner| push_absorb_inner(inner, l1));
+                    g.push(line());
+                    push_group(g, |inner| push_absorb_inner(inner, a));
+                });
+            });
+        });
+        return;
     }
+
+    recurse_head(doc, f);
+    doc.push(line());
+    // Selections must not priority-expand: only the `.`-suffix would move,
+    // which looks odd.
+    let arg_ann = if is_selection_arg(a) {
+        GroupAnn::RegularG
+    } else {
+        GroupAnn::Priority
+    };
+    push_nested(doc, |n| {
+        push_group_ann(n, arg_ann, |g| push_absorb_inner(g, a));
+    });
 }
 
 /// `group' Priority $ nest …`
@@ -222,8 +217,9 @@ pub(super) fn push_pretty_app(
 
     // Two trailing list arguments are rendered as a pair of regular groups so
     // they wrap together; lists are never "simple", so renderSimple cannot apply.
-    if let (Expression::Application(f2, l1), Expression::Term(Term::List(_, _, _))) = (&**f, &**a)
-        && matches!(**l1, Expression::Term(Term::List(_, _, _)))
+    if is_list_arg(a)
+        && let Expression::Application(f2, l1) = &**f
+        && is_list_arg(l1)
     {
         push_group(doc, |g| {
             g.extend_from_slice(pre);
