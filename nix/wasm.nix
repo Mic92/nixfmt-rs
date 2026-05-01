@@ -9,7 +9,7 @@
 }:
 rustPlatform.buildRustPackage {
   pname = "nixfmt-wasm";
-  version = "0.1.0";
+  version = (builtins.fromTOML (builtins.readFile ../Cargo.toml)).package.version;
   src = import ./source.nix { inherit lib; };
   cargoLock.lockFile = ../Cargo.lock;
 
