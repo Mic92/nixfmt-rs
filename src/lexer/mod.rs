@@ -373,7 +373,6 @@ impl Lexer {
                             description: format!("invalid character '{ch}' in path"),
                             hint: Some("paths can only contain alphanumeric characters, '.', '_', '-', and '/'".to_string()),
                         },
-                        labels: vec![],
                     }))
                 }
             }
@@ -385,7 +384,6 @@ impl Lexer {
                 delimiter: '<',
                 opening_span,
             },
-            labels: vec![],
         }))
     }
 
@@ -401,7 +399,6 @@ impl Lexer {
                     .collect(),
                 found: found.to_string(),
             },
-            labels: vec![],
         }))
     }
 

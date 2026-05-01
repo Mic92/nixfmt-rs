@@ -56,15 +56,6 @@ pub struct RenderConfig {
     pub indent_width: usize,
 }
 
-impl Default for RenderConfig {
-    fn default() -> Self {
-        Self {
-            width: 100,
-            indent_width: 2,
-        }
-    }
-}
-
 pub fn render_with_config(doc: Doc, config: &RenderConfig) -> String {
     layout_greedy(config.width, config.indent_width, doc)
 }

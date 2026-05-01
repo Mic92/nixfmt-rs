@@ -14,13 +14,10 @@ pub struct ParseError {
 
     /// Error kind with structured data
     pub kind: ErrorKind,
-
-    /// Additional related spans with labels
-    pub labels: Vec<Label>,
 }
 
 impl ParseError {
-    /// Build a boxed [`ErrorKind::UnexpectedToken`] error with no labels.
+    /// Build a boxed [`ErrorKind::UnexpectedToken`] error.
     pub fn unexpected(
         span: Span,
         expected: impl Into<Vec<String>>,
@@ -32,11 +29,10 @@ impl ParseError {
                 expected: expected.into(),
                 found: found.into(),
             },
-            labels: Vec::new(),
         })
     }
 
-    /// Build a boxed [`ErrorKind::InvalidSyntax`] error with no labels.
+    /// Build a boxed [`ErrorKind::InvalidSyntax`] error.
     pub fn invalid(span: Span, description: impl Into<String>, hint: Option<String>) -> Box<Self> {
         Box::new(Self {
             span,
@@ -44,11 +40,10 @@ impl ParseError {
                 description: description.into(),
                 hint,
             },
-            labels: Vec::new(),
         })
     }
 
-    /// Build a boxed [`ErrorKind::UnclosedDelimiter`] error with no labels.
+    /// Build a boxed [`ErrorKind::UnclosedDelimiter`] error.
     #[must_use]
     pub fn unclosed(span: Span, delimiter: char, opening_span: Span) -> Box<Self> {
         Box::new(Self {
@@ -57,11 +52,10 @@ impl ParseError {
                 delimiter,
                 opening_span,
             },
-            labels: Vec::new(),
         })
     }
 
-    /// Build a boxed [`ErrorKind::MissingToken`] error with no labels.
+    /// Build a boxed [`ErrorKind::MissingToken`] error.
     #[must_use]
     pub fn missing(span: Span, token: &str, after: &str) -> Box<Self> {
         Box::new(Self {
@@ -70,7 +64,6 @@ impl ParseError {
                 token: token.into(),
                 after: after.into(),
             },
-            labels: Vec::new(),
         })
     }
 
@@ -176,28 +169,6 @@ pub enum ErrorKind {
         /// Source text of the second comparison operator.
         second_op: String,
     },
-}
-
-/// Labeled related location
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct Label {
-    /// Source range this label points at.
-    pub span: Span,
-    /// Text shown next to the span in diagnostics.
-    pub message: String,
-    /// How the label is rendered (primary / secondary / note).
-    pub style: LabelStyle,
-}
-
-/// Label style for secondary locations
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum LabelStyle {
-    /// Main error location.
-    Primary,
-    /// Related / context location.
-    Secondary,
-    /// Informational annotation.
-    Note,
 }
 
 /// Convenience alias for `Result<T, ParseError>`.

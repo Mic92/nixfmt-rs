@@ -132,27 +132,17 @@ impl Parser {
         text
     }
 
-    /// Parse URI as a `SimpleString`
-    /// Based on nixfmt's uri parser
+    /// Parse URI as a `SimpleString`. Only called when [`looks_like_uri`]
+    /// has already verified `current == Identifier(_)` and the lexer is
+    /// positioned at `':' <uri-char>`, so neither check can fail here.
     pub(super) fn parse_uri(&mut self) -> Result<Term> {
         let ann = self.with_raw_ann(|p| {
             let Token::Identifier(scheme) = &p.current.value else {
-                return Err(ParseError::unexpected(
-                    p.current.span,
-                    vec!["identifier".to_string()],
-                    format!("'{}'", p.current.value.text()),
-                ));
+                unreachable!("looks_like_uri guards this")
             };
-
             let mut uri_text = scheme.clone();
 
-            if p.lexer.peek() != Some(':') {
-                return Err(ParseError::missing(
-                    p.lexer.current_pos(),
-                    "':'",
-                    "URI scheme",
-                ));
-            }
+            debug_assert_eq!(p.lexer.peek(), Some(':'));
             p.lexer.advance();
             uri_text.push(':');
 
