@@ -367,6 +367,20 @@ fn regression_context_parameter_shape() {
     assert_parse_error_contains("{ }@{ }: 1", "expected identifier");
 }
 
+/// After at least one `.selector`, `or` is the selection-default operator and
+/// *must* be followed by a default expression. We used to backtrack and treat
+/// it as the deprecated identifier `or`, accepting `a.b or ]`. Nix and
+/// upstream nixfmt both reject. (`a or`, with no selectors, remains the
+/// identifier and is handled in the application layer.)
+#[test]
+fn regression_or_after_selector_requires_default() {
+    assert_parse_error_contains("[ a.b or ]", "expected expression");
+    assert_parse_error_contains("{ x = a.b or; }", "expected expression");
+    // No selectors: still the identifier.
+    crate::parse("[ a or ]").expect("`or` without preceding selector is the identifier");
+    crate::parse("a or").expect("`or` without preceding selector is the identifier");
+}
+
 #[test]
 fn regression_single_ampersand_error() {
     assert_parse_error_contains("a & b", "expected '&&', found '&'");
