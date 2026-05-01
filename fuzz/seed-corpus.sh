@@ -5,14 +5,15 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
-for target in fuzz_parse fuzz_roundtrip fuzz_idempotent; do
+targets=(fuzz_parse fuzz_roundtrip fuzz_idempotent fuzz_debug_dumps)
+for target in "${targets[@]}"; do
 	mkdir -p "fuzz/corpus/$target"
 done
 
 find tests/fixtures/nixfmt fuzz/seeds -name '*.nix' -print0 |
 	while IFS= read -r -d '' f; do
 		name=${f//\//_}
-		for target in fuzz_parse fuzz_roundtrip fuzz_idempotent; do
+		for target in "${targets[@]}"; do
 			cp "$f" "fuzz/corpus/$target/$name"
 		done
 	done
