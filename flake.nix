@@ -28,6 +28,7 @@
     {
       packages = forAllSystems (system: {
         default = pkgsFor.${system}.callPackage ./nix/package.nix { };
+        wasm = pkgsFor.${system}.callPackage ./nix/wasm.nix { };
       });
 
       devShells = forAllSystems (system: {
