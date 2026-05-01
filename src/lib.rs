@@ -6,7 +6,8 @@
 //! let src = "{foo=1;}";
 //! assert_eq!(nixfmt_rs::format(src).unwrap(), "{ foo = 1; }\n");
 //!
-//! let opts = nixfmt_rs::Options { width: 40, indent: 4 };
+//! let mut opts = nixfmt_rs::Options::default();
+//! opts.width = 40;
 //! let _ = nixfmt_rs::format_with(src, &opts).unwrap();
 //! ```
 //!
@@ -38,7 +39,11 @@ pub(crate) use error::Result;
 pub(crate) use types::File;
 
 /// Layout options for [`format_with`].
+///
+/// Construct via [`Options::default`] and override fields; the struct is
+/// `#[non_exhaustive]` so new options can be added without a breaking change.
 #[derive(Debug, Clone)]
+#[non_exhaustive]
 pub struct Options {
     /// Maximum line width the formatter targets (soft limit).
     pub width: usize,
