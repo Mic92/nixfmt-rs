@@ -169,6 +169,37 @@ pub fn fixup(mut doc: Doc) -> Doc {
 /// Cheap placeholder used to vacate a slot during the read/write compaction.
 const HOLE: DocE = DocE::Spacing(Spacing::Softbreak);
 
+/// Outcome of lifting hard spacings/comments out of a fixed-up group body.
+enum GroupFixup {
+    /// Nothing to lift; body becomes the (simplified) group contents.
+    Keep(Doc),
+    /// Core is empty: the group dissolves into its lifted surroundings.
+    Dissolve { pre: Doc, post: Doc },
+    /// `pre` and `post` are lifted to the parent; `core` stays grouped.
+    Lift { pre: Doc, core: Doc, post: Doc },
+}
+
+/// Classify a recursively fixed-up group body. Pure in `body`; the caller
+/// handles splicing the result back into the parent's read/write window.
+fn split_liftable(ann: GroupAnn, mut body: Doc) -> GroupFixup {
+    let (pre_end, post_start) = lift_bounds(&body);
+    if pre_end == 0 && post_start == body.len() && !body.is_empty() {
+        return GroupFixup::Keep(simplify_group(ann, body));
+    }
+    let post = body.split_off(post_start);
+    let core = body.split_off(pre_end);
+    let pre = body;
+    if core.is_empty() {
+        GroupFixup::Dissolve { pre, post }
+    } else {
+        GroupFixup::Lift {
+            pre,
+            core: simplify_group(ann, core),
+            post,
+        }
+    }
+}
+
 /// In-place `fixup`. Walks `doc` with a read index and write index
 /// (`write_idx <= read_idx`), recursing into group bodies via `&mut` so the
 /// existing `Vec` allocations are reused. Mirrors Haskell `fixup`
@@ -232,56 +263,55 @@ fn fixup_mut(doc: &mut Vec<DocE>, mut nest_acc: isize, mut offset_acc: isize) {
                 }
                 fixup_mut(&mut body, nest_acc, offset_acc);
 
-                let (pre_end, post_start) = lift_bounds(&body);
-
-                if pre_end == 0 && post_start == body.len() && !body.is_empty() {
-                    // Fast path: nothing to lift.
-                    doc[write_idx] = DocE::Group(ann, simplify_group(ann, body));
-                    write_idx += 1;
-                    continue;
-                }
-
-                // Slow path: split [pre | core | post] out of the recursed body.
-                let post = body.split_off(post_start);
-                let core = body.split_off(pre_end);
-                let mut pre = body;
-
-                if core.is_empty() {
-                    // Dissolve: `fixup $ (a : pre) ++ post ++ ys`. Put the
-                    // lifted pieces back on the read side. Their `Text` nodes
-                    // already carry the baked indent, so wrap with a `Nest`
-                    // that cancels the running accumulator for the reprocess.
-                    let mut lifted = Vec::with_capacity(pre.len() + post.len() + 2);
-                    lifted.push(DocE::Nest(-nest_acc, -offset_acc));
-                    lifted.extend(pre);
-                    lifted.extend(post);
-                    lifted.push(DocE::Nest(nest_acc, offset_acc));
-                    doc.splice(write_idx..read_idx, lifted);
-                } else {
-                    let core = simplify_group(ann, core);
-                    // `fixup (a : pre)`: the lifted prefix is already fixed
-                    // internally, so the only remaining rewrite is a possible
-                    // spacing merge across the boundary with `doc[write_idx-1]`.
-                    if write_idx > 0
-                        && matches!(doc[write_idx - 1], DocE::Spacing(_))
-                        && let (DocE::Spacing(a), Some(DocE::Spacing(b))) =
-                            (&doc[write_idx - 1], pre.first())
-                    {
-                        doc[write_idx - 1] = DocE::Spacing(merge_spacings(*a, *b));
-                        pre.remove(0);
+                match split_liftable(ann, body) {
+                    GroupFixup::Keep(body) => {
+                        doc[write_idx] = DocE::Group(ann, body);
+                        write_idx += 1;
                     }
-                    let pre_len = pre.len();
-                    // Finalise `pre ++ [Group ann core]` into the write side
-                    // and leave `post` on the read side for `fixup (post ++ ys)`.
-                    doc.splice(
-                        write_idx..read_idx,
-                        pre.into_iter()
-                            .chain(std::iter::once(DocE::Group(ann, core)))
-                            .chain(post),
-                    );
-                    write_idx += pre_len + 1;
+                    GroupFixup::Dissolve { pre, post } => {
+                        // `fixup $ (a : pre) ++ post ++ ys`. Put the lifted
+                        // pieces back on the read side. Their `Text` nodes
+                        // already carry the baked indent, so wrap with a
+                        // `Nest` that cancels the running accumulator for the
+                        // reprocess.
+                        let mut lifted = Vec::with_capacity(pre.len() + post.len() + 2);
+                        lifted.push(DocE::Nest(-nest_acc, -offset_acc));
+                        lifted.extend(pre);
+                        lifted.extend(post);
+                        lifted.push(DocE::Nest(nest_acc, offset_acc));
+                        doc.splice(write_idx..read_idx, lifted);
+                        read_idx = write_idx;
+                    }
+                    GroupFixup::Lift {
+                        mut pre,
+                        core,
+                        post,
+                    } => {
+                        // The lifted prefix is already fixed internally, so
+                        // the only remaining rewrite is a possible spacing
+                        // merge across the boundary with `doc[write_idx-1]`.
+                        if write_idx > 0
+                            && let (DocE::Spacing(prev), Some(DocE::Spacing(first))) =
+                                (&doc[write_idx - 1], pre.first())
+                        {
+                            let merged = merge_spacings(*prev, *first);
+                            doc[write_idx - 1] = DocE::Spacing(merged);
+                            pre.remove(0);
+                        }
+                        let pre_len = pre.len();
+                        // Finalise `pre ++ [Group ann core]` into the write
+                        // side and leave `post` on the read side for
+                        // `fixup (post ++ ys)`.
+                        doc.splice(
+                            write_idx..read_idx,
+                            pre.into_iter()
+                                .chain(std::iter::once(DocE::Group(ann, core)))
+                                .chain(post),
+                        );
+                        write_idx += pre_len + 1;
+                        read_idx = write_idx;
+                    }
                 }
-                read_idx = write_idx;
             }
         }
     }
