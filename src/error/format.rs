@@ -177,7 +177,7 @@ impl<'a> ErrorFormatter<'a> {
             ErrorKind::MissingToken { token, after } => {
                 writeln!(out, "{indent}= note: {token} is required after {after}").unwrap();
             }
-            _ => {}
+            ErrorKind::InvalidSyntax { hint: None, .. } => {}
         }
     }
 }

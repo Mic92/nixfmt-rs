@@ -74,15 +74,6 @@ impl ParseError {
         })
     }
 
-    /// Create a simple error with just a message
-    pub fn new(span: Span, msg: impl Into<String>) -> Self {
-        Self {
-            span,
-            kind: ErrorKind::Message(msg.into()),
-            labels: Vec::new(),
-        }
-    }
-
     /// Get the primary message for this error
     #[must_use]
     pub fn message(&self) -> String {
@@ -114,7 +105,6 @@ impl ParseError {
                     "chained comparison operators '{first_op}' and '{second_op}' are not allowed"
                 )
             }
-            ErrorKind::Message(msg) => msg.clone(),
         }
     }
 
@@ -127,7 +117,6 @@ impl ParseError {
             ErrorKind::MissingToken { .. } => Some("E003"),
             ErrorKind::InvalidSyntax { .. } => Some("E005"),
             ErrorKind::ChainedComparison { .. } => Some("E006"),
-            ErrorKind::Message(_) => None,
         }
     }
 }
@@ -187,9 +176,6 @@ pub enum ErrorKind {
         /// Source text of the second comparison operator.
         second_op: String,
     },
-
-    /// Generic message (for gradual migration)
-    Message(String),
 }
 
 /// Labeled related location
