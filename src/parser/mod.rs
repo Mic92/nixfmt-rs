@@ -281,13 +281,7 @@ impl Parser {
         // Member check (?) is handled in parse_application so that `?` binds tighter than prefix `!`/`-`.
 
         if matches!(self.current.value, Token::TColon | Token::TAt) {
-            let param = Self::expr_to_parameter(expr)?;
-            return match self.finish_abstraction(param)? {
-                Break(abs) => Ok(abs),
-                // Unreachable: we only enter this arm when the lookahead is `:`/`@`,
-                // and `finish_abstraction` always consumes those.
-                Continue(_) => unreachable!(),
-            };
+            return Err(Self::reject_non_parameter_expr(&expr));
         }
 
         self.maybe_parse_binary_operation(expr)

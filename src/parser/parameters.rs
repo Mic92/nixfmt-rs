@@ -7,10 +7,7 @@
 //! - Context parameters: `args@{x, y}:` or `{x, y}@args:`
 
 use crate::error::{ParseError, Result};
-use crate::types::{
-    Ann, Binder, Expression, Item, Items, ParamAttr, Parameter, Selector, SimpleSelector, Span,
-    Term, Token,
-};
+use crate::types::{Expression, ParamAttr, Parameter, Span, Term, Token};
 
 use super::Parser;
 
@@ -197,84 +194,24 @@ impl Parser {
         Ok(())
     }
 
-    /// Convert expression to parameter (for lambda detection)
-    pub(super) fn expr_to_parameter(expr: Expression) -> Result<Parameter> {
-        match expr {
-            Expression::Term(Term::Token(ann)) => {
-                if matches!(ann.value, Token::Identifier(_)) {
-                    Ok(Parameter::ID(ann))
-                } else {
-                    Err(ParseError::unexpected(
-                        ann.span,
-                        vec!["identifier".to_string()],
-                        format!("'{}'", ann.value.text()),
-                    ))
-                }
-            }
-            Expression::Term(Term::Set(None, open, items, close)) => {
-                // Convert set literal to set parameter
-                // This happens for: { x, y }: or { x ? 1 }: patterns
-                let attrs = Self::items_to_param_attrs(items)?;
-                Ok(Parameter::Set(open, attrs, close))
-            }
-            _ => Err(ParseError::invalid(
-                Span::point(0),
-                "complex parameters not yet supported",
-                Some("use simple identifiers or set patterns as parameters".to_string()),
-            )),
+    /// Called from `parse_operation_or_lambda` when `:`/`@` follows an
+    /// expression whose head is neither an identifier nor `{` (those are
+    /// diverted earlier in `parse_abstraction_or_operation`), so `expr` can
+    /// never be a valid lambda parameter.
+    // Returns Box because crate::Result's error type is Box<ParseError>.
+    #[allow(clippy::unnecessary_box_returns)]
+    pub(super) fn reject_non_parameter_expr(expr: &Expression) -> Box<ParseError> {
+        if let Expression::Term(Term::Token(ann)) = expr {
+            return ParseError::unexpected(
+                ann.span,
+                vec!["identifier".to_string()],
+                format!("'{}'", ann.value.text()),
+            );
         }
-    }
-
-    /// Convert Items<Binder> to Vec<ParamAttr>
-    pub(super) fn items_to_param_attrs(items: Items<Binder>) -> Result<Vec<ParamAttr>> {
-        let mut attrs = Vec::new();
-
-        for item in items.0 {
-            match item {
-                Item::Item(binder) => {
-                    match binder {
-                        Binder::Assignment(mut path, _eq, expr, comma_or_semi) => {
-                            if path.len() == 1 {
-                                if let Some(Selector {
-                                    dot: None,
-                                    selector: SimpleSelector::ID(name),
-                                }) = path.pop()
-                                {
-                                    // Treat any assignment as `x ? default`
-                                    let default = Some((
-                                        Ann::new(Token::TQuestion, name.span), // Fake ? token
-                                        expr,
-                                    ));
-                                    let comma = Some(comma_or_semi);
-                                    attrs.push(ParamAttr::ParamAttr(
-                                        name,
-                                        Box::new(default),
-                                        comma,
-                                    ));
-                                } else {
-                                    return Err(ParseError::invalid(
-                                        Span::point(0),
-                                        "invalid parameter attribute",
-                                        Some("expected 'name' or 'name ? default'".to_string()),
-                                    ));
-                                }
-                            } else {
-                                return Err(ParseError::invalid(
-                                    Span::point(0),
-                                    "invalid parameter selector",
-                                    Some("expected identifier in parameter pattern".to_string()),
-                                ));
-                            }
-                        }
-                        Binder::Inherit(_, _, _, dots) => {
-                            attrs.push(ParamAttr::ParamEllipsis(dots));
-                        }
-                    }
-                }
-                Item::Comments(_) => {}
-            }
-        }
-
-        Ok(attrs)
+        ParseError::invalid(
+            Span::point(0),
+            "expression before ':' / '@' is not a valid lambda parameter",
+            Some("use a simple identifier or '{ ... }' set pattern".to_string()),
+        )
     }
 }
