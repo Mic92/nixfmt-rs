@@ -191,18 +191,6 @@ pub struct Ann<T> {
     pub trail_comment: Option<TrailingComment>,
 }
 
-impl<T> Ann<T> {
-    /// Wrap a value with a span and no surrounding trivia.
-    pub const fn new(value: T, span: Span) -> Self {
-        Self {
-            pre_trivia: Trivia::new(),
-            span,
-            value,
-            trail_comment: None,
-        }
-    }
-}
-
 impl<T: Clone> Ann<T> {
     pub fn without_trail(&self) -> Self {
         Self {
@@ -214,14 +202,6 @@ impl<T: Clone> Ann<T> {
     pub fn without_pre(&self) -> Self {
         Self {
             pre_trivia: Trivia::new(),
-            ..self.clone()
-        }
-    }
-
-    pub fn bare(&self) -> Self {
-        Self {
-            pre_trivia: Trivia::new(),
-            trail_comment: None,
             ..self.clone()
         }
     }
