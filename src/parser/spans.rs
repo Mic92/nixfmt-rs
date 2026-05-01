@@ -34,14 +34,13 @@ fn term_end(term: &Term) -> Span {
         Term::List(_, _, close) | Term::Set(_, _, _, close) | Term::Parenthesized(_, _, close) => {
             close.span
         }
-        Term::Selection(base, selectors, default) => {
-            // Return the rightmost element: default > last selector > base
+        Term::Selection(_, selectors, default) => {
+            // Rightmost element: default > last selector. The parser only
+            // builds `Selection` when `selectors` is non-empty.
             if let Some((_, default_expr)) = default {
                 term_end(default_expr)
-            } else if let Some(last) = selectors.last() {
-                simple_selector_end(&last.selector)
             } else {
-                term_end(base)
+                simple_selector_end(&selectors.last().expect("≥1 selector").selector)
             }
         }
     }
