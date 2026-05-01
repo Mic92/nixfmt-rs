@@ -37,3 +37,26 @@ jobs:
         run: cargo publish -p nixfmt_rs --locked
         env:
           CARGO_REGISTRY_TOKEN: ${{ steps.auth.outputs.token }}
+
+  npm:
+    runs-on: ubuntu-latest
+    environment: release
+    permissions:
+      contents: read
+      id-token: write # npm provenance / trusted publishing
+    steps:
+      - uses: actions/checkout@v6
+      - uses: NixOS/nix-installer-action@main
+      - run: nix build -L .#wasm
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24
+          registry-url: https://registry.npmjs.org
+      - name: Publish
+        # Writable copy so npm can stage its tarball. Auth is tokenless via
+        # npm Trusted Publishing (OIDC); configure on npmjs.com after the
+        # initial manual `npm publish`.
+        run: |
+          cp -r result/npm dist
+          cd dist
+          npm publish --provenance --access public
