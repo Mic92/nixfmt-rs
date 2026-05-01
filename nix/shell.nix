@@ -7,6 +7,8 @@
   rust-analyzer,
   rustfmt,
   nixfmt,
+  hyperfine,
+  rsync,
 }:
 mkShell {
   packages = [
@@ -17,6 +19,9 @@ mkShell {
     rust-analyzer
     rustfmt
     nixfmt
+    # scripts/bench.sh
+    hyperfine
+    rsync
   ];
 
   shellHook = ''
