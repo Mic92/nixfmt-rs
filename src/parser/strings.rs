@@ -210,29 +210,23 @@ impl Parser {
         Ok(classify_indented_string(ann))
     }
 
-    /// Parse one line of an indented string
-    /// Based on Haskell's indentedLine
+    /// Haskell `indentedLine`.
     fn parse_indented_string_line(&mut self) -> Result<Vec<StringPart>> {
         let mut parts = Vec::new();
 
         loop {
             match self.lexer.peek() {
-                Some('\'') if self.lexer.at("''") => {
-                    // Could be end or escape
-                    if matches!(self.lexer.peek_ahead(2), Some('$' | '\'' | '\\')) {
-                        let text = self.parse_indented_string_part();
-                        if !text.is_empty() {
-                            parts.push(StringPart::TextPart(text));
-                        }
-                    } else {
-                        break;
-                    }
+                Some('\n') | None => break,
+                // Closing `''` (not an `''$` / `'''` / `''\` escape).
+                Some('\'')
+                    if self.lexer.at("''")
+                        && !matches!(self.lexer.peek_ahead(2), Some('$' | '\'' | '\\')) =>
+                {
+                    break;
                 }
                 Some('$') if self.lexer.at("${") => {
-                    let interp = self.parse_string_interpolation()?;
-                    parts.push(interp);
+                    parts.push(self.parse_string_interpolation()?);
                 }
-                Some('\n') | None => break,
                 _ => {
                     let text = self.parse_indented_string_part();
                     if !text.is_empty() {
@@ -245,52 +239,44 @@ impl Parser {
         Ok(parts)
     }
 
-    /// Parse text part in indented string
-    /// Based on Haskell's indentedStringPart
+    /// Haskell `indentedStringPart`.
     fn parse_indented_string_part(&mut self) -> String {
         let mut text = String::new();
 
         loop {
             // `\n`, `'` and `$` are the only bytes that change control flow.
-            let run = self.lexer.scan_until3(b'\n', b'\'', b'$');
-            if !run.is_empty() {
-                text.push_str(run);
-            }
+            text.push_str(self.lexer.scan_until3(b'\n', b'\'', b'$'));
+
+            // One flat ladder ordered longest-prefix-first; `at()` makes each
+            // arm self-contained so there is no nested re-dispatch on `''`.
             match self.lexer.peek() {
                 None | Some('\n') => break,
-                Some('\'') if self.lexer.at("''") => {
-                    match self.lexer.peek_ahead(2) {
-                        Some('$') => {
-                            // ''$ -> $
-                            text.push_str("''$");
-                            self.lexer.advance_by(3);
-                        }
-                        Some('\'') => {
-                            // ''' -> '
-                            text.push_str("'''");
-                            self.lexer.advance_by(3);
-                        }
-                        Some('\\') => {
-                            // ''\ escapes next char
-                            text.push_str("''\\");
-                            self.lexer.advance_by(3);
-                            // Leave a following '\n' for the line loop so the
-                            // next line is visible to common-indent stripping
-                            // (matches Haskell `indentedStringPart`).
-                            match self.lexer.peek() {
-                                None | Some('\n') => {}
-                                Some(ch) => {
-                                    text.push(ch);
-                                    self.lexer.advance();
-                                }
-                            }
-                        }
-                        _ => {
-                            // Not an escape, end of string
-                            break;
-                        }
+
+                _ if self.lexer.at("''$") => {
+                    text.push_str("''$");
+                    self.lexer.advance_by(3);
+                }
+                _ if self.lexer.at("'''") => {
+                    text.push_str("'''");
+                    self.lexer.advance_by(3);
+                }
+                _ if self.lexer.at("''\\") => {
+                    text.push_str("''\\");
+                    self.lexer.advance_by(3);
+                    // Leave a following '\n' for the line loop so the next
+                    // line is visible to common-indent stripping (matches
+                    // Haskell `indentedStringPart`).
+                    if let Some(ch) = self.lexer.peek().filter(|&c| c != '\n') {
+                        text.push(ch);
+                        self.lexer.advance();
                     }
                 }
+                Some('\'') if self.lexer.at("''") => break,
+                Some('\'') => {
+                    text.push('\'');
+                    self.lexer.advance();
+                }
+
                 Some('$') if self.lexer.at("${") => break,
                 Some('$') if self.lexer.at("$$") => {
                     text.push_str("$$");
@@ -300,11 +286,7 @@ impl Parser {
                     text.push('$');
                     self.lexer.advance();
                 }
-                Some('\'') => {
-                    // single `'` (the `''` case matched above)
-                    text.push('\'');
-                    self.lexer.advance();
-                }
+
                 // Any other byte was consumed by `scan_until3`.
                 Some(_) => unreachable!(),
             }
