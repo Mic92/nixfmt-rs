@@ -41,8 +41,8 @@ impl<'a> ErrorFormatter<'a> {
         output
     }
 
-    /// Primary span plus any secondary spans (delimiter opener, labels) that
-    /// should get their own caret row in the snippet.
+    /// Primary span plus any secondary spans (delimiter opener) that should
+    /// get their own caret row in the snippet.
     fn collect_marks(error: &ParseError) -> Vec<Mark> {
         let mut marks = vec![Mark {
             span: error.span,
@@ -55,14 +55,6 @@ impl<'a> ErrorFormatter<'a> {
                 span: *opening_span,
                 glyph: '-',
                 label: Some("unclosed delimiter opened here".to_string()),
-            });
-        }
-
-        for label in &error.labels {
-            marks.push(Mark {
-                span: label.span,
-                glyph: '-',
-                label: Some(label.message.clone()),
             });
         }
 

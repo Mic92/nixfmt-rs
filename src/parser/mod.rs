@@ -412,7 +412,6 @@ impl Parser {
                         first_op: last_comparison_op.unwrap_or_else(|| "?".to_string()),
                         second_op: op_string,
                     },
-                    labels: vec![],
                 }));
             }
 
