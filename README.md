@@ -1,5 +1,9 @@
 # nixfmt-rs
 
+[![crates.io](https://img.shields.io/crates/v/nixfmt_rs.svg)](https://crates.io/crates/nixfmt_rs)
+[![docs.rs](https://img.shields.io/docsrs/nixfmt_rs)](https://docs.rs/nixfmt_rs)
+[![license](https://img.shields.io/crates/l/nixfmt_rs.svg)](LICENSE)
+
 A from-scratch Rust reimplementation of [nixfmt] that produces byte-identical output to the Haskell original.
 
 Try it in your browser: <https://mic92.github.io/nixfmt-rs/> (WebAssembly build, formats locally — no upload).
