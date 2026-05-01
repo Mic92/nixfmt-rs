@@ -2,6 +2,8 @@
 
 A from-scratch Rust reimplementation of [nixfmt] that produces byte-identical output to the Haskell original.
 
+Try it in your browser: <https://mic92.github.io/nixfmt-rs/> (WebAssembly build, formats locally — no upload).
+
 [nixfmt]: https://github.com/NixOS/nixfmt
 
 ## Status
