@@ -28,6 +28,7 @@
     {
       packages = forAllSystems (system: {
         default = pkgsFor.${system}.callPackage ./nix/package.nix { };
+        pgo = pkgsFor.${system}.callPackage ./nix/package-pgo.nix { };
         wasm = pkgsFor.${system}.callPackage ./nix/wasm.nix { };
       });
 
