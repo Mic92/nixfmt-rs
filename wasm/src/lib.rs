@@ -13,10 +13,12 @@ use wasm_bindgen::prelude::*;
 /// Format a Nix expression with default layout (width 100, indent 2).
 ///
 /// # Errors
-/// Throws a JS exception with the parse error message on invalid Nix.
+/// Throws a JS exception whose message is the same multi-line diagnostic
+/// the CLI prints (snippet + caret + hint). ANSI escapes are stripped
+/// since browser DOM nodes don't render them.
 #[wasm_bindgen]
 pub fn format(source: &str) -> Result<String, JsError> {
-    nixfmt_rs::format(source).map_err(|e| JsError::new(&e.to_string()))
+    format_with(source, 100, 2)
 }
 
 /// Format a Nix expression with explicit `width` (line width) and `indent`
@@ -26,5 +28,28 @@ pub fn format(source: &str) -> Result<String, JsError> {
 /// See [`format`].
 #[wasm_bindgen]
 pub fn format_with(source: &str, width: usize, indent: usize) -> Result<String, JsError> {
-    nixfmt_rs::format_with(source, width, indent).map_err(|e| JsError::new(&e.to_string()))
+    nixfmt_rs::format_with(source, width, indent).map_err(|e| {
+        let pretty = nixfmt_rs::format_error(source, None, &e);
+        JsError::new(&strip_ansi(&pretty))
+    })
+}
+
+/// Drop ANSI SGR escape sequences (`\x1b[...m`). The CLI formatter colours
+/// its output for terminals; the playground renders plain text in a `<pre>`.
+fn strip_ansi(s: &str) -> String {
+    let mut out = String::with_capacity(s.len());
+    let mut chars = s.chars().peekable();
+    while let Some(c) = chars.next() {
+        if c == '\x1b' && chars.peek() == Some(&'[') {
+            chars.next();
+            for term in chars.by_ref() {
+                if term.is_ascii_alphabetic() {
+                    break;
+                }
+            }
+        } else {
+            out.push(c);
+        }
+    }
+    out
 }
