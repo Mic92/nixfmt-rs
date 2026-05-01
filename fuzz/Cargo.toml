@@ -33,3 +33,10 @@ path = "fuzz_targets/fuzz_idempotent.rs"
 test = false
 doc = false
 bench = false
+
+[[bin]]
+name = "fuzz_debug_dumps"
+path = "fuzz_targets/fuzz_debug_dumps.rs"
+test = false
+doc = false
+bench = false

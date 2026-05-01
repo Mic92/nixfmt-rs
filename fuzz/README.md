@@ -5,11 +5,12 @@ Coverage-guided fuzzing for the parser and formatter via
 
 ## Targets
 
-| Target            | Property                                                                  |
-| ----------------- | ------------------------------------------------------------------------- |
-| `fuzz_parse`      | `parse()` never panics/hangs/OOMs on arbitrary bytes (errors are fine).   |
-| `fuzz_roundtrip`  | `parse → format → parse` succeeds and yields the same AST modulo trivia.  |
-| `fuzz_idempotent` | `format` converges: `format²(x) == format³(x)` (and `format(x)` reparses).|
+| Target             | Property                                                                  |
+| ------------------ | ------------------------------------------------------------------------- |
+| `fuzz_parse`       | `parse()` never panics on arbitrary bytes; on `Err`, `format_error()` rendering also never panics. |
+| `fuzz_roundtrip`   | `parse → format → parse` succeeds and yields the same AST modulo trivia.  |
+| `fuzz_idempotent`  | `format` converges: `format²(x) == format³(x)` (and `format(x)` reparses).|
+| `fuzz_debug_dumps` | `format_ast()` / `format_ir()` (the `--ast`/`--ir` debug renderers) never panic on parseable input. |
 
 All targets are seeded from `tests/fixtures/nixfmt/` plus `fuzz/seeds/`. Run
 `./fuzz/seed-corpus.sh` once to populate `fuzz/corpus/<target>/`. The files in
@@ -24,9 +25,10 @@ rustc accepts cargo-fuzz's unstable flags:
 
 ```sh
 nix develop .#fuzz
-cargo fuzz run -s none fuzz_parse      -- -max_total_time=300 -timeout=10
-cargo fuzz run -s none fuzz_roundtrip  -- -max_total_time=300 -timeout=10
-cargo fuzz run -s none fuzz_idempotent -- -max_total_time=300 -timeout=10
+cargo fuzz run -s none fuzz_parse       -- -max_total_time=300 -timeout=10
+cargo fuzz run -s none fuzz_roundtrip   -- -max_total_time=300 -timeout=10
+cargo fuzz run -s none fuzz_idempotent  -- -max_total_time=300 -timeout=10
+cargo fuzz run -s none fuzz_debug_dumps -- -max_total_time=300 -timeout=10
 ```
 
 `-s none` is required: nixpkgs rustc does not ship the sanitizer runtimes, so
@@ -41,11 +43,16 @@ line/region report:
 
 ```sh
 nix develop .#fuzz -c ./fuzz/coverage.sh fuzz_roundtrip
+nix develop .#fuzz -c ./fuzz/coverage.sh all   # combined across every target
 ```
 
-The merged profile lands in `fuzz/coverage/<target>/coverage.profdata`; the
-script also prints the `llvm-cov show --format=html` invocation for a browsable
-report.
+The merged profile lands in `fuzz/coverage/<target>/coverage.profdata` (or
+`fuzz/coverage/combined/` for multiple targets); the script also prints the
+`llvm-cov show --format=html` invocation for a browsable report.
+
+`fuzz_roundtrip` alone caps at ≈ 83 % region coverage because it never reaches
+the diagnostic renderer or the `--ast`/`--ir` debug printers; `all` is the
+meaningful number for whole-crate coverage.
 
 ## Triage
 
