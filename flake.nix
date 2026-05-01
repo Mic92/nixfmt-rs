@@ -31,7 +31,7 @@
         let
           pkgs = pkgsFor.${system};
           plain = pkgs.callPackage ./nix/package.nix { };
-          pgo = pkgs.callPackage ./nix/package-pgo.nix { };
+          pgo = pkgs.callPackage ./nix/package-pgo.nix { nixpkgs-src = nixpkgs; };
         in
         {
           inherit plain pgo;
