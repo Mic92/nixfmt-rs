@@ -123,29 +123,25 @@ fn push_priority_nest(doc: &mut Doc, f: impl FnOnce(&mut Doc)) {
 
 /// Render the last argument of a function call. Mirrors Haskell `absorbLast`.
 fn push_absorb_last(doc: &mut Doc, arg: &Expression) {
-    match arg {
-        Expression::Term(t) if is_absorbable_term(t) => {
-            // Haskell: `group' Priority $ nest $ prettyTerm t`. `prettyTerm`
-            // (unlike `instance Pretty Term`) does *not* wrap a `List` in an
-            // extra group.
-            push_priority_nest(doc, |n| push_pretty_term(n, t));
-        }
+    if let Expression::Term(t) = arg
+        && is_absorbable_term(t)
+    {
+        // Haskell: `group' Priority $ nest $ prettyTerm t`. `prettyTerm`
+        // (unlike `instance Pretty Term`) does *not* wrap a `List` in an
+        // extra group.
+        return push_priority_nest(doc, |n| push_pretty_term(n, t));
+    }
+
+    if let Expression::Term(Term::Parenthesized(open, inner, close)) = arg {
         // Parenthesised single-ID-parameter abstraction with absorbable body.
-        Expression::Term(Term::Parenthesized(open, inner, close))
-            if matches!(
-                **inner,
-                Expression::Abstraction(Parameter::ID(ref name), ref colon, ref body)
-                    if matches!(**body, Expression::Term(ref t) if is_absorbable_term(t))
-                        && !has_trivia(open) && !has_trivia(name) && !has_trivia(colon)
-            ) =>
+        if let Expression::Abstraction(Parameter::ID(name), colon, body) = &**inner
+            && let Expression::Term(body_term) = &**body
+            && is_absorbable_term(body_term)
+            && !has_trivia(open)
+            && !has_trivia(name)
+            && !has_trivia(colon)
         {
-            let Expression::Abstraction(Parameter::ID(name), colon, body) = &**inner else {
-                unreachable!()
-            };
-            let Expression::Term(body_term) = &**body else {
-                unreachable!()
-            };
-            push_priority_nest(doc, |n| {
+            return push_priority_nest(doc, |n| {
                 open.pretty(n);
                 name.pretty(n);
                 colon.pretty(n);
@@ -155,26 +151,16 @@ fn push_absorb_last(doc: &mut Doc, arg: &Expression) {
             });
         }
         // Parenthesised `ident { ... }` application with absorbable body.
-        Expression::Term(Term::Parenthesized(open, inner, close))
-            if matches!(
-                **inner,
-                Expression::Application(ref f, ref a)
-                    if matches!(**f, Expression::Term(Term::Token(ref ident))
-                            if matches!(ident.value, Token::Identifier(_))
-                                && !has_trivia(open) && !has_trivia(ident) && !has_trivia(close))
-                        && matches!(**a, Expression::Term(ref t) if is_absorbable_term(t))
-            ) =>
+        if let Expression::Application(f, a) = &**inner
+            && let Expression::Term(Term::Token(ident)) = &**f
+            && matches!(ident.value, Token::Identifier(_))
+            && let Expression::Term(body_term) = &**a
+            && is_absorbable_term(body_term)
+            && !has_trivia(open)
+            && !has_trivia(ident)
+            && !has_trivia(close)
         {
-            let Expression::Application(f, a) = &**inner else {
-                unreachable!()
-            };
-            let Expression::Term(Term::Token(ident)) = &**f else {
-                unreachable!()
-            };
-            let Expression::Term(body_term) = &**a else {
-                unreachable!()
-            };
-            push_priority_nest(doc, |n| {
+            return push_priority_nest(doc, |n| {
                 open.pretty(n);
                 ident.pretty(n);
                 n.push(hardspace());
@@ -182,15 +168,10 @@ fn push_absorb_last(doc: &mut Doc, arg: &Expression) {
                 close.pretty(n);
             });
         }
-        Expression::Term(Term::Parenthesized(open, expr, close)) => {
-            push_absorb_paren(doc, open, expr, close);
-        }
-        _ => {
-            push_group(doc, |g| {
-                push_nested(g, |n| arg.pretty(n));
-            });
-        }
+        return push_absorb_paren(doc, open, inner, close);
     }
+
+    push_group(doc, |g| push_nested(g, |n| arg.pretty(n)));
 }
 
 /// Render function applications (Haskell `prettyApp indentFunction pre hasPost f a`).
