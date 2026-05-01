@@ -31,6 +31,14 @@ cargo install nixfmt_rs
 nix develop -c cargo build --release   # binary at target/release/nixfmt
 ```
 
+Prebuilt static binaries are attached to each
+[GitHub release](https://github.com/Mic92/nixfmt-rs/releases) with a
+`SHA256SUMS` file and Sigstore-backed provenance:
+
+```bash
+gh attestation verify ./nixfmt-x86_64-linux -R Mic92/nixfmt-rs
+```
+
 NixOS / home-manager (via flake input):
 
 ```nix

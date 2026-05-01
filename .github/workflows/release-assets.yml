@@ -1,0 +1,74 @@
+name: Release assets
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Tag to attach assets to
+        required: true
+
+permissions:
+  contents: write
+  id-token: write # Sigstore OIDC for attestations
+  attestations: write
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: ubuntu-latest
+            attr: packages.x86_64-linux.static
+            asset: nixfmt-x86_64-linux
+          - runner: ubuntu-24.04-arm
+            attr: packages.aarch64-linux.static
+            asset: nixfmt-aarch64-linux
+          - runner: macos-latest
+            attr: packages.aarch64-darwin.default
+            asset: nixfmt-aarch64-darwin
+          - runner: ubuntu-latest
+            attr: wasm
+            asset: nixfmt-wasm.tar.gz
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: actions/checkout@v6
+      - uses: NixOS/nix-installer-action@main
+      - name: Build
+        run: |
+          nix build -L .#${{ matrix.attr }}
+          if [ -d result/pkg ]; then
+            tar -C result -czf ${{ matrix.asset }} pkg
+          else
+            cp result/bin/nixfmt ${{ matrix.asset }}
+          fi
+          file ${{ matrix.asset }}
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.asset }}
+          path: ${{ matrix.asset }}
+
+  publish:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+      - name: Checksums
+        run: |
+          cd dist
+          sha256sum nixfmt-* > SHA256SUMS
+          cat SHA256SUMS
+      - name: Attest build provenance
+        uses: actions/attest-build-provenance@v3
+        with:
+          subject-path: dist/nixfmt-*
+      - name: Upload to release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.event.release.tag_name || inputs.tag }}
+        run: gh release upload -R "$GITHUB_REPOSITORY" "$TAG" dist/* --clobber
