@@ -417,8 +417,7 @@ impl Lexer {
     /// Remaining input from the cursor.
     #[inline]
     fn rest(&self) -> &str {
-        // `byte_pos` is always on a char boundary.
-        unsafe { self.source.get_unchecked(self.byte_pos..) }
+        &self.source[self.byte_pos..]
     }
 
     /// Peek at current byte without consuming (None at EOF).
