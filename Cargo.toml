@@ -24,31 +24,35 @@ name = "nixfmt_rs"
 path = "src/lib.rs"
 
 [features]
-# Pulls in the directory walker and mimalloc allocator used by the `nixfmt`
-# binary. Library consumers can disable default features to depend on the
-# formatter alone (memchr + compact_str only).
 default = ["cli"]
+# Library consumers disable default features to skip binary-only deps.
 cli = ["dep:ignore", "dep:mimalloc"]
+# Optional regular deps (not dev-deps) so `cargo test` doesn't compile them.
+bench = ["dep:criterion"]
+sweep = ["dep:rayon", "dep:walkdir"]
 
 [dependencies]
 memchr = "2"
 compact_str = "0.9"
+criterion = { version = "0.8", optional = true }
+rayon = { version = "1", optional = true }
+walkdir = { version = "2", optional = true }
 
-# Binary-only deps; neither supports wasm32-unknown-unknown.
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 ignore = { version = "0.4", optional = true }
 mimalloc = { version = "0.1", default-features = false, optional = true }
 
 [dev-dependencies]
-criterion = "0.8"
 tempfile = "3"
-# examples/diff_sweep.rs only:
-rayon = "1"
-walkdir = "2"
 
 [[bench]]
 name = "parser_benchmark"
 harness = false
+required-features = ["bench"]
+
+[[example]]
+name = "diff_sweep"
+required-features = ["sweep"]
 
 [profile.release]
 lto = "thin"
