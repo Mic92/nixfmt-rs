@@ -11,7 +11,7 @@ use std::path::Path;
 use std::process::exit;
 use std::sync::atomic::{AtomicBool, Ordering};
 
-const VERSION: &str = env!("CARGO_PKG_VERSION");
+use nixfmt_rs::VERSION;
 
 const HELP: &str = "\
 nixfmt-rs [OPTIONS] [FILES]
