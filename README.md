@@ -21,24 +21,59 @@ Try it in your browser: <https://mic92.github.io/nixfmt-rs/> (WebAssembly build,
 See [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) for how the pieces fit
 together.
 
-## Build & run
+## Install
 
 ```bash
-nix develop          # or: cargo build --release
-cargo build --release
+# Nix
+nix run github:Mic92/nixfmt-rs -- --help
 
-# Format (stdin → stdout)
-echo '{a=1;}' | ./target/release/nixfmt_rs
+# Cargo
+cargo install nixfmt_rs
 
-# Format files / directories in place (recurses for *.nix, parallel)
-./target/release/nixfmt_rs path/to/file.nix path/to/dir
+# From source
+nix develop -c cargo build --release   # binary at target/release/nixfmt
+```
+
+NixOS / home-manager (via flake input):
+
+```nix
+{
+  inputs.nixfmt-rs.url = "github:Mic92/nixfmt-rs";
+
+  outputs = { nixpkgs, nixfmt-rs, ... }: {
+    nixosConfigurations.host = nixpkgs.lib.nixosSystem {
+      modules = [
+        ({ pkgs, ... }: {
+          environment.systemPackages = [ nixfmt-rs.packages.${pkgs.system}.default ];
+          # or, in home-manager:
+          # home.packages = [ nixfmt-rs.packages.${pkgs.system}.default ];
+        })
+      ];
+    };
+  };
+}
+```
+
+## Usage
+
+The binary is named `nixfmt` and is flag-compatible with upstream.
+
+```bash
+# stdin → stdout
+echo '{a=1;}' | nixfmt
+
+# Format files / directories in place (recurses into *.nix, parallel)
+nixfmt path/to/file.nix path/to/dir
 
 # Check only (exit 1 if any file would change)
-./target/release/nixfmt_rs -c path/to/dir
+nixfmt -c path/to/dir
+
+# Layout
+nixfmt --width 80 --indent 4 file.nix
 
 # Debugging modes (match `nixfmt --ast` / `nixfmt --ir` exactly)
-echo '{a=1;}' | ./target/release/nixfmt_rs --ast
-echo '{a=1;}' | ./target/release/nixfmt_rs --ir
+echo '{a=1;}' | nixfmt --ast
+echo '{a=1;}' | nixfmt --ir
 ```
 
 ## Library
