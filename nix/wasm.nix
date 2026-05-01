@@ -55,10 +55,7 @@ rustPlatform.buildRustPackage {
 
   meta = with lib; {
     description = "WebAssembly build of nixfmt-rs for browser embedding";
-    license = with licenses; [
-      mit
-      asl20
-    ];
+    license = licenses.mpl20;
     platforms = platforms.unix;
   };
 }
