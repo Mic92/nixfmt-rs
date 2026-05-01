@@ -1,0 +1,10 @@
+{
+  multi = ''
+zero
+  two
+'';
+  blank = ''
+
+
+  '';
+}

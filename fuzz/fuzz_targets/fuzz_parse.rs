@@ -14,5 +14,7 @@ fuzz_target!(|data: &[u8]| {
     };
     if let Err(e) = nixfmt_rs::parse(s) {
         let _ = nixfmt_rs::format_error(s, Some("<fuzz>"), &e);
+        let _ = nixfmt_rs::format_error(s, None, &e);
+        let _ = e.to_string();
     }
 });

@@ -1,0 +1,1 @@
+{ inherit (a.b) x; }

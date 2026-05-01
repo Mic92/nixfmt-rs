@@ -10,5 +10,6 @@
     # Hand-written to exercise parser branches the fixtures miss; formatting
     # would normalise away the very constructs they target (bare URIs, ~, etc.).
     "fuzz/seeds/**"
+    "fuzz/seeds-invalid/**"
   ];
 }
