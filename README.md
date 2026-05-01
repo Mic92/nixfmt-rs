@@ -62,6 +62,56 @@ let formatted = nixfmt_rs::format_with(src, &opts)?;
 On parse failure, render the returned `ParseError` with source context via
 `nixfmt_rs::format_error`. See the [API docs](https://docs.rs/nixfmt_rs).
 
+## treefmt
+
+The binary is a drop-in for `nixfmt`, so with [treefmt-nix] just override the
+package:
+
+```nix
+{
+  inputs = {
+    nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
+    treefmt-nix.url = "github:numtide/treefmt-nix";
+    nixfmt-rs.url = "github:Mic92/nixfmt-rs";
+  };
+
+  outputs = { nixpkgs, treefmt-nix, nixfmt-rs, ... }:
+    let
+      forAllSystems = nixpkgs.lib.genAttrs nixpkgs.lib.systems.flakeExposed;
+    in {
+      formatter = forAllSystems (system:
+        treefmt-nix.lib.mkWrapper nixpkgs.legacyPackages.${system} {
+          programs.nixfmt = {
+            enable = true;
+            package = nixfmt-rs.packages.${system}.default;
+          };
+        });
+    };
+}
+```
+
+Or in a plain `treefmt.toml`:
+
+```toml
+[formatter.nixfmt]
+command = "nixfmt"      # the nixfmt-rs binary is also called `nixfmt`
+includes = ["*.nix"]
+```
+
+Without treefmt at all, point `nix fmt` straight at the binary (it recurses
+into directories and formats `*.nix` in place):
+
+```nix
+outputs = { nixpkgs, nixfmt-rs, ... }:
+  let
+    forAllSystems = nixpkgs.lib.genAttrs nixpkgs.lib.systems.flakeExposed;
+  in {
+    formatter = forAllSystems (system: nixfmt-rs.packages.${system}.default);
+  };
+```
+
+[treefmt-nix]: https://github.com/numtide/treefmt-nix
+
 ## Testing
 
 ```bash
