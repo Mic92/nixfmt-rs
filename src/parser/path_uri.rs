@@ -107,7 +107,7 @@ impl Parser {
                 && text.ends_with('/')
             {
                 // Point to the trailing slash, not the start of the path
-                let current_pos = p.lexer.current_pos().start as usize;
+                let current_pos = p.lexer.current_pos().start();
                 let slash_pos = Span::new(current_pos.saturating_sub(1), current_pos);
                 return Err(ParseError::invalid(
                     slash_pos,

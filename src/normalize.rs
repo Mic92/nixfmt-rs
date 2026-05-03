@@ -13,12 +13,7 @@ use crate::types::{
     SimpleSelector, Span, StringPart, Term, Trivia, Whole,
 };
 
-const ZERO_SPAN: Span = Span {
-    start: 0,
-    end: 0,
-    start_line: 1,
-    end_line: 1,
-};
+const ZERO_SPAN: Span = Span::with_lines(0, 0, 1, 1);
 
 pub fn normalize_file(file: &mut File) {
     normalize_whole_expr(file);

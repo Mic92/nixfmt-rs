@@ -99,7 +99,7 @@ impl ParseError {
     /// Byte offsets `start..end` of the primary error location in the source.
     #[must_use]
     pub const fn byte_range(&self) -> std::ops::Range<usize> {
-        self.span.start as usize..self.span.end as usize
+        self.span.range()
     }
 
     /// Short, actionable fix suggestion if one is known.
@@ -133,7 +133,7 @@ impl ParseError {
     pub fn related(&self) -> Vec<(std::ops::Range<usize>, String)> {
         match &self.kind {
             ErrorKind::UnclosedDelimiter { opening_span, .. } => vec![(
-                opening_span.start as usize..opening_span.end as usize,
+                opening_span.range(),
                 "unclosed delimiter opened here".to_string(),
             )],
             _ => Vec::new(),
@@ -158,7 +158,7 @@ impl fmt::Display for ParseError {
         write!(
             f,
             "Parse error at byte {}: {}",
-            self.span.start,
+            self.span.start(),
             self.message()
         )
     }

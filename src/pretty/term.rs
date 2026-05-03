@@ -54,7 +54,7 @@ pub(super) fn push_render_list(
 ) {
     open.without_trail().pretty(doc);
 
-    let sur = if open.span.start_line != close.span.start_line
+    let sur = if open.span.start_line() != close.span.start_line()
         || items_has_only_comments(items)
         || (has_trivia(open) && items.0.is_empty())
     {
@@ -109,7 +109,7 @@ pub(super) fn push_pretty_set(
     // so an empty set that missed the LoneAnn fast path (pre-trivia on `{`)
     // still preserves the user's line break.
     let sep = if (!items.0.is_empty() && (wide == Width::Wide || starts_with_emptyline))
-        || open.span.start_line != close.span.start_line
+        || open.span.start_line() != close.span.start_line()
     {
         hardline()
     } else {

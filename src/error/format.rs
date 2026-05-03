@@ -58,7 +58,7 @@ impl<'a> ErrorFormatter<'a> {
             });
         }
 
-        marks.sort_by_key(|m| m.span.start);
+        marks.sort_by_key(|m| m.span.start());
         marks
     }
 
@@ -66,11 +66,11 @@ impl<'a> ErrorFormatter<'a> {
     /// context either side of the primary error.
     fn lines_to_show(&self, error: &ParseError, marks: &[Mark]) -> Vec<usize> {
         let last_line = self.context.source.lines().count().saturating_sub(1);
-        let primary = self.context.position(error.span.start).line - 1;
+        let primary = self.context.position(error.span.start()).line - 1;
 
         let mut lines: Vec<usize> = marks
             .iter()
-            .map(|m| self.context.position(m.span.start).line - 1)
+            .map(|m| self.context.position(m.span.start()).line - 1)
             .chain([primary.saturating_sub(1), (primary + 1).min(last_line)])
             .collect();
         lines.sort_unstable();
@@ -79,7 +79,7 @@ impl<'a> ErrorFormatter<'a> {
     }
 
     fn format_header(&self, error: &ParseError, line_num_width: usize, out: &mut String) {
-        let pos = self.context.position(error.span.start);
+        let pos = self.context.position(error.span.start());
 
         write!(out, "Error").unwrap();
 
@@ -120,7 +120,7 @@ impl<'a> ErrorFormatter<'a> {
             writeln!(out, "{line_num:>line_num_width$} │ {line_text}").unwrap();
 
             for mark in marks {
-                if self.context.position(mark.span.start).line - 1 != line_idx {
+                if self.context.position(mark.span.start()).line - 1 != line_idx {
                     continue;
                 }
                 let (col, len) = visual_span(line_text, line_start, mark.span);
@@ -176,8 +176,8 @@ impl<'a> ErrorFormatter<'a> {
 
 /// Character column and width of `span` within `line_text` (bytes -> chars).
 fn visual_span(line_text: &str, line_start: usize, span: Span) -> (usize, usize) {
-    let byte_col = (span.start as usize).saturating_sub(line_start);
-    let byte_len = (span.end - span.start).max(1) as usize;
+    let byte_col = span.start().saturating_sub(line_start);
+    let byte_len = span.len().max(1);
 
     let clamped_col = byte_col.min(line_text.len());
     let col = line_text[..clamped_col].chars().count();

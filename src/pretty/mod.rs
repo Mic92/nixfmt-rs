@@ -115,7 +115,7 @@ impl Pretty for Binder {
                 semi: semicolon,
             } => {
                 // Determine spacing strategy based on original layout
-                let same_line = inherit.span.start_line == semicolon.span.start_line;
+                let same_line = inherit.span.start_line() == semicolon.span.start_line();
                 let few_ids = ids.len() < 4;
                 let (sep, nosep) = if same_line && few_ids {
                     (line(), line_prime())
