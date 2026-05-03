@@ -2,6 +2,8 @@
   lib,
   stdenv,
   rustPlatform,
+  scdoc,
+  installShellFiles,
   git,
   nixfmt,
 }:
@@ -10,6 +12,20 @@ rustPlatform.buildRustPackage {
   version = (builtins.fromTOML (builtins.readFile ../Cargo.toml)).package.version;
   src = import ./source.nix { inherit lib; };
   cargoLock.lockFile = ../Cargo.lock;
+
+  nativeBuildInputs = [
+    scdoc
+    installShellFiles
+  ];
+
+  postBuild = ''
+    scdoc < docs/nixfmt.1.scd > nixfmt.1
+  '';
+
+  postInstall = ''
+    installManPage nixfmt.1
+  '';
+
   # The test suite shells out to the reference Haskell `nixfmt` to compare
   # output, so it must be on PATH during checkPhase. Pass `nixfmt = null`
   # (e.g. from pkgsStatic) to skip the suite where the reference can't build.
