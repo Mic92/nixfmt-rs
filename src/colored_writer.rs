@@ -2,7 +2,6 @@
 
 use crate::pretty_simple::Writer;
 
-// ANSI color codes
 const RESET: &str = "\x1b[0m";
 
 const DELIM_COLORS: &[&str] = &[
@@ -54,15 +53,36 @@ impl<'a> ColoredWriter<'a> {
 }
 
 impl Writer for ColoredWriter<'_> {
+    // Embedded '\n' in `text` must keep the IR-tree indentation on each
+    // continuation line; otherwise multi-line Nix string literals carried as a
+    // single Text element collapse to column 0.
     fn write_plain(&mut self, text: &str) {
-        self.indent();
-        self.output.push_str(text);
+        let mut first = true;
+        for line in text.split('\n') {
+            if !first {
+                self.newline();
+            }
+            self.indent();
+            self.output.push_str(line);
+            first = false;
+        }
     }
 
     fn write_colored(&mut self, text: &str, color: &str) {
+        // One color/RESET pair per call. The continuation indent on embedded
+        // newlines lives *inside* the span to match the reference byte stream.
         self.indent();
         self.output.push_str(color);
-        self.output.push_str(text);
+        let mut first = true;
+        for line in text.split('\n') {
+            if !first {
+                self.output.push('\n');
+                self.line_start = false;
+                self.output.push_str(&" ".repeat(self.depth * 4));
+            }
+            self.output.push_str(line);
+            first = false;
+        }
         self.output.push_str(RESET);
     }
 
