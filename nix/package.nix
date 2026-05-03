@@ -24,6 +24,11 @@ rustPlatform.buildRustPackage {
 
   postInstall = ''
     installManPage nixfmt.1
+    installShellCompletion \
+      --bash completions/nixfmt.bash \
+      --zsh completions/_nixfmt \
+      --fish completions/nixfmt.fish \
+      --nushell completions/nixfmt.nu
   '';
 
   # The test suite shells out to the reference Haskell `nixfmt` to compare
