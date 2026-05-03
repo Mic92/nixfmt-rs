@@ -4,6 +4,7 @@
   rustPlatform,
   scdoc,
   installShellFiles,
+  versionCheckHook,
   git,
   nixfmt,
 }:
@@ -37,6 +38,9 @@ rustPlatform.buildRustPackage {
   doCheck = nixfmt != null;
   # `git` is required by the --mergetool tests.
   nativeCheckInputs = lib.optional (nixfmt != null) nixfmt ++ [ git ];
+
+  doInstallCheck = true;
+  nativeInstallCheckInputs = [ versionCheckHook ];
   # The binary is named `nixfmt` (see Cargo.toml [[bin]]), not the pname.
   # Without this, lib.getExe guesses `nixfmt-rs` and treefmt-nix breaks.
   meta.mainProgram = "nixfmt";
