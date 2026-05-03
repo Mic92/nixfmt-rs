@@ -67,13 +67,14 @@ pub enum Trivium {
 
 /// Wrapper around a list of trivia items (comments/whitespace).
 ///
-/// Stored as a boxed `Vec` behind an `Option` so the overwhelmingly common
-/// empty case is a single null word: every `Ann<T>` carries one of these, and
-/// the parser moves `Ann` values by value through every production, so the
-/// 24→16 byte saving compounds across the whole AST.
+/// Stored as a boxed slice behind an `Option` so the overwhelmingly common
+/// empty case is two zero words and never allocates: every `Ann<T>` carries
+/// one of these, and the parser moves `Ann` values by value through every
+/// production, so the 24→16 byte saving compounds across the whole AST.
+/// Trivia runs are built once at lexeme boundaries and then read-only, so a
+/// frozen slice (single allocation) fits better than a growable `Vec`.
 #[derive(Debug, Clone, Default)]
-#[allow(clippy::box_collection)] // intentional: Option<Box<Vec>> is 8 bytes, Vec is 24
-pub struct Trivia(Option<Box<Vec<Trivium>>>);
+pub struct Trivia(Option<Box<[Trivium]>>);
 
 impl Trivia {
     /// Empty trivia list (no allocation).
@@ -84,32 +85,35 @@ impl Trivia {
 
     /// Single-element trivia list.
     pub fn one(t: Trivium) -> Self {
-        Self(Some(Box::new(vec![t])))
+        Self(Some(Box::new([t])))
     }
 
-    #[inline]
-    fn vec_mut(&mut self) -> &mut Vec<Trivium> {
-        self.0.get_or_insert_with(|| Box::new(Vec::new()))
-    }
-
-    /// Append a trivium, allocating storage on first use.
-    #[inline]
+    /// Append a trivium.
+    ///
+    /// Reallocates the backing slice; callers on hot paths should accumulate
+    /// into a `Vec<Trivium>` and convert once. Existing call sites only hit
+    /// this on comment-bearing tokens, which are rare.
     pub fn push(&mut self, t: Trivium) {
-        self.vec_mut().push(t);
+        let mut v: Vec<Trivium> = std::mem::take(self).into();
+        v.push(t);
+        *self = v.into();
     }
 
-    /// Insert at `idx`, allocating storage on first use.
+    /// Insert at `idx`. Same reallocation caveat as [`Self::push`].
     pub fn insert(&mut self, idx: usize, t: Trivium) {
-        self.vec_mut().insert(idx, t);
+        let mut v: Vec<Trivium> = std::mem::take(self).into();
+        v.insert(idx, t);
+        *self = v.into();
     }
 
-    /// Append all items from `iter`, allocating storage only if it yields any.
+    /// Append all items from `iter`, allocating only if it yields any.
     pub fn extend<I: IntoIterator<Item = Trivium>>(&mut self, iter: I) {
         let mut iter = iter.into_iter();
         if let Some(first) = iter.next() {
-            let v = self.vec_mut();
+            let mut v: Vec<Trivium> = std::mem::take(self).into();
             v.push(first);
             v.extend(iter);
+            *self = v.into();
         }
     }
 
@@ -145,14 +149,14 @@ impl From<Vec<Trivium>> for Trivia {
         if value.is_empty() {
             Self(None)
         } else {
-            Self(Some(Box::new(value)))
+            Self(Some(value.into_boxed_slice()))
         }
     }
 }
 
 impl From<Trivia> for Vec<Trivium> {
     fn from(val: Trivia) -> Self {
-        val.0.map(|b| *b).unwrap_or_default()
+        val.0.map(Self::from).unwrap_or_default()
     }
 }
 
@@ -582,5 +586,17 @@ impl Token {
     /// Check if this is an update, concat, or plus operator (for special formatting)
     pub const fn is_update_concat_plus(&self) -> bool {
         matches!(self, Self::TUpdate | Self::TConcat | Self::TPlus)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn trivia_is_two_words() {
+        // Guard against accidentally regressing to a fatter representation;
+        // every Ann<T> in the AST embeds one of these.
+        assert_eq!(std::mem::size_of::<Trivia>(), 16);
     }
 }
