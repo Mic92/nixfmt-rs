@@ -66,7 +66,7 @@ The binary is named `nixfmt` and is flag-compatible with upstream.
 
 ```bash
 # stdin → stdout
-echo '{a=1;}' | nixfmt
+echo '{a=1;}' | nixfmt -
 
 # Format files / directories in place (recurses into *.nix, parallel)
 nixfmt path/to/file.nix path/to/dir
@@ -158,13 +158,13 @@ require("conform").setup({ formatters_by_ft = { nix = { "nixfmt" } } })
 ```toml
 [[language]]
 name = "nix"
-formatter = { command = "nixfmt" }
+formatter = { command = "nixfmt", args = ["-"] }
 ```
 
 **Emacs** ([apheleia](https://github.com/radian-software/apheleia)): `nixfmt`
 is built in; just ensure the binary resolves to this one.
 
-**Anything else**: pipe the buffer through `nixfmt` (reads stdin, writes
+**Anything else**: pipe the buffer through `nixfmt -` (reads stdin, writes
 stdout, exit 1 on parse error).
 
 </details>
