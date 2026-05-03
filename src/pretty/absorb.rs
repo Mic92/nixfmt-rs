@@ -15,26 +15,26 @@ pub(super) fn is_absorbable_term(term: &Term) -> bool {
         // Multi-line indented string
         Term::IndentedString(s) if s.value.len() >= 2 => true,
         // Non-empty sets and lists
-        Term::Set(_, _, items, _) if !items.0.is_empty() => true,
-        Term::List(_, items, _) if !items.0.is_empty() => true,
+        Term::Set { items, .. } if !items.0.is_empty() => true,
+        Term::List { items, .. } if !items.0.is_empty() => true,
         // Empty sets and lists if they have a line break
         // https://github.com/NixOS/nixfmt/issues/253
-        Term::Set(_, open, items, close)
-            if items.0.is_empty() && open.span.start_line != close.span.start_line =>
-        {
-            true
-        }
-        Term::List(open, items, close)
+        Term::Set {
+            open, items, close, ..
+        } if items.0.is_empty() && open.span.start_line != close.span.start_line => true,
+        Term::List { open, items, close }
             if items.0.is_empty() && open.span.start_line != close.span.start_line =>
         {
             true
         }
         // Lists/sets with only comments are absorbable
         // https://github.com/NixOS/nixfmt/issues/362
-        Term::List(open, items, _) if has_trivia(open) || items_has_only_comments(items) => true,
-        Term::Set(_, open, items, _) if has_trivia(open) || items_has_only_comments(items) => true,
+        Term::List { open, items, .. } if has_trivia(open) || items_has_only_comments(items) => {
+            true
+        }
+        Term::Set { open, items, .. } if has_trivia(open) || items_has_only_comments(items) => true,
         // Parenthesized absorbable term, only when the open paren has no trivia
-        Term::Parenthesized(open, expr, _) if is_lone_ann(open) => {
+        Term::Parenthesized { open, expr, .. } if is_lone_ann(open) => {
             matches!(&**expr, Expression::Term(t) if is_absorbable_term(t))
         }
         _ => false,
@@ -45,13 +45,17 @@ pub(super) fn is_absorbable_term(term: &Term) -> bool {
 pub(super) fn is_absorbable_expr(expr: &Expression) -> bool {
     match expr {
         Expression::Term(t) => is_absorbable_term(t),
-        Expression::With(_, _, _, body) => {
+        Expression::With { body, .. } => {
             matches!(&**body, Expression::Term(t) if is_absorbable_term(t))
         }
         // Absorb function declarations but only those with simple parameter(s)
-        Expression::Abstraction(Parameter::ID(_), _, body) => match &**body {
+        Expression::Abstraction {
+            param: Parameter::Id(_),
+            body,
+            ..
+        } => match &**body {
             Expression::Term(t) => is_absorbable_term(t),
-            Expression::Abstraction(_, _, _) => is_absorbable_expr(body),
+            Expression::Abstraction { .. } => is_absorbable_expr(body),
             _ => false,
         },
         _ => false,
@@ -70,8 +74,12 @@ pub(super) fn push_absorb_expr(doc: &mut Doc, width: Width, expr: &Expression) {
         },
         // With expression with absorbable body: treat as absorbable term via
         // `prettyWith True`.
-        Expression::With(with_kw, env, semicolon, body) if matches!(&**body, Expression::Term(t) if is_absorbable_term(t)) =>
-        {
+        Expression::With {
+            kw_with: with_kw,
+            scope: env,
+            semi: semicolon,
+            body,
+        } if matches!(&**body, Expression::Term(t) if is_absorbable_term(t)) => {
             let Expression::Term(t) = &**body else {
                 unreachable!()
             };
@@ -108,11 +116,8 @@ pub(super) fn push_absorb_rhs(doc: &mut Doc, expr: &Expression) {
     match expr {
         // Exception to the absorbable-expr case below: do not force-expand attrsets
         // that only contain a single `inherit` statement.
-        Expression::Term(Term::Set(_, _, binders, _))
-            if matches!(
-                binders.0.as_slice(),
-                [Item::Item(Binder::Inherit(_, _, _, _))]
-            ) =>
+        Expression::Term(Term::Set { items: binders, .. })
+            if matches!(binders.0.as_slice(), [Item::Item(Binder::Inherit { .. })]) =>
         {
             push_nested_rhs(doc, hardspace(), |inner| {
                 push_absorb_expr(inner, Width::Regular, expr);
@@ -128,7 +133,11 @@ pub(super) fn push_absorb_rhs(doc: &mut Doc, expr: &Expression) {
 
         // Parenthesized expression: same special case as for the last argument of
         // a function call.
-        Expression::Term(Term::Parenthesized(open, inner, close)) => {
+        Expression::Term(Term::Parenthesized {
+            open,
+            expr: inner,
+            close,
+        }) => {
             doc.nested(|d| {
                 d.hardspace();
                 push_absorb_paren(d, open, inner, close);
@@ -153,13 +162,13 @@ pub(super) fn push_absorb_rhs(doc: &mut Doc, expr: &Expression) {
 
         // Function call: absorb if all arguments except the last fit on the line,
         // start on a new line otherwise.
-        Expression::Application(_, _) => {
+        Expression::Application { .. } => {
             doc.nested(|d| push_pretty_app(d, false, &[line()], false, expr));
         }
 
         // `with ...;` keeps the leading `line` inside the group so it can collapse
         // together with the body.
-        Expression::With(_, _, _, _) => {
+        Expression::With { .. } => {
             doc.nested(|d| {
                 d.group(|inner| {
                     inner.line();
@@ -171,7 +180,7 @@ pub(super) fn push_absorb_rhs(doc: &mut Doc, expr: &Expression) {
         // Special-case `//`, `++` and `+` to be more compact in some situations.
         // Case 1: LHS is an absorbable term without leading trivia → unindent the
         // concatenation chain (https://github.com/NixOS/nixfmt/issues/228).
-        Expression::Operation(left, op, _)
+        Expression::Operation { lhs: left, op, .. }
             if op.value.is_update_concat_plus()
                 && matches!(
                     &**left,
@@ -185,10 +194,13 @@ pub(super) fn push_absorb_rhs(doc: &mut Doc, expr: &Expression) {
 
         // Case 2: operator has no trivia and RHS is an absorbable term → keep
         // `<lhs> // {` on one line and let only the RHS expand.
-        Expression::Operation(left, op, right)
-            if is_lone_ann(op)
-                && op.value.is_update_concat_plus()
-                && matches!(&**right, Expression::Term(t) if is_absorbable_term(t)) =>
+        Expression::Operation {
+            lhs: left,
+            op,
+            rhs: right,
+        } if is_lone_ann(op)
+            && op.value.is_update_concat_plus()
+            && matches!(&**right, Expression::Term(t) if is_absorbable_term(t)) =>
         {
             let Expression::Term(t) = &**right else {
                 unreachable!()

@@ -258,11 +258,13 @@ impl FirstToken for Term {
             Self::Token(l) => l.into(),
             Self::SimpleString(s) | Self::IndentedString(s) => s.into(),
             Self::Path(p) => p.into(),
-            Self::List(open, _, _)
-            | Self::Set(None, open, _, _)
-            | Self::Parenthesized(open, _, _) => open.into(),
-            Self::Set(Some(rec), _, _, _) => rec.into(),
-            Self::Selection(inner, _, _) => inner.first_token(),
+            Self::List { open, .. }
+            | Self::Parenthesized { open, .. }
+            | Self::Set {
+                rec: None, open, ..
+            } => open.into(),
+            Self::Set { rec: Some(rec), .. } => rec.into(),
+            Self::Selection { base, .. } => base.first_token(),
         }
     }
     fn first_token_mut(&mut self) -> AnnSlotMut<'_> {
@@ -270,11 +272,13 @@ impl FirstToken for Term {
             Self::Token(l) => l.into(),
             Self::SimpleString(s) | Self::IndentedString(s) => s.into(),
             Self::Path(p) => p.into(),
-            Self::List(open, _, _)
-            | Self::Set(None, open, _, _)
-            | Self::Parenthesized(open, _, _) => open.into(),
-            Self::Set(Some(rec), _, _, _) => rec.into(),
-            Self::Selection(inner, _, _) => inner.first_token_mut(),
+            Self::List { open, .. }
+            | Self::Parenthesized { open, .. }
+            | Self::Set {
+                rec: None, open, ..
+            } => open.into(),
+            Self::Set { rec: Some(rec), .. } => rec.into(),
+            Self::Selection { base, .. } => base.first_token_mut(),
         }
     }
 }
@@ -282,16 +286,16 @@ impl FirstToken for Term {
 impl FirstToken for Parameter {
     fn first_token(&self) -> AnnSlot<'_> {
         match self {
-            Self::ID(n) => n.into(),
-            Self::Set(open, _, _) => open.into(),
-            Self::Context(first, _, _) => first.first_token(),
+            Self::Id(n) => n.into(),
+            Self::Set { open, .. } => open.into(),
+            Self::Context { lhs, .. } => lhs.first_token(),
         }
     }
     fn first_token_mut(&mut self) -> AnnSlotMut<'_> {
         match self {
-            Self::ID(n) => n.into(),
-            Self::Set(open, _, _) => open.into(),
-            Self::Context(first, _, _) => first.first_token_mut(),
+            Self::Id(n) => n.into(),
+            Self::Set { open, .. } => open.into(),
+            Self::Context { lhs, .. } => lhs.first_token_mut(),
         }
     }
 }
@@ -300,31 +304,31 @@ impl FirstToken for Expression {
     fn first_token(&self) -> AnnSlot<'_> {
         match self {
             Self::Term(t) => t.first_token(),
-            Self::With(kw, ..)
-            | Self::Let(kw, ..)
-            | Self::Assert(kw, ..)
-            | Self::If(kw, ..)
-            | Self::Negation(kw, _)
-            | Self::Inversion(kw, _) => kw.into(),
-            Self::Abstraction(p, _, _) => p.first_token(),
-            Self::Application(g, _) | Self::Operation(g, _, _) | Self::MemberCheck(g, _, _) => {
-                g.first_token()
-            }
+            Self::With { kw_with: kw, .. }
+            | Self::Let { kw_let: kw, .. }
+            | Self::Assert { kw_assert: kw, .. }
+            | Self::If { kw_if: kw, .. }
+            | Self::Negation { minus: kw, .. }
+            | Self::Inversion { bang: kw, .. } => kw.into(),
+            Self::Abstraction { param, .. } => param.first_token(),
+            Self::Application { func: g, .. }
+            | Self::Operation { lhs: g, .. }
+            | Self::MemberCheck { lhs: g, .. } => g.first_token(),
         }
     }
     fn first_token_mut(&mut self) -> AnnSlotMut<'_> {
         match self {
             Self::Term(t) => t.first_token_mut(),
-            Self::With(kw, ..)
-            | Self::Let(kw, ..)
-            | Self::Assert(kw, ..)
-            | Self::If(kw, ..)
-            | Self::Negation(kw, _)
-            | Self::Inversion(kw, _) => kw.into(),
-            Self::Abstraction(p, _, _) => p.first_token_mut(),
-            Self::Application(g, _) | Self::Operation(g, _, _) | Self::MemberCheck(g, _, _) => {
-                g.first_token_mut()
-            }
+            Self::With { kw_with: kw, .. }
+            | Self::Let { kw_let: kw, .. }
+            | Self::Assert { kw_assert: kw, .. }
+            | Self::If { kw_if: kw, .. }
+            | Self::Negation { minus: kw, .. }
+            | Self::Inversion { bang: kw, .. } => kw.into(),
+            Self::Abstraction { param, .. } => param.first_token_mut(),
+            Self::Application { func: g, .. }
+            | Self::Operation { lhs: g, .. }
+            | Self::MemberCheck { lhs: g, .. } => g.first_token_mut(),
         }
     }
 }
@@ -383,10 +387,27 @@ pub struct Selector {
 /// Binder (for attribute sets and let bindings)
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Binder {
-    /// inherit keyword, optional (from), selectors, semicolon
-    Inherit(Leaf, Option<Term>, Vec<SimpleSelector>, Leaf),
-    /// selectors = expr ;
-    Assignment(Vec<Selector>, Leaf, Expression, Leaf),
+    /// `inherit (from) attrs ;`
+    Inherit {
+        kw: Leaf,
+        from: Option<Term>,
+        attrs: Vec<SimpleSelector>,
+        semi: Leaf,
+    },
+    /// `path = value ;`
+    Assignment {
+        path: Vec<Selector>,
+        eq: Leaf,
+        value: Expression,
+        semi: Leaf,
+    },
+}
+
+/// `or` default clause on a `Selection`.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SetDefault {
+    pub or_kw: Leaf,
+    pub value: Box<Term>,
 }
 
 /// Terms (atoms)
@@ -396,57 +417,139 @@ pub enum Term {
     SimpleString(NixString),
     IndentedString(NixString),
     Path(Path),
-    /// [ items ]
-    List(Leaf, Items<Self>, Leaf),
-    /// { items } or rec { items } or let { items }
-    Set(Option<Leaf>, Leaf, Items<Binder>, Leaf),
-    /// term.selector1.selector2 or term.selector or term
-    Selection(Box<Self>, Vec<Selector>, Option<(Leaf, Box<Self>)>),
-    /// ( expr )
-    Parenthesized(Leaf, Box<Expression>, Leaf),
+    /// `[ items ]`
+    List {
+        open: Leaf,
+        items: Items<Self>,
+        close: Leaf,
+    },
+    /// `{ items }`, `rec { items }`, `let { items }`
+    Set {
+        rec: Option<Leaf>,
+        open: Leaf,
+        items: Items<Binder>,
+        close: Leaf,
+    },
+    /// `base.selector1.selector2` with optional `or default`
+    Selection {
+        base: Box<Self>,
+        selectors: Vec<Selector>,
+        default: Option<SetDefault>,
+    },
+    /// `( expr )`
+    Parenthesized {
+        open: Leaf,
+        expr: Box<Expression>,
+        close: Leaf,
+    },
+}
+
+/// `? expr` default clause on a function parameter attribute.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ParamDefault {
+    pub question: Leaf,
+    pub value: Expression,
 }
 
 /// Parameter attribute
 #[derive(Debug, Clone, PartialEq, Eq)]
+// `Attr` is intentionally larger than `Ellipsis`; pattern lists use `Attr`
+// for almost every entry, so the boxing the lint suggests is a pessimisation.
+#[allow(clippy::large_enum_variant)]
 pub enum ParamAttr {
-    /// name, optional (? default), optional comma
-    ParamAttr(Leaf, Box<Option<(Leaf, Expression)>>, Option<Leaf>),
-    ParamEllipsis(Leaf),
+    /// `name (? default) (,)`
+    Attr {
+        name: Leaf,
+        default: Option<ParamDefault>,
+        comma: Option<Leaf>,
+    },
+    Ellipsis(Leaf),
 }
 
 /// Lambda parameter
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Parameter {
-    ID(Leaf),
-    Set(Leaf, Vec<ParamAttr>, Leaf),
-    /// a @ b or a @ { b }
-    Context(Box<Self>, Leaf, Box<Self>),
+    Id(Leaf),
+    Set {
+        open: Leaf,
+        attrs: Vec<ParamAttr>,
+        close: Leaf,
+    },
+    /// `a @ b` or `a @ { b }`
+    Context {
+        lhs: Box<Self>,
+        at: Leaf,
+        rhs: Box<Self>,
+    },
 }
 
 /// Expressions
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Expression {
     Term(Term),
-    /// with expr ; expr
-    With(Leaf, Box<Self>, Leaf, Box<Self>),
-    /// let bindings in expr
-    Let(Leaf, Items<Binder>, Leaf, Box<Self>),
-    /// assert expr ; expr
-    Assert(Leaf, Box<Self>, Leaf, Box<Self>),
-    /// if expr then expr else expr
-    If(Leaf, Box<Self>, Leaf, Box<Self>, Leaf, Box<Self>),
-    /// param : body
-    Abstraction(Parameter, Leaf, Box<Self>),
+    /// `with scope ; body`
+    With {
+        kw_with: Leaf,
+        scope: Box<Self>,
+        semi: Leaf,
+        body: Box<Self>,
+    },
+    /// `let bindings in body`
+    Let {
+        kw_let: Leaf,
+        bindings: Items<Binder>,
+        kw_in: Leaf,
+        body: Box<Self>,
+    },
+    /// `assert cond ; body`
+    Assert {
+        kw_assert: Leaf,
+        cond: Box<Self>,
+        semi: Leaf,
+        body: Box<Self>,
+    },
+    /// `if cond then ... else ...`
+    If {
+        kw_if: Leaf,
+        cond: Box<Self>,
+        kw_then: Leaf,
+        then_branch: Box<Self>,
+        kw_else: Leaf,
+        else_branch: Box<Self>,
+    },
+    /// `param : body`
+    Abstraction {
+        param: Parameter,
+        colon: Leaf,
+        body: Box<Self>,
+    },
     /// function application
-    Application(Box<Self>, Box<Self>),
-    /// Binary operation
-    Operation(Box<Self>, Leaf, Box<Self>),
-    /// expr ? selector
-    MemberCheck(Box<Self>, Leaf, Vec<Selector>),
-    /// - expr (negation)
-    Negation(Leaf, Box<Self>),
-    /// ! expr (boolean inversion)
-    Inversion(Leaf, Box<Self>),
+    Application {
+        func: Box<Self>,
+        arg: Box<Self>,
+    },
+    /// binary operation
+    Operation {
+        lhs: Box<Self>,
+        op: Leaf,
+        rhs: Box<Self>,
+    },
+    /// `lhs ? path`
+    MemberCheck {
+        lhs: Box<Self>,
+        question: Leaf,
+        path: Vec<Selector>,
+    },
+    /// `- expr` (negation)
+    Negation {
+        minus: Leaf,
+        expr: Box<Self>,
+    },
+    /// `! expr` (boolean inversion)
+    Inversion {
+        bang: Leaf,
+        expr: Box<Self>,
+    },
 }
 
 /// Whole - an expression including final trivia

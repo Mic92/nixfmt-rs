@@ -87,22 +87,32 @@ fn normalize_selector(s: &mut Selector) {
 
 fn normalize_binder(b: &mut Binder) {
     match b {
-        Binder::Inherit(kw, from, sels, semi) => {
+        Binder::Inherit {
+            kw,
+            from,
+            attrs,
+            semi,
+        } => {
             normalize_leaf(kw);
             if let Some(t) = from {
                 normalize_term(t);
             }
-            for s in sels {
+            for s in attrs {
                 normalize_simple_selector(s);
             }
             normalize_leaf(semi);
         }
-        Binder::Assignment(sels, eq, expr, semi) => {
-            for s in sels {
+        Binder::Assignment {
+            path,
+            eq,
+            value,
+            semi,
+        } => {
+            for s in path {
                 normalize_selector(s);
             }
             normalize_leaf(eq);
-            normalize_expr(expr);
+            normalize_expr(value);
             normalize_leaf(semi);
         }
     }
@@ -113,12 +123,17 @@ fn normalize_term(t: &mut Term) {
         Term::Token(l) => normalize_leaf(l),
         Term::SimpleString(s) | Term::IndentedString(s) => normalize_nix_string(s),
         Term::Path(p) => normalize_ann(p, |parts| normalize_string_parts(parts)),
-        Term::List(open, items, close) => {
+        Term::List { open, items, close } => {
             normalize_leaf(open);
             normalize_items(items, normalize_term);
             normalize_leaf(close);
         }
-        Term::Set(rec, open, items, close) => {
+        Term::Set {
+            rec,
+            open,
+            items,
+            close,
+        } => {
             if let Some(r) = rec {
                 normalize_leaf(r);
             }
@@ -126,19 +141,23 @@ fn normalize_term(t: &mut Term) {
             normalize_items(items, normalize_binder);
             normalize_leaf(close);
         }
-        Term::Selection(base, sels, default) => {
+        Term::Selection {
+            base,
+            selectors,
+            default,
+        } => {
             normalize_term(base);
-            for s in sels {
+            for s in selectors {
                 normalize_selector(s);
             }
-            if let Some((kw, t)) = default {
-                normalize_leaf(kw);
-                normalize_term(t);
+            if let Some(d) = default {
+                normalize_leaf(&mut d.or_kw);
+                normalize_term(&mut d.value);
             }
         }
-        Term::Parenthesized(open, e, close) => {
+        Term::Parenthesized { open, expr, close } => {
             normalize_leaf(open);
-            normalize_expr(e);
+            normalize_expr(expr);
             normalize_leaf(close);
         }
     }
@@ -146,34 +165,38 @@ fn normalize_term(t: &mut Term) {
 
 fn normalize_param_attr(p: &mut ParamAttr) {
     match p {
-        ParamAttr::ParamAttr(name, def, comma) => {
+        ParamAttr::Attr {
+            name,
+            default,
+            comma,
+        } => {
             normalize_leaf(name);
-            if let Some((q, e)) = def.as_mut() {
-                normalize_leaf(q);
-                normalize_expr(e);
+            if let Some(d) = default.as_mut() {
+                normalize_leaf(&mut d.question);
+                normalize_expr(&mut d.value);
             }
             // The formatter freely adds/removes trailing commas in pattern
             // sets; treat presence of a comma as non-semantic.
             *comma = None;
         }
-        ParamAttr::ParamEllipsis(l) => normalize_leaf(l),
+        ParamAttr::Ellipsis(l) => normalize_leaf(l),
     }
 }
 
 fn normalize_parameter(p: &mut Parameter) {
     match p {
-        Parameter::ID(l) => normalize_leaf(l),
-        Parameter::Set(open, attrs, close) => {
+        Parameter::Id(l) => normalize_leaf(l),
+        Parameter::Set { open, attrs, close } => {
             normalize_leaf(open);
             for a in attrs {
                 normalize_param_attr(a);
             }
             normalize_leaf(close);
         }
-        Parameter::Context(a, at, b) => {
-            normalize_parameter(a);
+        Parameter::Context { lhs, at, rhs } => {
+            normalize_parameter(lhs);
             normalize_leaf(at);
-            normalize_parameter(b);
+            normalize_parameter(rhs);
         }
     }
 }
@@ -182,48 +205,76 @@ fn normalize_parameter(p: &mut Parameter) {
 fn normalize_expr(e: &mut Expression) {
     match e {
         Expression::Term(t) => normalize_term(t),
-        Expression::With(kw, a, semi, b) | Expression::Assert(kw, a, semi, b) => {
+        Expression::With {
+            kw_with: kw,
+            scope: a,
+            semi,
+            body: b,
+        }
+        | Expression::Assert {
+            kw_assert: kw,
+            cond: a,
+            semi,
+            body: b,
+        } => {
             normalize_leaf(kw);
             normalize_expr(a);
             normalize_leaf(semi);
             normalize_expr(b);
         }
-        Expression::Let(kw, binds, in_kw, body) => {
-            normalize_leaf(kw);
-            normalize_items(binds, normalize_binder);
-            normalize_leaf(in_kw);
+        Expression::Let {
+            kw_let,
+            bindings,
+            kw_in,
+            body,
+        } => {
+            normalize_leaf(kw_let);
+            normalize_items(bindings, normalize_binder);
+            normalize_leaf(kw_in);
             normalize_expr(body);
         }
-        Expression::If(i, c, t, a, el, b) => {
-            normalize_leaf(i);
-            normalize_expr(c);
-            normalize_leaf(t);
-            normalize_expr(a);
-            normalize_leaf(el);
-            normalize_expr(b);
+        Expression::If {
+            kw_if,
+            cond,
+            kw_then,
+            then_branch,
+            kw_else,
+            else_branch,
+        } => {
+            normalize_leaf(kw_if);
+            normalize_expr(cond);
+            normalize_leaf(kw_then);
+            normalize_expr(then_branch);
+            normalize_leaf(kw_else);
+            normalize_expr(else_branch);
         }
-        Expression::Abstraction(p, colon, body) => {
-            normalize_parameter(p);
+        Expression::Abstraction { param, colon, body } => {
+            normalize_parameter(param);
             normalize_leaf(colon);
             normalize_expr(body);
         }
-        Expression::Application(f, a) => {
-            normalize_expr(f);
-            normalize_expr(a);
+        Expression::Application { func, arg } => {
+            normalize_expr(func);
+            normalize_expr(arg);
         }
-        Expression::Operation(a, op, b) => {
-            normalize_expr(a);
+        Expression::Operation { lhs, op, rhs } => {
+            normalize_expr(lhs);
             normalize_leaf(op);
-            normalize_expr(b);
+            normalize_expr(rhs);
         }
-        Expression::MemberCheck(a, q, sels) => {
-            normalize_expr(a);
-            normalize_leaf(q);
-            for s in sels {
+        Expression::MemberCheck {
+            lhs,
+            question,
+            path,
+        } => {
+            normalize_expr(lhs);
+            normalize_leaf(question);
+            for s in path {
                 normalize_selector(s);
             }
         }
-        Expression::Negation(op, a) | Expression::Inversion(op, a) => {
+        Expression::Negation { minus: op, expr: a }
+        | Expression::Inversion { bang: op, expr: a } => {
             normalize_leaf(op);
             normalize_expr(a);
         }

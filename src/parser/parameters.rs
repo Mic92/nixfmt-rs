@@ -7,7 +7,7 @@
 //! - Context parameters: `args@{x, y}:` or `{x, y}@args:`
 
 use crate::error::{ParseError, Result};
-use crate::types::{Expression, ParamAttr, Parameter, Span, Term, Token};
+use crate::types::{Expression, ParamAttr, ParamDefault, Parameter, Span, Term, Token};
 
 use super::Parser;
 
@@ -18,7 +18,9 @@ fn find_formal<'a>(
     mut pred: impl FnMut(&'a str) -> bool,
 ) -> Option<(Span, &'a str)> {
     for attr in attrs {
-        if let ParamAttr::ParamAttr(name_leaf, _, _) = attr
+        if let ParamAttr::Attr {
+            name: name_leaf, ..
+        } = attr
             && let Token::Identifier(name) = &name_leaf.value
             && pred(name.as_str())
         {
@@ -49,7 +51,7 @@ impl Parser {
     /// the offending token that `nix-instantiate --parse` produces.
     pub(super) fn parse_context_second(&mut self, first: &Parameter) -> Result<Parameter> {
         match first {
-            Parameter::ID(name) => {
+            Parameter::Id(name) => {
                 let open = self.expect_token(Token::TBraceOpen, "'{'")?;
                 let attrs = self.parse_param_attrs()?;
                 Self::check_duplicate_formals(&attrs)?;
@@ -57,9 +59,9 @@ impl Parser {
                     Self::check_pattern_shadows_formal(n, &attrs)?;
                 }
                 let close = self.expect_token(Token::TBraceClose, "'}'")?;
-                Ok(Parameter::Set(open, attrs, close))
+                Ok(Parameter::Set { open, attrs, close })
             }
-            Parameter::Set(_, attrs, _) => {
+            Parameter::Set { attrs, .. } => {
                 if !matches!(self.current.value, Token::Identifier(_)) {
                     return Err(ParseError::unexpected(
                         self.current.span,
@@ -71,9 +73,9 @@ impl Parser {
                 if let Token::Identifier(n) = &name.value {
                     Self::check_pattern_shadows_formal(n, attrs)?;
                 }
-                Ok(Parameter::ID(name))
+                Ok(Parameter::Id(name))
             }
-            Parameter::Context(..) => unreachable!("callers pass ID or Set"),
+            Parameter::Context { .. } => unreachable!("callers pass Id or Set"),
         }
     }
 
@@ -101,7 +103,7 @@ impl Parser {
         while !matches!(self.current.value, Token::TBraceClose | Token::Sof) {
             if matches!(self.current.value, Token::TEllipsis) {
                 let dots = self.take_and_advance()?;
-                attrs.push(ParamAttr::ParamEllipsis(dots));
+                attrs.push(ParamAttr::Ellipsis(dots));
 
                 if matches!(self.current.value, Token::TComma) {
                     self.advance()?;
@@ -118,7 +120,10 @@ impl Parser {
                 let default = if matches!(self.current.value, Token::TQuestion) {
                     let q = self.take_and_advance()?;
                     let def_expr = self.parse_expression()?;
-                    Some((q, def_expr))
+                    Some(ParamDefault {
+                        question: q,
+                        value: def_expr,
+                    })
                 } else {
                     None
                 };
@@ -129,7 +134,11 @@ impl Parser {
                     None
                 };
 
-                attrs.push(ParamAttr::ParamAttr(name, Box::new(default), comma));
+                attrs.push(ParamAttr::Attr {
+                    name,
+                    default,
+                    comma,
+                });
             } else {
                 break;
             }

@@ -8,7 +8,11 @@ use super::util::{Width, move_trailing_comment_up};
 
 pub(super) fn push_absorb_abs(doc: &mut Doc, depth: usize, expr: &Expression) {
     match expr {
-        Expression::Abstraction(Parameter::ID(param), colon, body) => {
+        Expression::Abstraction {
+            param: Parameter::Id(param),
+            colon,
+            body,
+        } => {
             doc.hardspace();
             param.pretty(doc);
             colon.pretty(doc);
@@ -32,9 +36,15 @@ pub(super) fn push_absorb_abs(doc: &mut Doc, depth: usize, expr: &Expression) {
 /// Mirrors Haskell `insertIntoApp` used by the `Assert` pretty instance.
 pub(super) fn insert_into_app(insert: Expression, expr: Expression) -> (Expression, Expression) {
     match expr {
-        Expression::Application(f, a) => {
+        Expression::Application { func: f, arg: a } => {
             let (f2, a2) = insert_into_app(insert, *f);
-            (Expression::Application(Box::new(f2), Box::new(a2)), *a)
+            (
+                Expression::Application {
+                    func: Box::new(f2),
+                    arg: Box::new(a2),
+                },
+                *a,
+            )
         }
         other => (insert, other),
     }
@@ -102,7 +112,14 @@ pub(super) fn pretty_with(
 /// Mirrors Haskell `prettyIf` (Pretty.hs, inside the `If` clause).
 pub(super) fn pretty_if(doc: &mut Doc, sep: DocE, expr: &Expression) {
     match expr {
-        Expression::If(if_kw, cond, then_kw, expr0, else_kw, expr1) => {
+        Expression::If {
+            kw_if: if_kw,
+            cond,
+            kw_then: then_kw,
+            then_branch: expr0,
+            kw_else: else_kw,
+            else_branch: expr1,
+        } => {
             doc.group(|g| {
                 if_kw.pretty(g);
                 g.line();

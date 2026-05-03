@@ -101,9 +101,9 @@ impl Parser {
 
                 let ident = self.take_and_advance()?;
 
-                match self.finish_abstraction(Parameter::ID(ident))? {
+                match self.finish_abstraction(Parameter::Id(ident))? {
                     Break(abs) => Ok(abs),
-                    Continue(Parameter::ID(ident)) => {
+                    Continue(Parameter::Id(ident)) => {
                         let term = self.parse_postfix_selection(Term::Token(ident))?;
                         self.continue_operation_from(Expression::Term(term))
                     }
@@ -125,13 +125,17 @@ impl Parser {
                 // Empty set: {} - could be parameter or literal
                 let close_brace = self.take_and_advance()?;
 
-                match self.finish_abstraction(Parameter::Set(
-                    open_brace,
-                    Vec::new(),
-                    close_brace,
-                ))? {
+                match self.finish_abstraction(Parameter::Set {
+                    open: open_brace,
+                    attrs: Vec::new(),
+                    close: close_brace,
+                })? {
                     Break(abs) => Ok(abs),
-                    Continue(Parameter::Set(open_brace, _, mut close_brace)) => {
+                    Continue(Parameter::Set {
+                        open: open_brace,
+                        close: mut close_brace,
+                        ..
+                    }) => {
                         // Empty set literal: trivia on `}` becomes the set's comment items.
                         let items = if close_brace.pre_trivia.is_empty() {
                             Vec::new()
@@ -153,7 +157,7 @@ impl Parser {
                         self.expect_closing_delimiter(open_span, '{', Token::TBraceClose)?;
                     let close_span = close_brace.span;
 
-                    match self.finish_abstraction(Parameter::Set(open_brace, attrs, close_brace))? {
+                    match self.finish_abstraction(Parameter::Set { open: open_brace, attrs, close: close_brace })? {
                         Break(abs) => Ok(abs),
                         Continue(_) => Err(ParseError::invalid(
                             close_span,
@@ -182,7 +186,11 @@ impl Parser {
                     self.expect_closing_delimiter(open_span, '{', Token::TBraceClose)?;
                 let close_span = close_brace.span;
 
-                match self.finish_abstraction(Parameter::Set(open_brace, attrs, close_brace))? {
+                match self.finish_abstraction(Parameter::Set {
+                    open: open_brace,
+                    attrs,
+                    close: close_brace,
+                })? {
                     Break(abs) => Ok(abs),
                     Continue(_) => Err(ParseError::invalid(
                         close_span,
@@ -217,7 +225,11 @@ impl Parser {
             Token::TColon => {
                 let colon = self.take_and_advance()?;
                 let body = self.parse_expression()?;
-                Ok(Break(Expression::Abstraction(first, colon, Box::new(body))))
+                Ok(Break(Expression::Abstraction {
+                    param: first,
+                    colon,
+                    body: Box::new(body),
+                }))
             }
             Token::TAt => {
                 let at_tok = self.take_and_advance()?;
@@ -238,11 +250,15 @@ impl Parser {
                 }
                 let colon = self.expect_token(Token::TColon, "':'")?;
                 let body = self.parse_expression()?;
-                Ok(Break(Expression::Abstraction(
-                    Parameter::Context(Box::new(first), at_tok, Box::new(second)),
+                Ok(Break(Expression::Abstraction {
+                    param: Parameter::Context {
+                        lhs: Box::new(first),
+                        at: at_tok,
+                        rhs: Box::new(second),
+                    },
                     colon,
-                    Box::new(body),
-                )))
+                    body: Box::new(body),
+                }))
             }
             _ => Ok(Continue(first)),
         }
@@ -255,7 +271,12 @@ impl Parser {
         bindings: Items<Binder>,
         close: Leaf,
     ) -> Result<Expression> {
-        let set_term = Term::Set(None, open, bindings, close);
+        let set_term = Term::Set {
+            rec: None,
+            open,
+            items: bindings,
+            close,
+        };
         let term = self.parse_postfix_selection(set_term)?;
         self.continue_operation_from(Expression::Term(term))
     }
@@ -265,12 +286,19 @@ impl Parser {
         let expr = if matches!(self.current.value, Token::TQuestion) {
             let question = self.take_and_advance()?;
             let selectors = self.parse_selector_path()?;
-            Expression::MemberCheck(Box::new(expr), question, selectors)
+            Expression::MemberCheck {
+                lhs: Box::new(expr),
+                question,
+                path: selectors,
+            }
         } else if self.is_term_start() {
             let mut app_expr = expr;
             while self.is_term_start() && !self.is_expression_end() {
                 let arg = Expression::Term(self.parse_term()?);
-                app_expr = Expression::Application(Box::new(app_expr), Box::new(arg));
+                app_expr = Expression::Application {
+                    func: Box::new(app_expr),
+                    arg: Box::new(arg),
+                };
             }
             app_expr
         } else {
@@ -301,12 +329,18 @@ impl Parser {
             Token::TMinus => {
                 let op = self.take_and_advance()?;
                 let inner = self.parse_application()?;
-                return Ok(Expression::Negation(op, Box::new(inner)));
+                return Ok(Expression::Negation {
+                    minus: op,
+                    expr: Box::new(inner),
+                });
             }
             Token::TNot => {
                 let op = self.take_and_advance()?;
                 let inner = self.parse_application()?;
-                return Ok(Expression::Inversion(op, Box::new(inner)));
+                return Ok(Expression::Inversion {
+                    bang: op,
+                    expr: Box::new(inner),
+                });
             }
             _ => {}
         }
@@ -317,7 +351,10 @@ impl Parser {
         // IMPORTANT: Don't treat binary operators as term starts even if they could start paths
         while self.is_term_start() && !self.is_binary_op() && !self.is_expression_end() {
             let arg = Expression::Term(self.parse_term()?);
-            expr = Expression::Application(Box::new(expr), Box::new(arg));
+            expr = Expression::Application {
+                func: Box::new(expr),
+                arg: Box::new(arg),
+            };
         }
 
         // Postfix `?` has higher precedence than prefix `!`/`-`; checking it here ensures
@@ -325,7 +362,11 @@ impl Parser {
         if matches!(self.current.value, Token::TQuestion) {
             let question = self.take_and_advance()?;
             let selectors = self.parse_selector_path()?;
-            expr = Expression::MemberCheck(Box::new(expr), question, selectors);
+            expr = Expression::MemberCheck {
+                lhs: Box::new(expr),
+                question,
+                path: selectors,
+            };
         }
 
         Ok(expr)
@@ -451,25 +492,46 @@ impl Parser {
             // operand, and doing that with a left-associative chain is not possible.
             // If we have: (a + b) + c, restructure to: a + (b + c)
             left = if matches!(op_token.value, Token::TPlus) {
-                if let Expression::Operation(one, op1, two) = left {
+                if let Expression::Operation {
+                    lhs: one,
+                    op: op1,
+                    rhs: two,
+                } = left
+                {
                     if matches!(op1.value, Token::TPlus) {
-                        Expression::Operation(
-                            one,
-                            op1,
-                            Box::new(Expression::Operation(two, op_token, Box::new(right))),
-                        )
+                        Expression::Operation {
+                            lhs: one,
+                            op: op1,
+                            rhs: Box::new(Expression::Operation {
+                                lhs: two,
+                                op: op_token,
+                                rhs: Box::new(right),
+                            }),
+                        }
                     } else {
-                        Expression::Operation(
-                            Box::new(Expression::Operation(one, op1, two)),
-                            op_token,
-                            Box::new(right),
-                        )
+                        Expression::Operation {
+                            lhs: Box::new(Expression::Operation {
+                                lhs: one,
+                                op: op1,
+                                rhs: two,
+                            }),
+                            op: op_token,
+                            rhs: Box::new(right),
+                        }
                     }
                 } else {
-                    Expression::Operation(Box::new(left), op_token, Box::new(right))
+                    Expression::Operation {
+                        lhs: Box::new(left),
+                        op: op_token,
+                        rhs: Box::new(right),
+                    }
                 }
             } else {
-                Expression::Operation(Box::new(left), op_token, Box::new(right))
+                Expression::Operation {
+                    lhs: Box::new(left),
+                    op: op_token,
+                    rhs: Box::new(right),
+                }
             };
 
             if is_comparison {
@@ -605,7 +667,10 @@ impl Parser {
                 ));
             }
             let default_term = self.parse_term()?;
-            Some((or_tok, Box::new(default_term)))
+            Some(crate::types::SetDefault {
+                or_kw: or_tok,
+                value: Box::new(default_term),
+            })
         } else {
             None
         };
@@ -613,7 +678,11 @@ impl Parser {
         if selectors.is_empty() && or_default.is_none() {
             Ok(base_term)
         } else {
-            Ok(Term::Selection(Box::new(base_term), selectors, or_default))
+            Ok(Term::Selection {
+                base: Box::new(base_term),
+                selectors,
+                default: or_default,
+            })
         }
     }
 

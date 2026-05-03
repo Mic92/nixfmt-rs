@@ -10,16 +10,20 @@ use super::util::{is_lone_ann, move_trailing_comment_up, push_empty_brackets};
 impl Pretty for ParamAttr {
     fn pretty(&self, doc: &mut Doc) {
         match self {
-            Self::ParamAttr(name, default, maybe_comma) => {
+            Self::Attr {
+                name,
+                default,
+                comma: maybe_comma,
+            } => {
                 let has_default = default.is_some();
                 let make_pretty = |d: &mut Doc| {
                     name.pretty(d);
 
-                    if let Some((qmark, def)) = default.as_ref() {
+                    if let Some(def) = default.as_ref() {
                         d.hardspace();
                         d.nested(|inner| {
-                            qmark.pretty(inner);
-                            push_absorb_rhs(inner, def);
+                            def.question.pretty(inner);
+                            push_absorb_rhs(inner, &def.value);
                         });
                     }
 
@@ -34,7 +38,7 @@ impl Pretty for ParamAttr {
                     make_pretty(doc);
                 }
             }
-            Self::ParamEllipsis(ellipsis) => ellipsis.pretty(doc),
+            Self::Ellipsis(ellipsis) => ellipsis.pretty(doc),
         }
     }
 }
@@ -54,46 +58,66 @@ fn take_last_trail_comment_expr(expr: &mut Expression) -> Option<TrailingComment
             Term::Token(l) => l.trail_comment.take(),
             Term::SimpleString(l) | Term::IndentedString(l) => l.trail_comment.take(),
             Term::Path(l) => l.trail_comment.take(),
-            Term::List(_, _, close)
-            | Term::Set(_, _, _, close)
-            | Term::Parenthesized(_, _, close) => close.trail_comment.take(),
-            Term::Selection(_, _, Some((_, def))) => term(def),
+            Term::List { close, .. }
+            | Term::Set { close, .. }
+            | Term::Parenthesized { close, .. } => close.trail_comment.take(),
+            Term::Selection {
+                default: Some(d), ..
+            } => term(&mut d.value),
             // The parser only builds `Selection` when `selectors` is non-empty.
-            Term::Selection(_, sels, None) => sel(sels.last_mut().expect("≥1 selector")),
+            Term::Selection {
+                selectors,
+                default: None,
+                ..
+            } => sel(selectors.last_mut().expect("≥1 selector")),
         }
     }
     match expr {
         Expression::Term(t) => term(t),
-        Expression::With(_, _, _, body)
-        | Expression::Let(_, _, _, body)
-        | Expression::Assert(_, _, _, body)
-        | Expression::If(_, _, _, _, _, body)
-        | Expression::Abstraction(_, _, body)
-        | Expression::Application(_, body)
-        | Expression::Operation(_, _, body)
-        | Expression::Negation(_, body)
-        | Expression::Inversion(_, body) => take_last_trail_comment_expr(body),
+        Expression::With { body, .. }
+        | Expression::Let { body, .. }
+        | Expression::Assert { body, .. }
+        | Expression::If {
+            else_branch: body, ..
+        }
+        | Expression::Abstraction { body, .. }
+        | Expression::Application { arg: body, .. }
+        | Expression::Operation { rhs: body, .. }
+        | Expression::Negation { expr: body, .. }
+        | Expression::Inversion { expr: body, .. } => take_last_trail_comment_expr(body),
         // `parse_selector_path` always pushes at least one selector.
-        Expression::MemberCheck(_, _, sels) => sel(sels.last_mut().expect("≥1 selector")),
+        Expression::MemberCheck { path, .. } => sel(path.last_mut().expect("≥1 selector")),
     }
 }
 
 /// Mirrors `moveParamAttrComment` in Nixfmt/Pretty.hs.
 fn move_param_attr_comment(attr: ParamAttr) -> ParamAttr {
     match attr {
-        ParamAttr::ParamAttr(mut name, default, Some(mut comma))
-            if default.is_none() && name.trail_comment.is_some() && is_lone_ann(&comma) =>
-        {
+        ParamAttr::Attr {
+            mut name,
+            default,
+            comma: Some(mut comma),
+        } if default.is_none() && name.trail_comment.is_some() && is_lone_ann(&comma) => {
             comma.trail_comment = name.trail_comment.take();
-            ParamAttr::ParamAttr(name, default, Some(comma))
-        }
-        ParamAttr::ParamAttr(name, mut default, Some(mut comma))
-            if default.is_some() && is_lone_ann(&comma) =>
-        {
-            if let Some((_, def)) = default.as_mut() {
-                comma.trail_comment = take_last_trail_comment_expr(def);
+            ParamAttr::Attr {
+                name,
+                default,
+                comma: Some(comma),
             }
-            ParamAttr::ParamAttr(name, default, Some(comma))
+        }
+        ParamAttr::Attr {
+            name,
+            mut default,
+            comma: Some(mut comma),
+        } if default.is_some() && is_lone_ann(&comma) => {
+            if let Some(def) = default.as_mut() {
+                comma.trail_comment = take_last_trail_comment_expr(&mut def.value);
+            }
+            ParamAttr::Attr {
+                name,
+                default,
+                comma: Some(comma),
+            }
         }
         other => other,
     }
@@ -107,22 +131,26 @@ fn move_params_comments(attrs: &[ParamAttr]) -> Vec<ParamAttr> {
         let is_last = i + 1 == out.len();
         let (head, tail) = out[i..].split_first_mut().unwrap();
         match head {
-            ParamAttr::ParamAttr(_, _, Some(comma))
-                if comma.trail_comment.is_none() && !is_last =>
-            {
+            ParamAttr::Attr {
+                comma: Some(comma), ..
+            } if comma.trail_comment.is_none() && !is_last => {
                 let mut trivia = std::mem::take(&mut comma.pre_trivia);
                 match &mut tail[0] {
-                    ParamAttr::ParamAttr(name, _, _) => {
+                    ParamAttr::Attr { name, .. } => {
                         trivia.extend(std::mem::take(&mut name.pre_trivia));
                         name.pre_trivia = trivia;
                     }
-                    ParamAttr::ParamEllipsis(ell) => {
+                    ParamAttr::Ellipsis(ell) => {
                         trivia.extend(std::mem::take(&mut ell.pre_trivia));
                         ell.pre_trivia = trivia;
                     }
                 }
             }
-            ParamAttr::ParamAttr(name, _, comma @ None) if is_last => {
+            ParamAttr::Attr {
+                name,
+                comma: comma @ None,
+                ..
+            } if is_last => {
                 *comma = Some(Ann {
                     pre_trivia: Trivia::new(),
                     value: Token::TComma,
@@ -137,12 +165,12 @@ fn move_params_comments(attrs: &[ParamAttr]) -> Vec<ParamAttr> {
     out
 }
 
-fn param_attr_without_default(attr: &ParamAttr) -> bool {
-    matches!(attr, ParamAttr::ParamAttr(_, default, _) if default.is_none())
+const fn param_attr_without_default(attr: &ParamAttr) -> bool {
+    matches!(attr, ParamAttr::Attr { default, .. } if default.is_none())
 }
 
 const fn param_attr_is_ellipsis(attr: &ParamAttr) -> bool {
-    matches!(attr, ParamAttr::ParamEllipsis(_))
+    matches!(attr, ParamAttr::Ellipsis(_))
 }
 
 fn parameter_separator(open: &Leaf, attrs: &[ParamAttr], close: &Leaf) -> DocE {
@@ -181,10 +209,19 @@ fn render_param_attrs(attrs: &[ParamAttr]) -> Vec<Doc> {
             let is_last = idx + 1 == attrs.len();
 
             if is_last
-                && let ParamAttr::ParamAttr(name, default, Some(comma)) = attr
+                && let ParamAttr::Attr {
+                    name,
+                    default,
+                    comma: Some(comma),
+                } = attr
                 && is_lone_ann(comma)
             {
-                ParamAttr::ParamAttr(name.clone(), default.clone(), None).pretty(&mut rendered);
+                ParamAttr::Attr {
+                    name: name.clone(),
+                    default: default.clone(),
+                    comma: None,
+                }
+                .pretty(&mut rendered);
                 rendered.trailing(",");
                 return rendered;
             }
@@ -198,8 +235,8 @@ fn render_param_attrs(attrs: &[ParamAttr]) -> Vec<Doc> {
 impl Pretty for Parameter {
     fn pretty(&self, doc: &mut Doc) {
         match self {
-            Self::ID(id) => id.pretty(doc),
-            Self::Set(open, attrs, close) => {
+            Self::Id(id) => id.pretty(doc),
+            Self::Set { open, attrs, close } => {
                 let open = move_trailing_comment_up(open);
                 if attrs.is_empty() {
                     doc.group(|doc| push_empty_brackets(doc, &open, close));
@@ -220,7 +257,11 @@ impl Pretty for Parameter {
                     close.without_pre().pretty(doc);
                 });
             }
-            Self::Context(left, at, right) => {
+            Self::Context {
+                lhs: left,
+                at,
+                rhs: right,
+            } => {
                 left.pretty(doc);
                 at.pretty(doc);
                 right.pretty(doc);

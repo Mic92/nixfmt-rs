@@ -26,7 +26,12 @@ impl Parser {
 
         let close_brace = self.expect_closing_delimiter(opening_span, '{', Token::TBraceClose)?;
 
-        Ok(Term::Set(prefix_tok, open_brace, bindings, close_brace))
+        Ok(Term::Set {
+            rec: prefix_tok,
+            open: open_brace,
+            items: bindings,
+            close: close_brace,
+        })
     }
 
     /// Parse list: [ ... ]
@@ -37,7 +42,11 @@ impl Parser {
 
         let close_bracket = self.expect_closing_delimiter(opening_span, '[', Token::TBrackClose)?;
 
-        Ok(Term::List(open_bracket, items, close_bracket))
+        Ok(Term::List {
+            open: open_bracket,
+            items,
+            close: close_bracket,
+        })
     }
 
     /// Parse list items (terms)
@@ -86,6 +95,10 @@ impl Parser {
 
         let close_paren = self.expect_closing_delimiter(opening_span, '(', Token::TParenClose)?;
 
-        Ok(Term::Parenthesized(open_paren, Box::new(expr), close_paren))
+        Ok(Term::Parenthesized {
+            open: open_paren,
+            expr: Box::new(expr),
+            close: close_paren,
+        })
     }
 }

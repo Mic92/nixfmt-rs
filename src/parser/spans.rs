@@ -9,16 +9,20 @@ use crate::types::{Expression, SimpleSelector, Span, Term};
 pub(super) fn expr_end(expr: &Expression) -> Span {
     match expr {
         Expression::Term(term) => term_end(term),
-        Expression::With(_, _, _, expr)
-        | Expression::Let(_, _, _, expr)
-        | Expression::Assert(_, _, _, expr)
-        | Expression::If(_, _, _, _, _, expr)
-        | Expression::Abstraction(_, _, expr)
-        | Expression::Application(_, expr)
-        | Expression::Operation(_, _, expr)
-        | Expression::Negation(_, expr)
-        | Expression::Inversion(_, expr) => expr_end(expr),
-        Expression::MemberCheck(_, _, selectors) => selectors
+        Expression::With { body: expr, .. }
+        | Expression::Let { body: expr, .. }
+        | Expression::Assert { body: expr, .. }
+        | Expression::If {
+            else_branch: expr, ..
+        }
+        | Expression::Abstraction { body: expr, .. }
+        | Expression::Application { arg: expr, .. }
+        | Expression::Operation { rhs: expr, .. }
+        | Expression::Negation { expr, .. }
+        | Expression::Inversion { expr, .. } => expr_end(expr),
+        Expression::MemberCheck {
+            path: selectors, ..
+        } => selectors
             .last()
             // No selectors - shouldn't happen for a parsed MemberCheck.
             .map_or(Span::point(0), |last| simple_selector_end(&last.selector)),
@@ -31,17 +35,18 @@ fn term_end(term: &Term) -> Span {
         Term::Token(leaf) => leaf.span,
         Term::SimpleString(s) | Term::IndentedString(s) => s.span,
         Term::Path(p) => p.span,
-        Term::List(_, _, close) | Term::Set(_, _, _, close) | Term::Parenthesized(_, _, close) => {
+        Term::List { close, .. } | Term::Set { close, .. } | Term::Parenthesized { close, .. } => {
             close.span
         }
-        Term::Selection(_, selectors, default) => {
+        Term::Selection {
+            selectors, default, ..
+        } => {
             // Rightmost element: default > last selector. The parser only
             // builds `Selection` when `selectors` is non-empty.
-            if let Some((_, default_expr)) = default {
-                term_end(default_expr)
-            } else {
-                simple_selector_end(&selectors.last().expect("≥1 selector").selector)
-            }
+            default.as_ref().map_or_else(
+                || simple_selector_end(&selectors.last().expect("≥1 selector").selector),
+                |d| term_end(&d.value),
+            )
         }
     }
 }
