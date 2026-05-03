@@ -1,4 +1,4 @@
-use crate::predoc::{Doc, Pretty, hardspace, line, push_group, push_nested, softline};
+use crate::predoc::{Doc, Pretty, line};
 use crate::types::{Expression, Leaf, Token};
 
 use super::absorb::is_absorbable_term;
@@ -23,20 +23,20 @@ fn flatten_operation_chain<'a>(
 fn push_absorb_operation(doc: &mut Doc, expr: &Expression) {
     match expr {
         Expression::Term(term) if is_absorbable_term(term) => {
-            doc.push(hardspace());
+            doc.hardspace();
             term.pretty(doc);
         }
         Expression::Operation(_, _, _) => {
-            push_group(doc, |group_doc| {
-                group_doc.push(line());
+            doc.group(|group_doc| {
+                group_doc.line();
                 expr.pretty(group_doc);
             });
         }
         Expression::Application(_, _) => {
-            push_group(doc, |g| push_pretty_app(g, false, &[line()], false, expr));
+            doc.group(|g| push_pretty_app(g, false, &[line()], false, expr));
         }
         _ => {
-            doc.push(hardspace());
+            doc.hardspace();
             expr.pretty(doc);
         }
     }
@@ -62,9 +62,9 @@ pub(super) fn pretty_operation(
             | Token::TUnequal
     ) {
         left.pretty(doc);
-        doc.push(softline());
+        doc.softline();
         op.pretty(doc);
-        doc.push(hardspace());
+        doc.hardspace();
         right.pretty(doc);
         return;
     }
@@ -75,12 +75,12 @@ pub(super) fn pretty_operation(
         && is_absorbable_term(t)
         && op.value.is_update_concat_plus()
     {
-        push_group(doc, |inner| {
+        doc.group(|inner| {
             left.pretty(inner);
-            inner.push(line());
+            inner.line();
             op.pretty(inner);
-            inner.push(hardspace());
-            push_nested(inner, |n| t.pretty(n));
+            inner.hardspace();
+            inner.nested(|n| t.pretty(n));
         });
         return;
     }
@@ -97,7 +97,7 @@ pub(super) fn push_pretty_operation(
     let mut parts: Vec<(Option<&Leaf>, &Expression)> = Vec::new();
     flatten_operation_chain(op, operation, None, &mut parts);
 
-    push_group(doc, |group_doc| {
+    doc.group(|group_doc| {
         for (maybe_op, expr) in &parts {
             match maybe_op {
                 None => match expr {
@@ -107,9 +107,9 @@ pub(super) fn push_pretty_operation(
                     _ => expr.pretty(group_doc),
                 },
                 Some(op_leaf) => {
-                    group_doc.push(line());
+                    group_doc.line();
                     op_leaf.pretty(group_doc);
-                    push_nested(group_doc, |nested| {
+                    group_doc.nested(|nested| {
                         push_absorb_operation(nested, expr);
                     });
                 }

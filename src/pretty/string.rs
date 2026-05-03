@@ -1,7 +1,4 @@
-use crate::predoc::{
-    Doc, DocE, Pretty, TextAnn, line_prime, newline, push_group, push_nested, push_offset,
-    push_sep_by, push_text, text_width, unexpand_spacing_prime,
-};
+use crate::predoc::{Doc, DocE, Pretty, TextAnn, newline, text_width, unexpand_spacing_prime};
 use crate::types::{Expression, StringPart};
 
 use super::absorb::is_absorbable_term;
@@ -11,7 +8,9 @@ use super::util::{is_simple_expression, is_spaces};
 impl Pretty for StringPart {
     fn pretty(&self, doc: &mut Doc) {
         match self {
-            Self::TextPart(s) => push_text(doc, s),
+            Self::TextPart(s) => {
+                doc.text(s);
+            }
             Self::Interpolation(whole) => {
                 let trailing_empty = whole.trailing_trivia.is_empty();
                 let value = &whole.value;
@@ -20,10 +19,10 @@ impl Pretty for StringPart {
                     && let Expression::Term(term) = value
                     && is_absorbable_term(term)
                 {
-                    push_group(doc, |g| {
-                        push_text(g, "${");
+                    doc.group(|g| {
+                        g.text("${");
                         term.pretty(g);
-                        push_text(g, "}");
+                        g.text("}");
                     });
                     return;
                 }
@@ -31,14 +30,14 @@ impl Pretty for StringPart {
                 // Simple interpolations (mostly identifiers/selections): force
                 // single line regardless of width.
                 if trailing_empty && is_simple_expression(value) {
-                    push_text(doc, "${");
+                    doc.text("${");
                     let mut rendered = Doc::new();
                     value.pretty(&mut rendered);
                     match unexpand_spacing_prime(None, &rendered) {
                         Some(compact) => doc.extend(compact),
                         None => doc.extend(rendered),
                     }
-                    push_text(doc, "}");
+                    doc.text("}");
                     return;
                 }
 
@@ -46,17 +45,19 @@ impl Pretty for StringPart {
                 // ≤30 columns, force it onto this line even past the width limit.
                 let mut rendered = Doc::new();
                 whole.pretty(&mut rendered);
-                push_group(doc, |g| {
-                    push_text(g, "${");
+                doc.group(|g| {
+                    g.text("${");
                     match unexpand_spacing_prime(Some(30), &rendered) {
                         Some(compact) => g.extend(compact),
-                        None => push_nested(g, |n| {
-                            n.push(line_prime());
-                            n.extend(rendered);
-                            n.push(line_prime());
-                        }),
+                        None => {
+                            g.nested(|n| {
+                                n.line_prime();
+                                n.extend(rendered);
+                                n.line_prime();
+                            });
+                        }
                     }
-                    push_text(g, "}");
+                    g.text("}");
                 });
             }
         }
@@ -80,13 +81,13 @@ impl Pretty for Vec<StringPart> {
             _ => None,
         };
         if let Some((pre, expr)) = lone {
-            push_text(doc, pre);
-            push_offset(doc, text_width(pre), |d| {
-                push_group(d, |g| {
-                    push_text(g, "${");
+            doc.text(pre);
+            doc.offset(text_width(pre), |d| {
+                d.group(|g| {
+                    g.text("${");
                     // Upstream keeps this case split identical to `prettyTerm (Parenthesized …)`.
-                    push_nested(g, |n| push_parenthesized_inner(n, expr));
-                    push_text(g, "}");
+                    g.nested(|n| push_parenthesized_inner(n, expr));
+                    g.text("}");
                 });
             });
             return;
@@ -95,14 +96,14 @@ impl Pretty for Vec<StringPart> {
         match self.as_slice() {
             // Lone interpolation with trailing trivia: always surround with `line'`.
             [StringPart::Interpolation(whole)] => {
-                push_group(doc, |g| {
-                    push_text(g, "${");
-                    push_nested(g, |n| {
-                        n.push(line_prime());
+                doc.group(|g| {
+                    g.text("${");
+                    g.nested(|n| {
+                        n.line_prime();
                         whole.pretty(n);
-                        n.push(line_prime());
+                        n.line_prime();
                     });
-                    push_text(g, "}");
+                    g.text("}");
                 });
             }
             // If a line is split across multiple code lines due to large
@@ -114,8 +115,8 @@ impl Pretty for Vec<StringPart> {
                         .take_while(|c| c.is_whitespace())
                         .collect::<String>(),
                 );
-                push_text(doc, t);
-                push_offset(doc, indentation, |d| {
+                doc.text(t);
+                doc.offset(indentation, |d| {
                     for part in rest {
                         part.pretty(d);
                     }
@@ -132,27 +133,26 @@ impl Pretty for Vec<StringPart> {
 
 /// Format a simple string (with double quotes)
 pub(super) fn push_pretty_simple_string(doc: &mut Doc, parts: &[Vec<StringPart>]) {
-    push_group(doc, |d| {
-        push_text(d, "\"");
+    doc.group(|d| {
+        d.text("\"");
         // Use literal \n instead of newline() to avoid indentation
-        let newline_doc = vec![DocE::Text(0, 0, TextAnn::RegularT, "\n".to_string())];
-        push_sep_by(d, &newline_doc, parts.to_vec());
-        push_text(d, "\"");
+        let newline_doc = [DocE::Text(0, 0, TextAnn::RegularT, "\n".to_string())];
+        d.sep_by(&newline_doc, parts.iter().cloned());
+        d.text("\"");
     });
 }
 
 /// Format an indented string (with '')
 pub(super) fn push_pretty_indented_string(doc: &mut Doc, parts: &[Vec<StringPart>]) {
-    push_group(doc, |d| {
-        push_text(d, "''");
+    doc.group(|d| {
+        d.text("''");
         // For multi-line strings, add a potential line break after opening ''
         if parts.len() > 1 {
-            d.push(line_prime());
+            d.line_prime();
         }
-        push_nested(d, |inner| {
-            let newline_doc = vec![newline()];
-            push_sep_by(inner, &newline_doc, parts.to_vec());
+        d.nested(|inner| {
+            inner.sep_by(&[newline()], parts.iter().cloned());
         });
-        push_text(d, "''");
+        d.text("''");
     });
 }

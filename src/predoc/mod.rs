@@ -6,11 +6,7 @@
 mod builder;
 mod render;
 
-pub use builder::{
-    emptyline, hardline, hardspace, line, line_prime, newline, push_comment, push_group,
-    push_group_ann, push_hcat, push_nested, push_offset, push_sep_by, push_surrounded, push_text,
-    push_trailing, push_trailing_comment, softline, softline_prime,
-};
+pub use builder::{hardline, hardspace, line, line_prime, newline};
 #[cfg(any(test, feature = "debug-dump"))]
 pub use render::fixup;
 pub use render::{RenderConfig, render_with_config};
@@ -76,12 +72,59 @@ pub enum DocE {
     Spacing(Spacing),
     Group(GroupAnn, Doc),
     /// Indentation delta marker (nest, offset). Emitted in begin/end pairs by
-    /// `push_nested`/`push_offset` and folded into `Text` during `fixup`, so
+    /// [`Doc::nested`]/[`Doc::offset`] and folded into `Text` during `fixup`, so
     /// the renderer never sees it.
     Nest(isize, isize),
 }
 
-pub type Doc = Vec<DocE>;
+/// A document under construction.
+///
+/// Wraps a `Vec<DocE>` and exposes builder methods (`text`, `group`, `nested`,
+/// …) defined in [`builder`]. The inner `Vec` is `pub(crate)` so the renderer
+/// and fixup pass can perform in-place `Vec` surgery without going through the
+/// builder API; everything outside `predoc` should treat `Doc` as opaque and
+/// use the methods.
+#[derive(Debug, Default, Clone, PartialEq, Eq)]
+pub struct Doc(pub(crate) Vec<DocE>);
+
+impl Doc {
+    pub const fn new() -> Self {
+        Self(Vec::new())
+    }
+    /// Escape hatch for pushing a pre-built [`DocE`]. Prefer the typed
+    /// builder methods (`text`, `hardline`, …) where one exists.
+    pub fn push_raw(&mut self, e: DocE) -> &mut Self {
+        self.0.push(e);
+        self
+    }
+}
+
+impl std::ops::Deref for Doc {
+    type Target = [DocE];
+    fn deref(&self) -> &[DocE] {
+        &self.0
+    }
+}
+
+impl IntoIterator for Doc {
+    type Item = DocE;
+    type IntoIter = std::vec::IntoIter<DocE>;
+    fn into_iter(self) -> Self::IntoIter {
+        self.0.into_iter()
+    }
+}
+
+impl Extend<DocE> for Doc {
+    fn extend<I: IntoIterator<Item = DocE>>(&mut self, iter: I) {
+        self.0.extend(iter);
+    }
+}
+
+impl From<Vec<DocE>> for Doc {
+    fn from(v: Vec<DocE>) -> Self {
+        Self(v)
+    }
+}
 
 /// Opaque wrapper for intermediate representation (for debugging)
 #[cfg(any(test, feature = "debug-dump"))]
@@ -94,7 +137,7 @@ pub trait Pretty {
 
 impl Pretty for Doc {
     fn pretty(&self, doc: &mut Doc) {
-        doc.extend(self.iter().cloned());
+        doc.0.extend_from_slice(&self.0);
     }
 }
 
@@ -150,5 +193,5 @@ pub fn unexpand_spacing_prime(mut limit: Option<i32>, doc: &[DocE]) -> Option<Do
             return None;
         }
     }
-    Some(result)
+    Some(Doc(result))
 }

@@ -2,7 +2,22 @@
 
 use super::{PrettySimple, Writer, format_bracket_list};
 use crate::format_constructor;
-use crate::predoc::{DocE, GroupAnn, IR, Spacing, TextAnn};
+use crate::predoc::{Doc, DocE, GroupAnn, IR, Spacing, TextAnn};
+
+impl PrettySimple for Doc {
+    fn format<W: Writer>(&self, w: &mut W) {
+        self.0.format(w);
+    }
+    fn is_simple(&self) -> bool {
+        self.0.is_simple()
+    }
+    fn has_delimiters(&self) -> bool {
+        self.0.has_delimiters()
+    }
+    fn is_empty(&self) -> bool {
+        self.0.is_empty()
+    }
+}
 
 impl PrettySimple for IR {
     fn format<W: Writer>(&self, w: &mut W) {
