@@ -252,85 +252,62 @@ pub trait FirstToken {
     fn first_token_mut(&mut self) -> AnnSlotMut<'_>;
 }
 
-impl FirstToken for Term {
-    fn first_token(&self) -> AnnSlot<'_> {
-        match self {
-            Self::Token(l) => l.into(),
-            Self::SimpleString(s) | Self::IndentedString(s) => s.into(),
-            Self::Path(p) => p.into(),
-            Self::List { open, .. }
-            | Self::Parenthesized { open, .. }
-            | Self::Set {
-                rec: None, open, ..
-            } => open.into(),
-            Self::Set { rec: Some(rec), .. } => rec.into(),
-            Self::Selection { base, .. } => base.first_token(),
-        }
-    }
-    fn first_token_mut(&mut self) -> AnnSlotMut<'_> {
-        match self {
-            Self::Token(l) => l.into(),
-            Self::SimpleString(s) | Self::IndentedString(s) => s.into(),
-            Self::Path(p) => p.into(),
-            Self::List { open, .. }
-            | Self::Parenthesized { open, .. }
-            | Self::Set {
-                rec: None, open, ..
-            } => open.into(),
-            Self::Set { rec: Some(rec), .. } => rec.into(),
-            Self::Selection { base, .. } => base.first_token_mut(),
-        }
-    }
+/// Expand one match arm for `first_token_impl!`: `leaf` arms hit an `Ann<_>`
+/// directly via `.into()`, `recurse` arms call `$rec` (`first_token` or
+/// `first_token_mut`) on a child node.
+macro_rules! first_token_arm {
+    (leaf, $rec:ident, $e:expr) => {
+        $e.into()
+    };
+    (recurse, $rec:ident, $e:expr) => {
+        $e.$rec()
+    };
 }
 
-impl FirstToken for Parameter {
-    fn first_token(&self) -> AnnSlot<'_> {
-        match self {
-            Self::Id(n) => n.into(),
-            Self::Set { open, .. } => open.into(),
-            Self::Context { lhs, .. } => lhs.first_token(),
+/// Generate both `first_token` and `first_token_mut` from one set of match
+/// arms, avoiding the otherwise-identical `&`/`&mut` duplication.
+macro_rules! first_token_impl {
+    ($ty:ty; $($pat:pat => $kind:ident $e:expr),+ $(,)?) => {
+        impl FirstToken for $ty {
+            fn first_token(&self) -> AnnSlot<'_> {
+                match self { $($pat => first_token_arm!($kind, first_token, $e),)+ }
+            }
+            fn first_token_mut(&mut self) -> AnnSlotMut<'_> {
+                match self { $($pat => first_token_arm!($kind, first_token_mut, $e),)+ }
+            }
         }
-    }
-    fn first_token_mut(&mut self) -> AnnSlotMut<'_> {
-        match self {
-            Self::Id(n) => n.into(),
-            Self::Set { open, .. } => open.into(),
-            Self::Context { lhs, .. } => lhs.first_token_mut(),
-        }
-    }
+    };
 }
 
-impl FirstToken for Expression {
-    fn first_token(&self) -> AnnSlot<'_> {
-        match self {
-            Self::Term(t) => t.first_token(),
-            Self::With { kw_with: kw, .. }
-            | Self::Let { kw_let: kw, .. }
-            | Self::Assert { kw_assert: kw, .. }
-            | Self::If { kw_if: kw, .. }
-            | Self::Negation { minus: kw, .. }
-            | Self::Inversion { bang: kw, .. } => kw.into(),
-            Self::Abstraction { param, .. } => param.first_token(),
-            Self::Application { func: g, .. }
-            | Self::Operation { lhs: g, .. }
-            | Self::MemberCheck { lhs: g, .. } => g.first_token(),
-        }
-    }
-    fn first_token_mut(&mut self) -> AnnSlotMut<'_> {
-        match self {
-            Self::Term(t) => t.first_token_mut(),
-            Self::With { kw_with: kw, .. }
-            | Self::Let { kw_let: kw, .. }
-            | Self::Assert { kw_assert: kw, .. }
-            | Self::If { kw_if: kw, .. }
-            | Self::Negation { minus: kw, .. }
-            | Self::Inversion { bang: kw, .. } => kw.into(),
-            Self::Abstraction { param, .. } => param.first_token_mut(),
-            Self::Application { func: g, .. }
-            | Self::Operation { lhs: g, .. }
-            | Self::MemberCheck { lhs: g, .. } => g.first_token_mut(),
-        }
-    }
+first_token_impl! { Term;
+    Self::Token(l) => leaf l,
+    Self::SimpleString(s) | Self::IndentedString(s) => leaf s,
+    Self::Path(p) => leaf p,
+    Self::List { open, .. }
+    | Self::Parenthesized { open, .. }
+    | Self::Set { rec: None, open, .. } => leaf open,
+    Self::Set { rec: Some(rec), .. } => leaf rec,
+    Self::Selection { base, .. } => recurse base,
+}
+
+first_token_impl! { Parameter;
+    Self::Id(n) => leaf n,
+    Self::Set { open, .. } => leaf open,
+    Self::Context { lhs, .. } => recurse lhs,
+}
+
+first_token_impl! { Expression;
+    Self::Term(t) => recurse t,
+    Self::With { kw_with: kw, .. }
+    | Self::Let { kw_let: kw, .. }
+    | Self::Assert { kw_assert: kw, .. }
+    | Self::If { kw_if: kw, .. }
+    | Self::Negation { minus: kw, .. }
+    | Self::Inversion { bang: kw, .. } => leaf kw,
+    Self::Abstraction { param, .. } => recurse param,
+    Self::Application { func: g, .. }
+    | Self::Operation { lhs: g, .. }
+    | Self::MemberCheck { lhs: g, .. } => recurse g,
 }
 
 /// Haskell `convertTrailing`.
