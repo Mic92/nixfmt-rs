@@ -406,13 +406,13 @@ impl Parser {
             // This prevents: 1 < 2 < 3 (both < at precedence 9)
             // But allows: 1 < 2 == 2 > 3 (< and > at precedence 9, == at precedence 8)
             if is_comparison && last_comparison_prec == Some(prec) {
-                return Err(Box::new(ParseError {
+                return Err(ParseError {
                     span: op_token.span,
                     kind: crate::error::ErrorKind::ChainedComparison {
                         first_op: last_comparison_op.unwrap_or_else(|| "?".to_string()),
                         second_op: op_string,
                     },
-                }));
+                });
             }
 
             let is_right_assoc = Self::is_right_associative(&op_token.value);

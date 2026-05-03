@@ -29,9 +29,7 @@ fn find_formal<'a>(
 }
 
 /// Build the "duplicate formal function argument" error for `name` at `span`.
-// Returns Box because crate::Result's error type is Box<ParseError>.
-#[allow(clippy::unnecessary_box_returns)]
-fn duplicate_formal_error(span: Span, name: &str) -> Box<ParseError> {
+fn duplicate_formal_error(span: Span, name: &str) -> ParseError {
     ParseError::invalid(
         span,
         format!("duplicate formal function argument '{name}'"),
@@ -164,9 +162,7 @@ impl Parser {
     /// expression whose head is neither an identifier nor `{` (those are
     /// diverted earlier in `parse_abstraction_or_operation`), so `expr` can
     /// never be a valid lambda parameter.
-    // Returns Box because crate::Result's error type is Box<ParseError>.
-    #[allow(clippy::unnecessary_box_returns)]
-    pub(super) fn reject_non_parameter_expr(expr: &Expression) -> Box<ParseError> {
+    pub(super) fn reject_non_parameter_expr(expr: &Expression) -> ParseError {
         if let Expression::Term(Term::Token(ann)) = expr {
             return ParseError::unexpected(
                 ann.span,
