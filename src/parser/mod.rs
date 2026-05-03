@@ -10,8 +10,6 @@ mod path_uri;
 mod spans;
 mod strings;
 
-use std::ops::ControlFlow::{self, Break, Continue};
-
 use crate::error::{ParseError, Result};
 use crate::lexer::Lexer;
 use crate::types::{
@@ -23,6 +21,18 @@ pub struct Parser {
     lexer: Lexer,
     /// Current token
     current: Ann<Token>,
+}
+
+/// Outcome of `finish_abstraction`: either a full lambda was parsed, or no
+/// `:`/`@` followed and the tentative parameter is handed back so the caller
+/// can reinterpret the surrounding `{ ... }` as a set literal (or report an
+/// error). A named enum reads better at call sites than `ControlFlow`, which
+/// is conventionally tied to `?`-style short-circuit semantics.
+enum SetOrLambda {
+    /// A complete `param: body` (optionally with `@`) abstraction.
+    Lambda(Expression),
+    /// No colon followed; the tentative parameter is returned untouched.
+    Set(Parameter),
 }
 
 /// Saved parser state for checkpointing
@@ -102,12 +112,12 @@ impl Parser {
                 let ident = self.take_and_advance()?;
 
                 match self.finish_abstraction(Parameter::Id(ident))? {
-                    Break(abs) => Ok(abs),
-                    Continue(Parameter::Id(ident)) => {
+                    SetOrLambda::Lambda(abs) => Ok(abs),
+                    SetOrLambda::Set(Parameter::Id(ident)) => {
                         let term = self.parse_postfix_selection(Term::Token(ident))?;
                         self.continue_operation_from(Expression::Term(term))
                     }
-                    Continue(_) => unreachable!(),
+                    SetOrLambda::Set(_) => unreachable!(),
                 }
             }
             _ => self.parse_operation_or_lambda(),
@@ -130,8 +140,8 @@ impl Parser {
                     attrs: Vec::new(),
                     close: close_brace,
                 })? {
-                    Break(abs) => Ok(abs),
-                    Continue(Parameter::Set {
+                    SetOrLambda::Lambda(abs) => Ok(abs),
+                    SetOrLambda::Set(Parameter::Set {
                         open: open_brace,
                         close: mut close_brace,
                         ..
@@ -144,7 +154,7 @@ impl Parser {
                         };
                         self.finish_set_literal_expr(open_brace, Items(items), close_brace)
                     }
-                    Continue(_) => unreachable!(),
+                    SetOrLambda::Set(_) => unreachable!(),
                 }
             }
             Token::Identifier(_) => {
@@ -158,8 +168,8 @@ impl Parser {
                     let close_span = close_brace.span;
 
                     match self.finish_abstraction(Parameter::Set { open: open_brace, attrs, close: close_brace })? {
-                        Break(abs) => Ok(abs),
-                        Continue(_) => Err(ParseError::invalid(
+                        SetOrLambda::Lambda(abs) => Ok(abs),
+                        SetOrLambda::Set(_) => Err(ParseError::invalid(
                             close_span,
                             "set with parameter-like syntax but no colon",
                             Some("use '{ x = ...; }' for set literals or '{ x }: body' for parameters".to_string()),
@@ -191,8 +201,8 @@ impl Parser {
                     attrs,
                     close: close_brace,
                 })? {
-                    Break(abs) => Ok(abs),
-                    Continue(_) => Err(ParseError::invalid(
+                    SetOrLambda::Lambda(abs) => Ok(abs),
+                    SetOrLambda::Set(_) => Err(ParseError::invalid(
                         close_span,
                         "{ ... } must be followed by ':' or '@'",
                         Some("use '{ x }: body' for function parameters".to_string()),
@@ -213,19 +223,16 @@ impl Parser {
     /// consume the optional `@ second` part and the mandatory `: body` and
     /// build an `Expression::Abstraction`.
     ///
-    /// * `Break(expr)`  – a full abstraction was parsed.
-    /// * `Continue(first)` – neither `:` nor `@` follows; `first` is handed
+    /// * `Lambda(expr)` – a full abstraction was parsed.
+    /// * `Set(first)` – neither `:` nor `@` follows; `first` is handed
     ///   back untouched so the caller can reinterpret it (set literal,
     ///   operation, or a hard error).
-    fn finish_abstraction(
-        &mut self,
-        first: Parameter,
-    ) -> Result<ControlFlow<Expression, Parameter>> {
+    fn finish_abstraction(&mut self, first: Parameter) -> Result<SetOrLambda> {
         match self.current.value {
             Token::TColon => {
                 let colon = self.take_and_advance()?;
                 let body = self.parse_expression()?;
-                Ok(Break(Expression::Abstraction {
+                Ok(SetOrLambda::Lambda(Expression::Abstraction {
                     param: first,
                     colon,
                     body: Box::new(body),
@@ -250,7 +257,7 @@ impl Parser {
                 }
                 let colon = self.expect_token(Token::TColon, "':'")?;
                 let body = self.parse_expression()?;
-                Ok(Break(Expression::Abstraction {
+                Ok(SetOrLambda::Lambda(Expression::Abstraction {
                     param: Parameter::Context {
                         lhs: Box::new(first),
                         at: at_tok,
@@ -260,7 +267,7 @@ impl Parser {
                     body: Box::new(body),
                 }))
             }
-            _ => Ok(Continue(first)),
+            _ => Ok(SetOrLambda::Set(first)),
         }
     }
 
