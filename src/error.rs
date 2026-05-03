@@ -111,7 +111,7 @@ impl ParseError {
         match &self.kind {
             ErrorKind::InvalidSyntax { hint, .. } => hint.clone(),
             ErrorKind::UnclosedDelimiter { delimiter, .. } => {
-                let (_, close) = format::ErrorFormatter::delimiter_pair(*delimiter);
+                let (_, close) = format::delimiter_pair(*delimiter);
                 Some(format!("add closing {close}"))
             }
             ErrorKind::ChainedComparison { .. } => {
