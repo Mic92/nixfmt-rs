@@ -30,7 +30,7 @@ path = "src/lib.rs"
 [features]
 default = ["cli"]
 # Library consumers disable default features to skip binary-only deps.
-cli = ["dep:ignore", "dep:mimalloc", "debug-dump"]
+cli = ["dep:ignore", "dep:mimalloc", "dep:lexopt", "debug-dump"]
 # Enables format_ast/format_ir (Haskell-parity --ast/--ir dumps). No extra deps;
 # split from `cli` so the fuzz crate can exercise the dumpers without pulling
 # in ignore/mimalloc.
@@ -48,6 +48,7 @@ walkdir = { version = "2", optional = true }
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 ignore = { version = "0.4", optional = true }
+lexopt = { version = "0.3", optional = true }
 mimalloc = { version = "0.1", default-features = false, optional = true }
 
 [dev-dependencies]
