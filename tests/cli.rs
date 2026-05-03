@@ -52,11 +52,27 @@ fn stdin_formats_to_stdout() {
     let out = ours(&[], Some(UNFORMATTED));
     assert!(out.status.success());
     assert_eq!(String::from_utf8_lossy(&out.stdout), FORMATTED);
-    assert!(out.stderr.is_empty());
+    let stderr = String::from_utf8_lossy(&out.stderr);
+    assert!(
+        stderr.contains("Bare invocation"),
+        "expected deprecation warning, got stderr={stderr:?}"
+    );
 
     let ref_out = nixfmt(&[], Some(UNFORMATTED));
     assert_eq!(out.stdout, ref_out.stdout);
     assert_eq!(out.status.code(), ref_out.status.code());
+}
+
+#[test]
+fn dash_reads_stdin_without_warning() {
+    let out = ours(&["-"], Some(UNFORMATTED));
+    assert!(out.status.success(), "stderr={:?}", out.stderr);
+    assert_eq!(String::from_utf8_lossy(&out.stdout), FORMATTED);
+    assert!(
+        out.stderr.is_empty(),
+        "no warning when '-' is explicit, got {:?}",
+        String::from_utf8_lossy(&out.stderr)
+    );
 }
 
 #[test]
@@ -75,12 +91,12 @@ fn check_unformatted_stdin_exits_1() {
 
 #[test]
 fn check_formatted_stdin_exits_0() {
-    let out = ours(&["--check"], Some(FORMATTED));
+    let out = ours(&["--check", "-"], Some(FORMATTED));
     assert_eq!(out.status.code(), Some(0));
     assert!(out.stdout.is_empty());
     assert!(out.stderr.is_empty());
 
-    let ref_out = nixfmt(&["--check"], Some(FORMATTED));
+    let ref_out = nixfmt(&["--check", "-"], Some(FORMATTED));
     assert_eq!(ref_out.status.code(), Some(0));
 }
 

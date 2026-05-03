@@ -14,8 +14,9 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use nixfmt_rs::VERSION;
 
 const HELP: &str = "\
-nixfmt-rs [OPTIONS] [FILES]
+nixfmt-rs [OPTIONS] [FILES or -]
   Format Nix source code (Rust implementation of nixfmt)
+  Use '-' as a file argument to read from stdin.
 
 Common flags:
   -w --width=INT        Maximum width in characters [default: 100]
@@ -108,6 +109,7 @@ fn parse_args() -> Result<Opts, String> {
                     .parse()
                     .map_err(|_| "Invalid integer for --width".to_string())?;
             }
+            "-" => o.files.push("-".to_string()),
             s if s.starts_with('-') => return Err(format!("Unknown flag: {s}")),
             _ => o.files.push(arg),
         }
@@ -210,7 +212,13 @@ fn main() {
 
     let mut ok = true;
 
-    if o.files.is_empty() {
+    let stdin_only = o.files.is_empty() || o.files.iter().all(|f| f == "-");
+    if o.files.is_empty() && !o.quiet {
+        eprintln!(
+            "Warning: Bare invocation of nixfmt-rs is deprecated. Use 'nixfmt-rs -' for anonymous stdin."
+        );
+    }
+    if stdin_only {
         let mut buf = String::new();
         if let Err(e) = io::stdin().read_to_string(&mut buf) {
             eprintln!("error: failed to read stdin: {e}");
@@ -218,6 +226,9 @@ fn main() {
         }
         let name = o.filename.as_deref().unwrap_or("<stdin>");
         ok &= process(&o, name, &buf, false);
+    } else if o.files.iter().any(|f| f == "-") {
+        eprintln!("error: cannot mix '-' (stdin) with file arguments");
+        exit(1);
     } else {
         // Debug dumps stream to stderr; running them in parallel would
         // interleave output, so keep those modes sequential.
