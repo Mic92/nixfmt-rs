@@ -13,6 +13,8 @@ use std::sync::atomic::{AtomicBool, Ordering};
 
 use nixfmt_rs::VERSION;
 
+mod json_diag;
+
 const HELP: &str = "\
 nixfmt-rs [OPTIONS] [FILES or -]
   Format Nix source code (Rust implementation of nixfmt)
@@ -30,6 +32,9 @@ Common flags:
   -a --ast              Pretty print the internal AST to stderr (debug)
   -f --filename=ITEM    Filename to display when input is read from stdin
      --ir               Pretty print the internal IR to stderr (debug)
+     --message-format=FMT
+                        How to render diagnostics: 'human' (default) or 'json'
+                        (one JSON object per line on stderr, LSP Diagnostic shape)
   -? --help             Display help message
   -V --version          Print version information
      --numeric-version  Print just the version number
@@ -49,6 +54,7 @@ struct Opts {
     ir: bool,
     parse_only: bool,
     mergetool: bool,
+    json_diagnostics: bool,
     filename: Option<String>,
     files: Vec<String>,
 }
@@ -100,6 +106,14 @@ fn parse_args() -> Result<Opts, String> {
             "--ir" => o.ir = true,
             "--parse-only" => o.parse_only = true,
             "-m" | "--mergetool" => o.mergetool = true,
+            "--message-format" => {
+                let v = value("--message-format")?;
+                o.json_diagnostics = match v.as_str() {
+                    "human" => false,
+                    "json" => true,
+                    other => return Err(format!("Unknown --message-format: {other}")),
+                };
+            }
             "-f" | "--filename" => o.filename = Some(value("--filename")?),
             "--" => {
                 o.files.extend(args.by_ref());
@@ -117,21 +131,48 @@ fn parse_args() -> Result<Opts, String> {
     Ok(o)
 }
 
+fn render_err(o: &Opts, source: &str, name: &str, e: &nixfmt_rs::ParseError) -> String {
+    if o.json_diagnostics {
+        json_diag::parse_error(source, name, e)
+    } else {
+        nixfmt_rs::format_error(source, Some(name), e)
+    }
+}
+
+fn report(o: &Opts, file: Option<&str>, severity: &str, msg: &str) {
+    eprintln!("{}", render_msg(o, file, severity, msg));
+}
+
 fn try_format(o: &Opts, name: &str, source: &str) -> Result<String, String> {
     let fmt = |s: &str| {
         let mut opts = nixfmt_rs::Options::default();
         opts.width = o.width;
         opts.indent = o.indent;
-        nixfmt_rs::format_with(s, &opts).map_err(|e| nixfmt_rs::format_error(s, Some(name), &e))
+        nixfmt_rs::format_with(s, &opts).map_err(|e| render_err(o, s, name, &e))
     };
     let out = fmt(source)?;
     if o.verify {
-        let again = fmt(&out).map_err(|e| format!("{name}: nixfmt verify: reparse failed\n{e}"))?;
+        let again = fmt(&out)?;
         if again != out {
-            return Err(format!("{name}: nixfmt verify: output is not idempotent"));
+            return Err(render_msg(
+                o,
+                Some(name),
+                "error",
+                "verify: output is not idempotent",
+            ));
         }
     }
     Ok(out)
+}
+
+fn render_msg(o: &Opts, file: Option<&str>, severity: &str, msg: &str) -> String {
+    if o.json_diagnostics {
+        json_diag::message(file, severity, msg)
+    } else if let Some(f) = file {
+        format!("{f}: {msg}")
+    } else {
+        msg.to_string()
+    }
 }
 
 /// Returns `true` on success so the caller can fold exit status across files.
@@ -141,7 +182,7 @@ fn process(o: &Opts, name: &str, source: &str, in_place: bool) -> bool {
             Ok(_) => true,
             Err(e) => {
                 if !o.quiet {
-                    eprintln!("{}", nixfmt_rs::format_error(source, Some(name), &e));
+                    eprintln!("{}", render_err(o, source, name, &e));
                 }
                 false
             }
@@ -158,7 +199,7 @@ fn process(o: &Opts, name: &str, source: &str, in_place: bool) -> bool {
         match res {
             Ok(s) => eprint!("{s}"),
             Err(e) if !o.quiet => {
-                eprintln!("{}", nixfmt_rs::format_error(source, Some(name), &e));
+                eprintln!("{}", render_err(o, source, name, &e));
             }
             Err(_) => {}
         }
@@ -178,7 +219,7 @@ fn process(o: &Opts, name: &str, source: &str, in_place: bool) -> bool {
     if o.check {
         if out != source {
             if !o.quiet {
-                eprintln!("{name}: not formatted");
+                report(o, Some(name), "warning", "not formatted");
             }
             return false;
         }
@@ -191,7 +232,7 @@ fn process(o: &Opts, name: &str, source: &str, in_place: bool) -> bool {
             && let Err(e) = std::fs::write(name, &out)
         {
             if !o.quiet {
-                eprintln!("{name}: {e}");
+                report(o, Some(name), "error", &e.to_string());
             }
             return false;
         }
@@ -217,7 +258,7 @@ fn main() {
     }
 
     let stdin_only = o.files.is_empty() || o.files.iter().all(|f| f == "-");
-    if o.files.is_empty() && !o.quiet {
+    if o.files.is_empty() && !o.quiet && !o.json_diagnostics {
         eprintln!(
             "Warning: Bare invocation of nixfmt-rs is deprecated. Use 'nixfmt-rs -' for anonymous stdin."
         );
@@ -249,7 +290,7 @@ fn process_path(o: &Opts, path: &Path) -> bool {
         Ok(source) => process(o, &name, &source, true),
         Err(e) => {
             if !o.quiet {
-                eprintln!("{name}: {e}");
+                report(o, Some(&name), "error", &e.to_string());
             }
             false
         }
@@ -281,7 +322,7 @@ fn walk_and_process(o: &Opts, parallel: bool) -> bool {
             Ok(_) => true,
             Err(e) => {
                 if !o.quiet {
-                    eprintln!("{e}");
+                    report(o, None, "error", &e.to_string());
                 }
                 false
             }

@@ -48,6 +48,65 @@ const FORMATTED: &str = "{ a = 1; }\n";
 const INVALID: &str = "{a=1;\n";
 
 #[test]
+fn message_format_json_emits_one_object_per_error() {
+    let out = ours(
+        &["--message-format=json", "-f", "bad.nix", "-"],
+        Some(INVALID),
+    );
+    assert_eq!(out.status.code(), Some(1));
+    assert!(out.stdout.is_empty(), "no formatted output on parse error");
+    let stderr = String::from_utf8(out.stderr).unwrap();
+    // Schema details covered by json_diag unit tests; here we only check the
+    // flag is wired and -f reaches the output.
+    let line = stderr.lines().next().expect("one json line");
+    assert!(line.starts_with('{') && line.ends_with('}'), "{line}");
+    assert!(line.contains(r#""file":"bad.nix""#), "{line}");
+}
+
+#[test]
+fn message_format_json_check_mode_is_pure_json() {
+    let d = tempfile::tempdir().unwrap();
+    let f = tmpfile(&d, "a.nix", UNFORMATTED);
+    let out = ours(
+        &["--message-format=json", "--check", f.to_str().unwrap()],
+        None,
+    );
+    assert_eq!(out.status.code(), Some(1));
+    let stderr = String::from_utf8(out.stderr).unwrap();
+    for line in stderr.lines() {
+        assert!(
+            line.starts_with('{') && line.ends_with('}'),
+            "non-JSON on stderr: {line:?}"
+        );
+    }
+    assert!(stderr.contains(r#""message":"not formatted""#), "{stderr}");
+    assert!(stderr.contains(r#""severity":"warning""#), "{stderr}");
+}
+
+#[test]
+fn message_format_json_io_error_is_json() {
+    let out = ours(&["--message-format=json", "/nonexistent/path.nix"], None);
+    assert_eq!(out.status.code(), Some(1));
+    let stderr = String::from_utf8(out.stderr).unwrap();
+    assert!(!stderr.is_empty());
+    for line in stderr.lines() {
+        assert!(line.starts_with('{') && line.ends_with('}'), "{line:?}");
+    }
+    // Walker reports the missing path inside its error message; we only
+    // guarantee the line is valid JSON, not that `file` is split out.
+    assert!(stderr.contains("/nonexistent/path.nix"), "{stderr}");
+    assert!(stderr.contains(r#""severity":"error""#), "{stderr}");
+}
+
+#[test]
+fn message_format_rejects_unknown_value() {
+    let out = ours(&["--message-format=xml", "-"], Some(UNFORMATTED));
+    assert_eq!(out.status.code(), Some(1));
+    let stderr = String::from_utf8_lossy(&out.stderr);
+    assert!(stderr.contains("--message-format"), "{stderr}");
+}
+
+#[test]
 fn stdin_formats_to_stdout() {
     let out = ours(&[], Some(UNFORMATTED));
     assert!(out.status.success());
