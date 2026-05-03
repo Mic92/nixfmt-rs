@@ -9,6 +9,7 @@ fs.toSource {
     ../Cargo.lock
     ../src
     ../docs
+    ../completions
     ../benches
     ../examples
     ../tests

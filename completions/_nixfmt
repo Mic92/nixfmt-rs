@@ -1,0 +1,18 @@
+#compdef nixfmt
+
+_arguments -s -S \
+  '(-w --width)'{-w+,--width=}'[maximum width in characters]:width:' \
+  '--indent=[number of spaces for indentation]:indent:' \
+  '(-c --check)'{-c,--check}'[check whether files are formatted]' \
+  '(-m --mergetool)'{-m,--mergetool}'[git mergetool mode]' \
+  '(-q --quiet)'{-q,--quiet}'[do not report errors]' \
+  '(-s --strict)'{-s,--strict}'[enable stricter formatting mode]' \
+  '(-v --verify)'{-v,--verify}'[sanity-check output after formatting]' \
+  '(-a --ast)'{-a,--ast}'[dump internal AST to stderr]' \
+  '--ir[dump internal IR to stderr]' \
+  '(-f --filename)'{-f+,--filename=}'[display name for stdin input]:filename:_files' \
+  '--message-format=[diagnostic output format]:format:(human json)' \
+  '(- *)'{-h,--help}'[show help]' \
+  '(- *)'{-V,--version}'[print version]' \
+  '(- *)--numeric-version[print just the version number]' \
+  '*:nix file:_files -g "*.nix"'
