@@ -8,6 +8,7 @@ fs.toSource {
     ../Cargo.toml
     ../Cargo.lock
     ../src
+    ../docs
     ../benches
     ../examples
     ../tests
