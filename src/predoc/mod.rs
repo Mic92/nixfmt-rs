@@ -11,7 +11,9 @@ pub use builder::{
     push_group_ann, push_hcat, push_nested, push_offset, push_sep_by, push_surrounded, push_text,
     push_trailing, push_trailing_comment, softline, softline_prime,
 };
-pub use render::{RenderConfig, fixup, render_with_config};
+#[cfg(any(test, feature = "debug-dump"))]
+pub use render::fixup;
+pub use render::{RenderConfig, render_with_config};
 
 /// Spacing types for layout
 ///
@@ -82,6 +84,7 @@ pub enum DocE {
 pub type Doc = Vec<DocE>;
 
 /// Opaque wrapper for intermediate representation (for debugging)
+#[cfg(any(test, feature = "debug-dump"))]
 #[derive(Debug)]
 pub struct IR(pub(crate) Doc);
 

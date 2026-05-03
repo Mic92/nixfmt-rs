@@ -30,7 +30,11 @@ path = "src/lib.rs"
 [features]
 default = ["cli"]
 # Library consumers disable default features to skip binary-only deps.
-cli = ["dep:ignore", "dep:mimalloc"]
+cli = ["dep:ignore", "dep:mimalloc", "debug-dump"]
+# Enables format_ast/format_ir (Haskell-parity --ast/--ir dumps). No extra deps;
+# split from `cli` so the fuzz crate can exercise the dumpers without pulling
+# in ignore/mimalloc.
+debug-dump = []
 # Optional regular deps (not dev-deps) so `cargo test` doesn't compile them.
 bench = ["dep:criterion"]
 sweep = ["dep:rayon", "dep:walkdir"]

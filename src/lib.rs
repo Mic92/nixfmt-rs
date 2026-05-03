@@ -20,9 +20,14 @@
 #![forbid(unsafe_code)]
 
 // Internal modules - hidden from public API
-mod colored_writer;
 mod error;
 mod predoc;
+
+// Debug-dump machinery (Haskell `Show` / pretty-simple parity). Only needed
+// by the `nixfmt` binary's --ast/--ir flags and the regression test suite.
+#[cfg(any(test, feature = "debug-dump"))]
+mod colored_writer;
+#[cfg(any(test, feature = "debug-dump"))]
 mod pretty_simple;
 
 // Internal modules - not exposed as public API
@@ -112,6 +117,7 @@ pub fn format_with(source: &str, opts: &Options) -> Result<String> {
     Ok(output)
 }
 
+#[cfg(any(test, feature = "debug-dump"))]
 pub(crate) fn ast_to_ir(ast: &File) -> predoc::IR {
     let mut doc = predoc::Doc::new();
     ast.pretty(&mut doc);
@@ -122,6 +128,7 @@ pub(crate) fn ast_to_ir(ast: &File) -> predoc::IR {
 ///
 /// # Errors
 /// See [`parse`].
+#[cfg(any(test, feature = "debug-dump"))]
 #[doc(hidden)]
 pub fn format_ast(source: &str) -> Result<String> {
     use pretty_simple::PrettySimple;
@@ -135,6 +142,7 @@ pub fn format_ast(source: &str) -> Result<String> {
 ///
 /// # Errors
 /// See [`parse`].
+#[cfg(any(test, feature = "debug-dump"))]
 #[doc(hidden)]
 pub fn format_ir(source: &str) -> Result<String> {
     use pretty_simple::PrettySimple;
