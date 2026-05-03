@@ -193,7 +193,10 @@ fn visual_span(line_text: &str, line_start: usize, span: Span) -> (usize, usize)
 ///
 /// Keyed on the *expected* token; `found` lets us special-case a few
 /// confusable pairs without guessing about parser context we don't have here.
-fn unexpected_token_hint(expected: &str, found: &str) -> Option<(&'static str, &'static str)> {
+pub(super) fn unexpected_token_hint(
+    expected: &str,
+    found: &str,
+) -> Option<(&'static str, &'static str)> {
     Some(match expected {
         "';'" => (
             "missing semicolon after definition",
@@ -232,7 +235,7 @@ fn unexpected_token_hint(expected: &str, found: &str) -> Option<(&'static str, &
 impl ErrorFormatter<'_> {
     /// The lexer encodes the `''` opener as a single `'`; expand it back so we
     /// don't render `'''`.
-    const fn delimiter_pair(opening: char) -> (&'static str, &'static str) {
+    pub(super) const fn delimiter_pair(opening: char) -> (&'static str, &'static str) {
         match opening {
             '{' => ("'{'", "'}'"),
             '[' => ("'['", "']'"),

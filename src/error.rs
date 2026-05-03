@@ -105,6 +105,44 @@ impl ParseError {
         self.span.start as usize..self.span.end as usize
     }
 
+    /// Short, actionable fix suggestion if one is known.
+    ///
+    /// Intended for editor integrations that want a one-line hint (e.g. an
+    /// LSP code-action title) without parsing the rendered snippet.
+    #[must_use]
+    pub fn help(&self) -> Option<String> {
+        match &self.kind {
+            ErrorKind::InvalidSyntax { hint, .. } => hint.clone(),
+            ErrorKind::UnclosedDelimiter { delimiter, .. } => {
+                let (_, close) = format::ErrorFormatter::delimiter_pair(*delimiter);
+                Some(format!("add closing {close}"))
+            }
+            ErrorKind::ChainedComparison { .. } => {
+                Some("use parentheses: (a < b) && (b < c)".to_string())
+            }
+            ErrorKind::MissingToken { token, .. } => Some(format!("add {token}")),
+            ErrorKind::UnexpectedToken { expected, found } => match expected.as_slice() {
+                [single] => {
+                    format::unexpected_token_hint(single, found).map(|(_, help)| help.to_string())
+                }
+                _ => None,
+            },
+        }
+    }
+
+    /// Secondary locations worth pointing at alongside the primary span,
+    /// as `(byte_range, label)` pairs (e.g. the unmatched opening delimiter).
+    #[must_use]
+    pub fn related(&self) -> Vec<(std::ops::Range<usize>, String)> {
+        match &self.kind {
+            ErrorKind::UnclosedDelimiter { opening_span, .. } => vec![(
+                opening_span.start as usize..opening_span.end as usize,
+                "unclosed delimiter opened here".to_string(),
+            )],
+            _ => Vec::new(),
+        }
+    }
+
     /// Get error code if available
     #[must_use]
     pub const fn code(&self) -> Option<&str> {
