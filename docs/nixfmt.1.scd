@@ -63,6 +63,19 @@ explicit.
 	Filename to use in diagnostic messages when input is read from standard
 	input. Useful for editor integrations.
 
+*--message-format*=_FMT_
+	How diagnostics are rendered on standard error. _FMT_ is one of:
+
+	*human* (default)
+		rustc-style snippets with carets and fix-it hints.
+
+	*json*
+		One JSON object per line, shaped like an LSP _Diagnostic_: _file_,
+		_severity_, _code_, _message_, 0-based _range_, _byteRange_, optional
+		_help_ and _relatedInformation_, plus the human _rendered_ text. All
+		standard-error output (including *--check* results and I/O errors) is
+		JSON in this mode.
+
 *-?*, *--help*
 	Display a short help message and exit.
 
@@ -101,6 +114,10 @@ Check formatting in CI without modifying files:
 Format a snippet from a pipeline:
 
 	*echo '{a=1;}' | nixfmt -*
+
+Consume diagnostics from a wrapper or LSP:
+
+	*nixfmt --message-format=json --check . 2>&1 >/dev/null | jq .*
 
 Use as a *git mergetool*:
 

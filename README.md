@@ -209,6 +209,31 @@ Error[E005]: commas are not used to separate list elements in Nix
 Run `cargo run --example error_visualization` to see the full catalogue
 of diagnostics on intentionally broken inputs.
 
+### Machine-readable output
+
+For editor / LSP integrations, `--message-format=json` writes one JSON
+object per diagnostic to stderr instead of the rendered snippet. The shape
+follows the LSP `Diagnostic` type (0-based `range`), with raw `byteRange`
+offsets and the human `rendered` text alongside:
+
+```console
+$ nixfmt --message-format=json --check . 2>&1 >/dev/null | jq -c .
+{"file":"config.nix","severity":"error","code":"E002",
+ "message":"unclosed delimiter '{'",
+ "range":{"start":{"line":4,"character":0},"end":{"line":4,"character":0}},
+ "byteRange":{"start":42,"end":42},
+ "help":"add closing '}'",
+ "relatedInformation":[{"message":"unclosed delimiter opened here",
+   "range":{"start":{"line":2,"character":8},"end":{"line":2,"character":9}},
+   "byteRange":{"start":18,"end":19}}],
+ "rendered":"Error[E002]: unclosed delimiter '{'\n   ┌─ config.nix:5:1\n..."}
+{"file":"ok.nix","severity":"warning","message":"not formatted"}
+```
+
+In this mode every line on stderr is JSON (parse errors, `--check`
+results, I/O failures), so wrappers can parse line-by-line without
+special-casing.
+
 ## Benchmarks
 
 `--check` over a full nixpkgs checkout (42 942 `.nix` files), AMD EPYC
