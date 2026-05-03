@@ -174,7 +174,7 @@ const fn param_attr_is_ellipsis(attr: &ParamAttr) -> bool {
 }
 
 fn parameter_separator(open: &Leaf, attrs: &[ParamAttr], close: &Leaf) -> DocE {
-    if open.span.start_line != close.span.start_line {
+    if open.span.start_line() != close.span.start_line() {
         return hardline();
     }
 

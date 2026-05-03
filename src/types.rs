@@ -13,10 +13,10 @@ pub type TokenText = compact_str::CompactString;
 /// far below 4 GiB, so the narrower offsets are not a practical limitation.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub struct Span {
-    pub start: u32,      // byte offset
-    pub end: u32,        // byte offset
-    pub start_line: u32, // line number (1-indexed)
-    pub end_line: u32,   // line number (1-indexed)
+    start: u32,      // byte offset
+    end: u32,        // byte offset
+    start_line: u32, // line number (1-indexed)
+    end_line: u32,   // line number (1-indexed)
 }
 
 impl Span {
@@ -51,6 +51,48 @@ impl Span {
             start_line: 1,
             end_line: 1,
         }
+    }
+
+    /// Start byte offset.
+    #[inline]
+    pub const fn start(self) -> usize {
+        self.start as usize
+    }
+
+    /// End byte offset (exclusive).
+    #[inline]
+    pub const fn end(self) -> usize {
+        self.end as usize
+    }
+
+    /// Line number of the start offset (1-indexed).
+    #[inline]
+    pub const fn start_line(self) -> usize {
+        self.start_line as usize
+    }
+
+    /// Line number of the end offset (1-indexed).
+    #[inline]
+    pub const fn end_line(self) -> usize {
+        self.end_line as usize
+    }
+
+    /// Length in bytes.
+    #[inline]
+    pub const fn len(self) -> usize {
+        (self.end - self.start) as usize
+    }
+
+    /// True iff the span covers zero bytes.
+    #[inline]
+    pub const fn is_empty(self) -> bool {
+        self.start == self.end
+    }
+
+    /// Byte range, suitable for slicing the source: `source[span.range()]`.
+    #[inline]
+    pub const fn range(self) -> std::ops::Range<usize> {
+        self.start as usize..self.end as usize
     }
 }
 

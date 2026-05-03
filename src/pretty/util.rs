@@ -100,7 +100,7 @@ pub(super) fn is_simple_expression(expr: &Expression) -> bool {
 /// line break between the delimiters. Shared by empty list / set / param-set.
 pub(super) fn push_empty_brackets(doc: &mut Doc, open: &Leaf, close: &Leaf) {
     open.pretty(doc);
-    if open.span.start_line == close.span.start_line {
+    if open.span.start_line() == close.span.start_line() {
         doc.hardspace();
     } else {
         doc.hardline();

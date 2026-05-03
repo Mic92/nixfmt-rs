@@ -21,9 +21,9 @@ pub(super) fn is_absorbable_term(term: &Term) -> bool {
         // https://github.com/NixOS/nixfmt/issues/253
         Term::Set {
             open, items, close, ..
-        } if items.0.is_empty() && open.span.start_line != close.span.start_line => true,
+        } if items.0.is_empty() && open.span.start_line() != close.span.start_line() => true,
         Term::List { open, items, close }
-            if items.0.is_empty() && open.span.start_line != close.span.start_line =>
+            if items.0.is_empty() && open.span.start_line() != close.span.start_line() =>
         {
             true
         }

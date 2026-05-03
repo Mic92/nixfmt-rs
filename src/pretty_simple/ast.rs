@@ -399,7 +399,7 @@ impl PrettySimple for SpanWrapper {
 
         w.write_plain("Pos ");
         let ctx = ErrorContext::new(w.source(), None);
-        let pos = ctx.position(self.0.start);
+        let pos = ctx.position(self.0.start());
         pos.line.format(w);
     }
 
