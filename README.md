@@ -9,8 +9,8 @@ A drop-in replacement for [nixfmt]: same binary name, same flags, **byte-identic
 
 - **Drop-in.** Verified byte-for-byte against `nixfmt` v1.2.0 across all of
   nixpkgs; swap the binary and nothing in your tree reformats.
-- **Fast.** Formats the entire nixpkgs checkout in under 2 s — ~130× the
-  Haskell implementation single-threaded ([benchmarks](#benchmarks)).
+- **Fast.** Formats the entire nixpkgs checkout in under 2 s — ~23× faster
+  than `nixfmt-tree` ([benchmarks](#benchmarks)).
 - **Embeddable.** Usable as a [Rust library](#library) (`#![forbid(unsafe_code)]`,
   two dependencies) or in the browser via the
   [WebAssembly build](https://mic92.github.io/nixfmt-rs/).
