@@ -100,11 +100,11 @@ impl Span {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Trivium {
     EmptyLine(),
-    LineComment(String),
+    LineComment(Box<str>),
     /// `BlockComment(is_doc`, lines)
     /// `is_doc` = true for /** */ comments
-    BlockComment(bool, Vec<String>),
-    LanguageAnnotation(String),
+    BlockComment(bool, Box<[Box<str>]>),
+    LanguageAnnotation(Box<str>),
 }
 
 /// Wrapper around a list of trivia items (comments/whitespace).
@@ -355,7 +355,7 @@ first_token_impl! { Expression;
 /// Haskell `convertTrailing`.
 impl From<&TrailingComment> for Trivium {
     fn from(tc: &TrailingComment) -> Self {
-        Self::LineComment(format!(" {}", tc.0))
+        Self::LineComment(format!(" {}", tc.0).into_boxed_str())
     }
 }
 
@@ -378,7 +378,7 @@ pub type Leaf = Ann<Token>;
 /// String parts - either text or interpolation
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum StringPart {
-    TextPart(String),
+    TextPart(Box<str>),
     Interpolation(Box<Whole<Expression>>),
 }
 

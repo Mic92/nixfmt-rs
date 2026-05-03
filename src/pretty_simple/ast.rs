@@ -39,6 +39,7 @@ simple_atom!(&str, |s, w| {
     w.write_colored("\"", STRING_QUOTE_COLOR);
 });
 simple_atom!(String, |s, w| s.as_str().format(w));
+simple_atom!(Box<str>, |s, w| (&**s).format(w));
 
 // isize / usize: number literals (pretty-simple's NumberLit)
 simple_atom!(isize, |n, w| w.write_colored(&n.to_string(), NUMBER_COLOR));
@@ -518,6 +519,32 @@ impl<A: PrettySimple, B: PrettySimple> PrettySimple for (A, B) {
 
     fn has_delimiters(&self) -> bool {
         true
+    }
+}
+
+/// `PrettySimple` for `Box<[T]>` — renders like a `Vec<T>` (sequence brackets).
+impl<T: PrettySimple> PrettySimple for Box<[T]> {
+    fn format<W: Writer>(&self, w: &mut W) {
+        format_bracket_list(w, self, true);
+    }
+
+    fn is_simple(&self) -> bool {
+        if self.is_empty() {
+            return true;
+        }
+        if self.len() == 1 {
+            let item = &self[0];
+            return item.is_atomic() || (item.is_simple() && item.has_delimiters());
+        }
+        false
+    }
+
+    fn has_delimiters(&self) -> bool {
+        true
+    }
+
+    fn is_empty(&self) -> bool {
+        <[T]>::is_empty(self)
     }
 }
 

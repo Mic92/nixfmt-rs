@@ -9,7 +9,7 @@ impl Pretty for StringPart {
     fn pretty(&self, doc: &mut Doc) {
         match self {
             Self::TextPart(s) => {
-                doc.text(s);
+                doc.text(&**s);
             }
             Self::Interpolation(whole) => {
                 let trailing_empty = whole.trailing_trivia.is_empty();
@@ -76,7 +76,7 @@ impl Pretty for Vec<StringPart> {
             [StringPart::TextPart(pre), StringPart::Interpolation(whole)]
                 if is_spaces(pre) && whole.trailing_trivia.is_empty() =>
             {
-                Some((pre.as_str(), &whole.value))
+                Some((&**pre, &whole.value))
             }
             _ => None,
         };
@@ -115,7 +115,7 @@ impl Pretty for Vec<StringPart> {
                         .take_while(|c| c.is_whitespace())
                         .collect::<String>(),
                 );
-                doc.text(t);
+                doc.text(&**t);
                 doc.offset(indentation, |d| {
                     for part in rest {
                         part.pretty(d);
