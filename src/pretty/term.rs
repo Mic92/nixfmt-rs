@@ -1,7 +1,4 @@
-use crate::predoc::{
-    Doc, DocE, Pretty, hardline, hardspace, line, line_prime, push_group, push_nested,
-    push_surrounded,
-};
+use crate::predoc::{Doc, DocE, Pretty, hardline, hardspace, line};
 use crate::types::{Ann, Binder, Expression, Item, Items, Leaf, Term, Token, Trivium};
 
 use super::absorb::{is_absorbable_expr, is_absorbable_term, push_absorb_expr};
@@ -63,8 +60,8 @@ pub(super) fn push_render_list(
         line()
     };
 
-    push_surrounded(doc, &vec![sur], |d| {
-        push_nested(d, |inner| {
+    doc.surrounded(&[sur], |d| {
+        d.nested(|inner| {
             open.trail_comment.pretty(inner);
             push_pretty_items_sep(inner, items, item_sep);
         });
@@ -85,7 +82,7 @@ pub(super) fn push_pretty_set(
     if items.0.is_empty() && is_lone_ann(open) && close.pre_trivia.is_empty() {
         if let Some(rec) = krec {
             rec.pretty(doc);
-            doc.push(hardspace());
+            doc.hardspace();
         }
         push_empty_brackets(doc, open, close);
         return;
@@ -93,7 +90,7 @@ pub(super) fn push_pretty_set(
 
     if let Some(rec) = krec {
         rec.pretty(doc);
-        doc.push(hardspace());
+        doc.hardspace();
     }
 
     open.without_trail().pretty(doc);
@@ -109,13 +106,13 @@ pub(super) fn push_pretty_set(
     let sep = if (!items.0.is_empty() && (wide == Width::Wide || starts_with_emptyline))
         || open.span.start_line != close.span.start_line
     {
-        vec![hardline()]
+        hardline()
     } else {
-        vec![line()]
+        line()
     };
 
-    push_surrounded(doc, &sep, |d| {
-        push_nested(d, |inner| {
+    doc.surrounded(&[sep], |d| {
+        d.nested(|inner| {
             open.trail_comment.pretty(inner);
             push_pretty_items(inner, items);
         });
@@ -137,7 +134,7 @@ fn push_pretty_items_sep<T: Pretty>(doc: &mut Doc, items: &Items<T>, sep: &DocE)
             let mut i = 0;
             while i < items.len() {
                 if i > 0 {
-                    doc.push(sep.clone());
+                    doc.push_raw(sep.clone());
                 }
 
                 // Special case: language annotation comment followed by string item
@@ -148,8 +145,8 @@ fn push_pretty_items_sep<T: Pretty>(doc: &mut Doc, items: &Items<T>, sep: &DocE)
                     && let Item::Item(string_item) = &items[i + 1]
                 {
                     Trivium::LanguageAnnotation(lang.clone()).pretty(doc);
-                    doc.push(hardspace());
-                    push_group(doc, |d| string_item.pretty(d));
+                    doc.hardspace();
+                    doc.group(|d| string_item.pretty(d));
                     i += 2;
                     continue;
                 }
@@ -166,7 +163,7 @@ fn push_pretty_items_sep<T: Pretty>(doc: &mut Doc, items: &Items<T>, sep: &DocE)
 pub(super) fn push_parenthesized_inner(doc: &mut Doc, expr: &Expression) {
     match expr {
         _ if is_absorbable_expr(expr) => {
-            push_group(doc, |inner| {
+            doc.group(|inner| {
                 push_absorb_expr(inner, Width::Regular, expr);
             });
         }
@@ -174,24 +171,24 @@ pub(super) fn push_parenthesized_inner(doc: &mut Doc, expr: &Expression) {
             push_pretty_app(doc, true, &[], true, expr);
         }
         Expression::Term(Term::Selection(term, _, _)) if is_absorbable_term(term) => {
-            doc.push(line_prime());
-            push_group(doc, |inner| {
+            doc.line_prime();
+            doc.group(|inner| {
                 expr.pretty(inner);
             });
-            doc.push(line_prime());
+            doc.line_prime();
         }
         Expression::Term(Term::Selection(_, _, _)) => {
-            push_group(doc, |inner| {
+            doc.group(|inner| {
                 expr.pretty(inner);
             });
-            doc.push(line_prime());
+            doc.line_prime();
         }
         _ => {
-            doc.push(line_prime());
-            push_group(doc, |inner| {
+            doc.line_prime();
+            doc.group(|inner| {
                 expr.pretty(inner);
             });
-            doc.push(line_prime());
+            doc.line_prime();
         }
     }
 }
@@ -207,9 +204,9 @@ pub(super) fn push_pretty_parenthesized(
     // moveTrailingCommentUp: a trailing comment on `(` becomes its own pre-trivia.
     open.pre_trivia.extend(trail);
 
-    push_group(doc, |g| {
+    doc.group(|g| {
         open.pretty(g);
-        push_nested(g, |nested| {
+        g.nested(|nested| {
             push_parenthesized_inner(nested, expr);
             close_pre.pretty(nested);
         });

@@ -1,7 +1,4 @@
-use crate::predoc::{
-    Doc, DocE, GroupAnn, Pretty, hardline, hardspace, line, push_group, push_group_ann,
-    push_nested, push_surrounded,
-};
+use crate::predoc::{Doc, DocE, GroupAnn, Pretty, hardline, line};
 use crate::types::{Binder, Expression, Items, Leaf, Parameter, Trivia, Trivium};
 
 use super::term::push_pretty_items;
@@ -12,20 +9,20 @@ use super::util::{Width, move_trailing_comment_up};
 pub(super) fn push_absorb_abs(doc: &mut Doc, depth: usize, expr: &Expression) {
     match expr {
         Expression::Abstraction(Parameter::ID(param), colon, body) => {
-            doc.push(hardspace());
+            doc.hardspace();
             param.pretty(doc);
             colon.pretty(doc);
             push_absorb_abs(doc, depth + 1, body);
         }
         _ if is_absorbable_expr(expr) => {
-            doc.push(hardspace());
-            push_group_ann(doc, GroupAnn::Priority, |priority_group| {
+            doc.hardspace();
+            doc.group_ann(GroupAnn::Priority, |priority_group| {
                 push_absorb_expr(priority_group, Width::Regular, expr);
             });
         }
         _ => {
             let separator = if depth <= 2 { line() } else { hardline() };
-            doc.push(separator);
+            doc.push_raw(separator);
             expr.pretty(doc);
         }
     }
@@ -67,16 +64,16 @@ pub(super) fn pretty_let(
     let moved_trivia: Trivia = moved_trivia_vec.into();
 
     // letPart = group $ pretty let_ <> hardline <> nest (renderItems hardline binders)
-    push_group(doc, |g| {
+    doc.group(|g| {
         let_kw.pretty(g);
-        g.push(hardline());
-        push_nested(g, |n| push_pretty_items(n, binders));
+        g.hardline();
+        g.nested(|n| push_pretty_items(n, binders));
     });
-    doc.push(hardline());
+    doc.hardline();
     // inPart = group $ pretty in_ <> hardline <> trivia <> pretty expr
-    push_group(doc, |g| {
+    doc.group(|g| {
         in_kw_clean.pretty(g);
-        g.push(hardline());
+        g.hardline();
         moved_trivia.pretty(g);
         expr.pretty(g);
     });
@@ -89,15 +86,15 @@ pub(super) fn pretty_with(
     semicolon: &Leaf,
     expr1: &Expression,
 ) {
-    push_group(doc, |g| {
+    doc.group(|g| {
         with.pretty(g);
-        g.push(hardspace());
-        push_nested(g, |n| {
-            push_group(n, |inner| expr0.pretty(inner));
+        g.hardspace();
+        g.nested(|n| {
+            n.group(|inner| expr0.pretty(inner));
         });
         semicolon.pretty(g);
     });
-    doc.push(line());
+    doc.line();
     expr1.pretty(doc);
 }
 
@@ -106,26 +103,26 @@ pub(super) fn pretty_with(
 pub(super) fn pretty_if(doc: &mut Doc, sep: DocE, expr: &Expression) {
     match expr {
         Expression::If(if_kw, cond, then_kw, expr0, else_kw, expr1) => {
-            push_group(doc, |g| {
+            doc.group(|g| {
                 if_kw.pretty(g);
-                g.push(line());
-                push_nested(g, |n| cond.pretty(n));
-                g.push(line());
+                g.line();
+                g.nested(|n| cond.pretty(n));
+                g.line();
                 then_kw.pretty(g);
             });
-            push_surrounded(doc, &vec![sep], |d| {
-                push_nested(d, |n| {
-                    push_group(n, |g| expr0.pretty(g));
+            doc.surrounded(&[sep], |d| {
+                d.nested(|n| {
+                    n.group(|g| expr0.pretty(g));
                 });
             });
             move_trailing_comment_up(else_kw).pretty(doc);
-            doc.push(hardspace());
+            doc.hardspace();
             pretty_if(doc, hardline(), expr1);
         }
         x => {
-            doc.push(line());
-            push_nested(doc, |n| {
-                push_group(n, |g| x.pretty(g));
+            doc.line();
+            doc.nested(|n| {
+                n.group(|g| x.pretty(g));
             });
         }
     }

@@ -1,7 +1,4 @@
-use crate::predoc::{
-    Doc, DocE, Pretty, hardline, hardspace, line, push_group, push_nested, push_sep_by,
-    push_trailing,
-};
+use crate::predoc::{Doc, DocE, Pretty, hardline, line};
 use crate::types::{
     Ann, Expression, Leaf, ParamAttr, Parameter, Selector, SimpleSelector, Term, Token,
     TrailingComment, Trivia,
@@ -19,8 +16,8 @@ impl Pretty for ParamAttr {
                     name.pretty(d);
 
                     if let Some((qmark, def)) = default.as_ref() {
-                        d.push(hardspace());
-                        push_nested(d, |inner| {
+                        d.hardspace();
+                        d.nested(|inner| {
                             qmark.pretty(inner);
                             push_absorb_rhs(inner, def);
                         });
@@ -32,7 +29,7 @@ impl Pretty for ParamAttr {
                 };
 
                 if has_default {
-                    push_group(doc, make_pretty);
+                    doc.group(make_pretty);
                 } else {
                     make_pretty(doc);
                 }
@@ -180,7 +177,7 @@ fn render_param_attrs(attrs: &[ParamAttr]) -> Vec<Doc> {
         .iter()
         .enumerate()
         .map(|(idx, attr)| {
-            let mut rendered = Vec::new();
+            let mut rendered = Doc::new();
             let is_last = idx + 1 == attrs.len();
 
             if is_last
@@ -188,7 +185,7 @@ fn render_param_attrs(attrs: &[ParamAttr]) -> Vec<Doc> {
                 && is_lone_ann(comma)
             {
                 ParamAttr::ParamAttr(name.clone(), default.clone(), None).pretty(&mut rendered);
-                push_trailing(&mut rendered, ",");
+                rendered.trailing(",");
                 return rendered;
             }
 
@@ -205,23 +202,21 @@ impl Pretty for Parameter {
             Self::Set(open, attrs, close) => {
                 let open = move_trailing_comment_up(open);
                 if attrs.is_empty() {
-                    push_group(doc, |doc| push_empty_brackets(doc, &open, close));
+                    doc.group(|doc| push_empty_brackets(doc, &open, close));
                     return;
                 }
 
                 let sep = parameter_separator(&open, attrs, close);
-                let sep_doc = vec![sep.clone()];
+                let sep_doc = [sep.clone()];
 
-                push_group(doc, |doc| {
+                doc.group(|doc| {
                     open.pretty(doc);
-                    doc.push(sep.clone());
-                    let sep_after = sep.clone();
-                    push_nested(doc, |inner| {
-                        let attr_docs = render_param_attrs(attrs);
-                        push_sep_by(inner, &sep_doc, attr_docs);
+                    doc.push_raw(sep.clone());
+                    doc.nested(|inner| {
+                        inner.sep_by(&sep_doc, render_param_attrs(attrs));
                     });
-                    doc.push(sep_after);
-                    push_nested(doc, |inner| close.pre_trivia.pretty(inner));
+                    doc.push_raw(sep);
+                    doc.nested(|inner| close.pre_trivia.pretty(inner));
                     close.without_pre().pretty(doc);
                 });
             }

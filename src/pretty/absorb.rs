@@ -1,7 +1,4 @@
-use crate::predoc::{
-    Doc, DocE, GroupAnn, Pretty, hardspace, line, line_prime, push_group, push_group_ann,
-    push_nested,
-};
+use crate::predoc::{Doc, DocE, GroupAnn, Pretty, hardspace, line};
 use crate::types::{Ann, Binder, Expression, Item, Parameter, Term, Token};
 
 use super::app::push_pretty_app;
@@ -78,14 +75,16 @@ pub(super) fn push_absorb_expr(doc: &mut Doc, width: Width, expr: &Expression) {
             let Expression::Term(t) = &**body else {
                 unreachable!()
             };
-            push_group_ann(doc, GroupAnn::RegularG, |g| {
-                g.push(line_prime());
+            doc.group_ann(GroupAnn::RegularG, |g| {
+                g.line_prime();
                 with_kw.pretty(g);
-                g.push(hardspace());
-                push_nested(g, |n| push_group(n, |gg| env.pretty(gg)));
+                g.hardspace();
+                g.nested(|n| {
+                    n.group(|gg| env.pretty(gg));
+                });
                 semicolon.pretty(g);
-                g.push(hardspace());
-                push_group_ann(g, GroupAnn::Priority, |pg| push_pretty_term_wide(pg, t));
+                g.hardspace();
+                g.group_ann(GroupAnn::Priority, |pg| push_pretty_term_wide(pg, t));
             });
         }
         _ => expr.pretty(doc),
@@ -94,9 +93,9 @@ pub(super) fn push_absorb_expr(doc: &mut Doc, width: Width, expr: &Expression) {
 
 /// `nest $ lead <> group …`
 fn push_nested_rhs(doc: &mut Doc, lead: DocE, f: impl FnOnce(&mut Doc)) {
-    push_nested(doc, |d| {
-        d.push(lead);
-        push_group(d, f);
+    doc.nested(|d| {
+        d.push_raw(lead);
+        d.group(f);
     });
 }
 
@@ -130,8 +129,8 @@ pub(super) fn push_absorb_rhs(doc: &mut Doc, expr: &Expression) {
         // Parenthesized expression: same special case as for the last argument of
         // a function call.
         Expression::Term(Term::Parenthesized(open, inner, close)) => {
-            push_nested(doc, |d| {
-                d.push(hardspace());
+            doc.nested(|d| {
+                d.hardspace();
                 push_absorb_paren(d, open, inner, close);
             });
         }
@@ -144,9 +143,9 @@ pub(super) fn push_absorb_rhs(doc: &mut Doc, expr: &Expression) {
 
         // Non-absorbable term: if multi-line, force it onto a new indented line.
         Expression::Term(_) => {
-            push_nested(doc, |d| {
-                push_group(d, |inner| {
-                    inner.push(line());
+            doc.nested(|d| {
+                d.group(|inner| {
+                    inner.line();
                     expr.pretty(inner);
                 });
             });
@@ -155,15 +154,15 @@ pub(super) fn push_absorb_rhs(doc: &mut Doc, expr: &Expression) {
         // Function call: absorb if all arguments except the last fit on the line,
         // start on a new line otherwise.
         Expression::Application(_, _) => {
-            push_nested(doc, |d| push_pretty_app(d, false, &[line()], false, expr));
+            doc.nested(|d| push_pretty_app(d, false, &[line()], false, expr));
         }
 
         // `with ...;` keeps the leading `line` inside the group so it can collapse
         // together with the body.
         Expression::With(_, _, _, _) => {
-            push_nested(doc, |d| {
-                push_group(d, |inner| {
-                    inner.push(line());
+            doc.nested(|d| {
+                d.group(|inner| {
+                    inner.line();
                     expr.pretty(inner);
                 });
             });
@@ -180,7 +179,7 @@ pub(super) fn push_absorb_rhs(doc: &mut Doc, expr: &Expression) {
                         if is_absorbable_term(t) && !term_first_token_has_pre_trivia(t)
                 ) =>
         {
-            doc.push(hardspace());
+            doc.hardspace();
             push_pretty_operation(doc, true, expr, op);
         }
 
@@ -194,15 +193,15 @@ pub(super) fn push_absorb_rhs(doc: &mut Doc, expr: &Expression) {
             let Expression::Term(t) = &**right else {
                 unreachable!()
             };
-            push_nested(doc, |d| {
-                push_group(d, |g| {
-                    g.push(line());
+            doc.nested(|d| {
+                d.group(|g| {
+                    g.line();
                     left.pretty(g);
-                    g.push(line());
-                    push_group_ann(g, GroupAnn::Transparent, |tg| {
+                    g.line();
+                    g.group_ann(GroupAnn::Transparent, |tg| {
                         op.pretty(tg);
-                        tg.push(hardspace());
-                        push_group_ann(tg, GroupAnn::Priority, |pg| {
+                        tg.hardspace();
+                        tg.group_ann(GroupAnn::Priority, |pg| {
                             push_pretty_term_wide(pg, t);
                         });
                     });
@@ -228,12 +227,12 @@ pub(super) fn push_absorb_paren(
     close: &Ann<Token>,
 ) {
     let (open, trail, close_pre, close) = split_paren_trivia(open, close);
-    push_group_ann(doc, GroupAnn::Priority, |g| {
-        push_nested(g, |outer| {
+    doc.group_ann(GroupAnn::Priority, |g| {
+        g.nested(|outer| {
             open.pretty(outer);
-            outer.push(line_prime());
-            push_group(outer, |inner| {
-                push_nested(inner, |body| {
+            outer.line_prime();
+            outer.group(|inner| {
+                inner.nested(|body| {
                     // Any trailing comment on `(` is moved down into the body,
                     // mirroring `mapFirstToken (\a -> a{preTrivia = post' <> preTrivia})`.
                     trail.pretty(body);
@@ -241,7 +240,7 @@ pub(super) fn push_absorb_paren(
                     close_pre.pretty(body);
                 });
             });
-            outer.push(line_prime());
+            outer.line_prime();
             close.pretty(outer);
         });
     });

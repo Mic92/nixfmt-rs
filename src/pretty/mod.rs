@@ -2,11 +2,7 @@
 //!
 //! Implements formatting rules from nixfmt's Pretty.hs
 
-use crate::predoc::{
-    Doc, GroupAnn, Pretty, emptyline, hardline, hardspace, line, line_prime, push_comment,
-    push_group, push_group_ann, push_hcat, push_nested, push_offset, push_sep_by, push_text,
-    push_trailing_comment, softline, softline_prime,
-};
+use crate::predoc::{Doc, GroupAnn, Pretty, hardline, line, line_prime};
 use crate::types::{
     Ann, Binder, Expression, Item, Parameter, Selector, SimpleSelector, Term, Token,
     TrailingComment, Trivia, Trivium, Whole,
@@ -33,40 +29,37 @@ use util::{Width, is_simple_selector, move_trailing_comment_up, pretty_ann_with}
 
 impl Pretty for TrailingComment {
     fn pretty(&self, doc: &mut Doc) {
-        doc.push(hardspace());
-        push_trailing_comment(doc, format!("# {}", self.0));
-        doc.push(hardline());
+        doc.hardspace()
+            .trailing_comment(format!("# {}", self.0))
+            .hardline();
     }
 }
 
 impl Pretty for Trivium {
     fn pretty(&self, doc: &mut Doc) {
         match self {
-            Self::EmptyLine() => doc.push(emptyline()),
+            Self::EmptyLine() => {
+                doc.emptyline();
+            }
             Self::LineComment(c) => {
-                push_comment(doc, format!("#{c}"));
-                doc.push(hardline());
+                doc.comment(format!("#{c}")).hardline();
             }
             Self::BlockComment(is_doc, lines) => {
-                push_comment(doc, if *is_doc { "/**" } else { "/*" });
-                doc.push(hardline());
+                doc.comment(if *is_doc { "/**" } else { "/*" }).hardline();
                 // Indent the comment using offset instead of nest
-                push_offset(doc, 2, |offset_doc| {
+                doc.offset(2, |offset_doc| {
                     for line in lines {
                         if line.is_empty() {
-                            offset_doc.push(emptyline());
+                            offset_doc.emptyline();
                         } else {
-                            push_comment(offset_doc, line);
-                            offset_doc.push(hardline());
+                            offset_doc.comment(line).hardline();
                         }
                     }
                 });
-                push_comment(doc, "*/");
-                doc.push(hardline());
+                doc.comment("*/").hardline();
             }
             Self::LanguageAnnotation(lang) => {
-                push_comment(doc, format!("/* {lang} */"));
-                doc.push(hardspace());
+                doc.comment(format!("/* {lang} */")).hardspace();
             }
         }
     }
@@ -86,7 +79,7 @@ impl Pretty for Trivia {
             return;
         }
 
-        doc.push(hardline());
+        doc.hardline();
         for trivium in self {
             trivium.pretty(doc);
         }
@@ -105,7 +98,9 @@ impl<T: Pretty> Pretty for Item<T> {
     fn pretty(&self, doc: &mut Doc) {
         match self {
             Self::Comments(trivia) => trivia.pretty(doc),
-            Self::Item(x) => push_group(doc, |d| x.pretty(d)),
+            Self::Item(x) => {
+                doc.group(|d| x.pretty(d));
+            }
         }
     }
 }
@@ -123,30 +118,30 @@ impl Pretty for Binder {
                     (hardline(), hardline())
                 };
 
-                push_group(doc, |d| {
+                doc.group(|d| {
                     inherit.pretty(d);
 
-                    let sep_doc = vec![sep.clone()];
+                    let sep_doc = [sep.clone()];
                     let finish_inherit = |nested: &mut Doc| {
                         if !ids.is_empty() {
-                            push_sep_by(nested, &sep_doc, ids.clone());
+                            nested.sep_by(&sep_doc, ids.iter().cloned());
                         }
-                        nested.push(nosep.clone());
+                        nested.push_raw(nosep.clone());
                         semicolon.pretty(nested);
                     };
 
                     match source {
                         None => {
-                            d.push(sep.clone());
-                            push_nested(d, finish_inherit);
+                            d.push_raw(sep.clone());
+                            d.nested(finish_inherit);
                         }
                         Some(src) => {
-                            push_nested(d, |nested| {
-                                push_group(nested, |g| {
-                                    g.push(line());
+                            d.nested(|nested| {
+                                nested.group(|g| {
+                                    g.line();
                                     src.pretty(g);
                                 });
-                                nested.push(sep);
+                                nested.push_raw(sep);
                                 finish_inherit(nested);
                             });
                         }
@@ -157,16 +152,16 @@ impl Pretty for Binder {
                 // Only allow a break after `=` when the key is long/dynamic;
                 // for short plain-id keys the extra line buys almost nothing.
                 let simple_lhs = selectors.len() <= 4 && selectors.iter().all(is_simple_selector);
-                push_group(doc, |d| {
-                    push_hcat(d, selectors.clone());
-                    push_nested(d, |inner| {
-                        inner.push(hardspace());
+                doc.group(|d| {
+                    d.hcat(selectors.iter().cloned());
+                    d.nested(|inner| {
+                        inner.hardspace();
                         assign.pretty(inner);
                         if simple_lhs {
                             push_absorb_rhs(inner, expr);
                         } else {
-                            inner.push(line_prime());
-                            push_group_ann(inner, GroupAnn::Priority, |g| {
+                            inner.line_prime();
+                            inner.group_ann(GroupAnn::Priority, |g| {
                                 push_absorb_rhs(g, expr);
                             });
                         }
@@ -181,10 +176,10 @@ impl Pretty for Binder {
 impl Pretty for Token {
     fn pretty(&self, doc: &mut Doc) {
         if let Self::EnvPath(s) = self {
-            push_text(doc, format!("<{s}>"));
+            doc.text(format!("<{s}>"));
             return;
         }
-        push_text(doc, self.text());
+        doc.text(self.text());
     }
 }
 
@@ -228,7 +223,7 @@ impl Pretty for Term {
                 push_pretty_parenthesized(doc, open, expr, close);
             }
             Self::List(open, items, close) => {
-                push_group(doc, |g| push_pretty_term_list(g, open, items, close));
+                doc.group(|g| push_pretty_term_list(g, open, items, close));
             }
             Self::Set(krec, open, binders, close) => {
                 push_pretty_set(doc, Width::Regular, krec.as_ref(), open, binders, close);
@@ -244,19 +239,25 @@ impl Pretty for Term {
                     Self::Token(Ann {
                         value: Token::Integer(_),
                         ..
-                    }) if !selectors.is_empty() => doc.push(hardspace()),
+                    }) if !selectors.is_empty() => {
+                        doc.hardspace();
+                    }
                     Self::Token(_) => {}
-                    Self::Parenthesized(_, _, _) => doc.push(softline_prime()),
-                    _ => doc.push(line_prime()),
+                    Self::Parenthesized(_, _, _) => {
+                        doc.softline_prime();
+                    }
+                    _ => {
+                        doc.line_prime();
+                    }
                 }
 
-                push_hcat(doc, selectors.clone());
+                doc.hcat(selectors.iter().cloned());
 
                 if let Some((or_kw, def)) = default {
-                    doc.push(softline());
-                    push_nested(doc, |inner| {
+                    doc.softline();
+                    doc.nested(|inner| {
                         or_kw.pretty(inner);
-                        inner.push(hardspace());
+                        inner.hardspace();
                         def.pretty(inner);
                     });
                 }
@@ -277,9 +278,9 @@ impl Pretty for Expression {
             }
             Self::MemberCheck(expr, question, selectors) => {
                 expr.pretty(doc);
-                doc.push(softline());
+                doc.softline();
                 question.pretty(doc);
-                doc.push(hardspace());
+                doc.hardspace();
                 for sel in selectors {
                     sel.pretty(doc);
                 }
@@ -310,20 +311,20 @@ impl Pretty for Expression {
                     ),
                     _ => unreachable!(),
                 };
-                push_group_ann(doc, GroupAnn::RegularG, |g| {
+                doc.group_ann(GroupAnn::RegularG, |g| {
                     pretty_if(g, line(), &expr_moved);
                 });
             }
             Self::Assert(assert_kw, cond, semicolon, expr) => {
                 // group $ prettyApp False mempty False (insertIntoApp (Term (Token assert)) cond)
                 //       <> ";" <> hardline <> pretty expr
-                push_group(doc, |g| {
+                doc.group(|g| {
                     let assert_term = Self::Term(Term::Token(assert_kw.clone()));
                     let (f, a) = insert_into_app(assert_term, (**cond).clone());
                     let app = Self::Application(Box::new(f), Box::new(a));
                     push_pretty_app(g, false, &[], false, &app);
                     semicolon.pretty(g);
-                    g.push(hardline());
+                    g.hardline();
                     expr.pretty(g);
                 });
             }
@@ -331,8 +332,8 @@ impl Pretty for Expression {
                 pretty_with(doc, with_kw, env, semicolon, expr);
             }
             Self::Abstraction(Parameter::ID(param), colon, body) => {
-                push_group(doc, |group_doc| {
-                    group_doc.push(line_prime());
+                doc.group(|group_doc| {
+                    group_doc.line_prime();
                     param.pretty(group_doc);
                     colon.pretty(group_doc);
                     push_absorb_abs(group_doc, 1, body);
@@ -341,13 +342,13 @@ impl Pretty for Expression {
             Self::Abstraction(param, colon, body) => {
                 param.pretty(doc);
                 colon.pretty(doc);
-                doc.push(line());
+                doc.line();
                 // Haskell `Abstraction` (set-param) clause: absorbable body
                 // gets `group (prettyTermWide t)`.
                 if let Self::Term(t) = &**body
                     && is_absorbable_term(t)
                 {
-                    push_group(doc, |g| push_pretty_term_wide(g, t));
+                    doc.group(|g| push_pretty_term_wide(g, t));
                     return;
                 }
                 body.pretty(doc);
@@ -358,7 +359,7 @@ impl Pretty for Expression {
 
 impl<T: Pretty> Pretty for Whole<T> {
     fn pretty(&self, doc: &mut Doc) {
-        push_group(doc, |doc| {
+        doc.group(|doc| {
             self.value.pretty(doc);
             self.trailing_trivia.pretty(doc);
         });

@@ -1,4 +1,4 @@
-use crate::predoc::{Doc, Pretty, hardline, hardspace};
+use crate::predoc::{Doc, Pretty};
 use crate::types::{
     Ann, Expression, FirstToken, Item, Items, Leaf, Selector, SimpleSelector, Term, Token, Trivia,
     Trivium,
@@ -99,9 +99,9 @@ pub(super) fn is_simple_expression(expr: &Expression) -> bool {
 pub(super) fn push_empty_brackets(doc: &mut Doc, open: &Leaf, close: &Leaf) {
     open.pretty(doc);
     if open.span.start_line == close.span.start_line {
-        doc.push(hardspace());
+        doc.hardspace();
     } else {
-        doc.push(hardline());
+        doc.hardline();
     }
     close.pretty(doc);
 }

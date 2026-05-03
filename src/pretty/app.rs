@@ -1,7 +1,4 @@
-use crate::predoc::{
-    Doc, DocE, GroupAnn, Pretty, hardline, hardspace, line, line_prime, push_group, push_group_ann,
-    push_nested, unexpand_spacing_prime,
-};
+use crate::predoc::{Doc, DocE, GroupAnn, Pretty, line, unexpand_spacing_prime};
 use crate::types::{Expression, FirstToken, Item, Parameter, Term, Token, Trivia};
 
 use super::absorb::{is_absorbable_term, push_absorb_paren};
@@ -59,7 +56,7 @@ fn strip_first_comment(expr: &Expression) -> Expression {
 /// Walk the function-call chain. Mirrors Haskell `absorbApp` (Pretty.hs).
 fn push_absorb_app(doc: &mut Doc, expr: &Expression, indent_function: bool, comment: &Trivia) {
     let recurse_head = |doc: &mut Doc, head: &Expression| {
-        push_group_ann(doc, GroupAnn::Transparent, |g| {
+        doc.group_ann(GroupAnn::Transparent, |g| {
             push_absorb_app(g, head, indent_function, comment);
         });
     };
@@ -71,9 +68,9 @@ fn push_absorb_app(doc: &mut Doc, expr: &Expression, indent_function: bool, comm
         if !comment.is_empty() {
             strip_first_comment(expr).pretty(doc);
         } else if indent_function {
-            push_nested(doc, |n| {
-                push_group(n, |g| {
-                    g.push(line_prime());
+            doc.nested(|n| {
+                n.group(|g| {
+                    g.line_prime();
                     expr.pretty(g);
                 });
             });
@@ -88,14 +85,14 @@ fn push_absorb_app(doc: &mut Doc, expr: &Expression, indent_function: bool, comm
         && let Expression::Application(f2, l1) = &**f
         && is_list_arg(l1)
     {
-        push_group_ann(doc, GroupAnn::Transparent, |outer| {
+        doc.group_ann(GroupAnn::Transparent, |outer| {
             recurse_head(outer, f2);
-            push_nested(outer, |n| {
-                push_group(n, |g| {
-                    g.push(line());
-                    push_group(g, |inner| push_absorb_inner(inner, l1));
-                    g.push(line());
-                    push_group(g, |inner| push_absorb_inner(inner, a));
+            outer.nested(|n| {
+                n.group(|g| {
+                    g.line();
+                    g.group(|inner| push_absorb_inner(inner, l1));
+                    g.line();
+                    g.group(|inner| push_absorb_inner(inner, a));
                 });
             });
         });
@@ -103,7 +100,7 @@ fn push_absorb_app(doc: &mut Doc, expr: &Expression, indent_function: bool, comm
     }
 
     recurse_head(doc, f);
-    doc.push(line());
+    doc.line();
     // Selections must not priority-expand: only the `.`-suffix would move,
     // which looks odd.
     let arg_ann = if is_selection_arg(a) {
@@ -111,14 +108,16 @@ fn push_absorb_app(doc: &mut Doc, expr: &Expression, indent_function: bool, comm
     } else {
         GroupAnn::Priority
     };
-    push_nested(doc, |n| {
-        push_group_ann(n, arg_ann, |g| push_absorb_inner(g, a));
+    doc.nested(|n| {
+        n.group_ann(arg_ann, |g| push_absorb_inner(g, a));
     });
 }
 
 /// `group' Priority $ nest …`
 fn push_priority_nest(doc: &mut Doc, f: impl FnOnce(&mut Doc)) {
-    push_group_ann(doc, GroupAnn::Priority, |g| push_nested(g, f));
+    doc.group_ann(GroupAnn::Priority, |g| {
+        g.nested(f);
+    });
 }
 
 /// Render the last argument of a function call. Mirrors Haskell `absorbLast`.
@@ -145,7 +144,7 @@ fn push_absorb_last(doc: &mut Doc, arg: &Expression) {
                 open.pretty(n);
                 name.pretty(n);
                 colon.pretty(n);
-                n.push(hardspace());
+                n.hardspace();
                 push_pretty_term_wide(n, body_term);
                 close.pretty(n);
             });
@@ -163,7 +162,7 @@ fn push_absorb_last(doc: &mut Doc, arg: &Expression) {
             return push_priority_nest(doc, |n| {
                 open.pretty(n);
                 ident.pretty(n);
-                n.push(hardspace());
+                n.hardspace();
                 push_pretty_term_wide(n, body_term);
                 close.pretty(n);
             });
@@ -171,7 +170,9 @@ fn push_absorb_last(doc: &mut Doc, arg: &Expression) {
         return push_absorb_paren(doc, open, inner, close);
     }
 
-    push_group(doc, |g| push_nested(g, |n| arg.pretty(n)));
+    doc.group(|g| {
+        g.nested(|n| arg.pretty(n));
+    });
 }
 
 /// Render function applications (Haskell `prettyApp indentFunction pre hasPost f a`).
@@ -190,7 +191,7 @@ pub(super) fn push_pretty_app(
 
     let post_hardline = |doc: &mut Doc| {
         if has_post && !comment.is_empty() {
-            doc.push(hardline());
+            doc.hardline();
         }
     };
 
@@ -202,25 +203,29 @@ pub(super) fn push_pretty_app(
         && let Expression::Application(f2, l1) = &**f
         && is_list_arg(l1)
     {
-        push_group(doc, |g| {
-            g.extend_from_slice(pre);
-            push_group_ann(g, GroupAnn::Transparent, |inner| {
+        doc.group(|g| {
+            g.0.extend_from_slice(pre);
+            g.group_ann(GroupAnn::Transparent, |inner| {
                 push_absorb_app(inner, f2, indent_function, &comment);
             });
-            g.push(line());
-            push_nested(g, |n| push_group(n, |gr| push_absorb_inner(gr, l1)));
-            g.push(line());
-            push_nested(g, |n| push_group(n, |gr| push_absorb_inner(gr, a)));
+            g.line();
+            g.nested(|n| {
+                n.group(|gr| push_absorb_inner(gr, l1));
+            });
+            g.line();
+            g.nested(|n| {
+                n.group(|gr| push_absorb_inner(gr, a));
+            });
             if has_post {
-                g.push(line_prime());
+                g.line_prime();
             }
         });
         post_hardline(doc);
         return;
     }
 
-    let mut rendered_f: Doc = pre.to_vec();
-    push_group_ann(&mut rendered_f, GroupAnn::Transparent, |g| {
+    let mut rendered_f = Doc::from(pre.to_vec());
+    rendered_f.group_ann(GroupAnn::Transparent, |g| {
         push_absorb_app(g, f, indent_function, &comment);
     });
 
@@ -228,21 +233,21 @@ pub(super) fn push_pretty_app(
     if is_simple_expression(expr)
         && let Some(unexpanded) = unexpand_spacing_prime(None, &rendered_f)
     {
-        push_group(doc, |g| {
+        doc.group(|g| {
             g.extend(unexpanded);
-            g.push(hardspace());
+            g.hardspace();
             push_absorb_last(g, a);
         });
         post_hardline(doc);
         return;
     }
 
-    push_group(doc, |g| {
+    doc.group(|g| {
         g.extend(rendered_f);
-        g.push(line());
+        g.line();
         push_absorb_last(g, a);
         if has_post {
-            g.push(line_prime());
+            g.line_prime();
         }
     });
     post_hardline(doc);

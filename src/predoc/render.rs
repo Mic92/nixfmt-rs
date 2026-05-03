@@ -74,7 +74,7 @@ const fn is_hard_spacing(elem: &DocE) -> bool {
 fn simplify_group(ann: GroupAnn, mut body: Doc) -> Doc {
     if body.len() == 1
         && matches!(&body[0], DocE::Group(a2, _) if ann == *a2)
-        && let Some(DocE::Group(_, inner)) = body.pop()
+        && let Some(DocE::Group(_, inner)) = body.0.pop()
     {
         return inner;
     }
@@ -135,7 +135,7 @@ fn unexpand_spacing(chain: &[&[DocE]]) -> Doc {
             }
         }
     }
-    result
+    Doc(result)
 }
 
 /// Cheap pre-check so `render_group` can skip the clone-heavy `priority_groups`
@@ -153,7 +153,7 @@ fn has_priority_groups(doc: &[DocE]) -> bool {
 /// - Merging consecutive spacings
 /// - Removing empty groups
 pub fn fixup(mut doc: Doc) -> Doc {
-    fixup_mut(&mut doc, 0, 0);
+    fixup_mut(&mut doc.0, 0, 0);
     doc
 }
 
@@ -177,8 +177,8 @@ fn split_liftable(ann: GroupAnn, mut body: Doc) -> GroupFixup {
     if pre_end == 0 && post_start == body.len() && !body.is_empty() {
         return GroupFixup::Keep(simplify_group(ann, body));
     }
-    let post = body.split_off(post_start);
-    let core = body.split_off(pre_end);
+    let post = Doc(body.0.split_off(post_start));
+    let core = Doc(body.0.split_off(pre_end));
     let pre = body;
     if core.is_empty() {
         GroupFixup::Dissolve { pre, post }
@@ -250,9 +250,9 @@ fn fixup_mut(doc: &mut Vec<DocE>, mut nest_acc: isize, mut offset_acc: isize) {
                 {
                     write_idx -= 1;
                     doc[write_idx] = HOLE;
-                    body.insert(0, DocE::Spacing(Spacing::Hardspace));
+                    body.0.insert(0, DocE::Spacing(Spacing::Hardspace));
                 }
-                fixup_mut(&mut body, nest_acc, offset_acc);
+                fixup_mut(&mut body.0, nest_acc, offset_acc);
 
                 match split_liftable(ann, body) {
                     GroupFixup::Keep(body) => {
@@ -287,7 +287,7 @@ fn fixup_mut(doc: &mut Vec<DocE>, mut nest_acc: isize, mut offset_acc: isize) {
                         {
                             let merged = merge_spacings(*prev, *first);
                             doc[write_idx - 1] = DocE::Spacing(merged);
-                            pre.remove(0);
+                            pre.0.remove(0);
                         }
                         let pre_len = pre.len();
                         // Finalise `pre ++ [Group ann core]` into the write
@@ -844,7 +844,7 @@ impl Renderer {
                 {
                     // Rebuilding the subgroup yields an owned element that
                     // `grp` must borrow, so recurse with it spliced in front.
-                    let owned = [DocE::Group(*ann, inner[1..].to_vec())];
+                    let owned = [DocE::Group(*ann, Doc(inner[1..].to_vec()))];
                     grp[0] = &grp[0][1..];
                     grp.insert(0, &owned);
                     return self.try_render_group(&grp, lookahead);
