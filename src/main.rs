@@ -22,7 +22,8 @@ Common flags:
   -w --width=INT        Maximum width in characters [default: 100]
      --indent=INT       Number of spaces to use for indentation [default: 2]
   -c --check            Check whether files are formatted without modifying them
-  -m --mergetool        Git mergetool mode (not implemented)
+  -m --mergetool        Git mergetool mode: format BASE/LOCAL/REMOTE, run
+                        'git merge-file', format and move result to MERGED
   -q --quiet            Do not report errors
   -s --strict           Enable a stricter formatting mode (accepted, currently no-op)
   -v --verify           Apply sanity checks on the output after formatting
@@ -47,7 +48,6 @@ struct Opts {
     ast: bool,
     ir: bool,
     parse_only: bool,
-    #[allow(dead_code)] // accepted for CLI parity; mergetool mode unimplemented
     mergetool: bool,
     filename: Option<String>,
     files: Vec<String>,
@@ -212,6 +212,10 @@ fn main() {
 
     let mut ok = true;
 
+    if o.mergetool {
+        exit(i32::from(!run_mergetool(&o)));
+    }
+
     let stdin_only = o.files.is_empty() || o.files.iter().all(|f| f == "-");
     if o.files.is_empty() && !o.quiet {
         eprintln!(
@@ -299,4 +303,81 @@ fn walk_and_process(o: &Opts, parallel: bool) -> bool {
         })
     });
     ok.load(Ordering::Relaxed)
+}
+
+/// `git mergetool` mode: pre-format the three input revisions, invoke
+/// `git merge-file`, format its output, then move it onto the MERGED path.
+fn run_mergetool(o: &Opts) -> bool {
+    let [base, local, remote, merged] = if let [b, l, r, m] = o.files.as_slice() {
+        [b.as_str(), l.as_str(), r.as_str(), m.as_str()]
+    } else {
+        if !o.quiet {
+            eprintln!(
+                "--mergetool mode expects exactly 4 file arguments ($BASE, $LOCAL, $REMOTE, $MERGED)"
+            );
+        }
+        return false;
+    };
+
+    if Path::new(merged)
+        .extension()
+        .is_none_or(|ext| !ext.eq_ignore_ascii_case("nix"))
+    {
+        if !o.quiet {
+            eprintln!("Skipping non-Nix file {merged}");
+        }
+        return false;
+    }
+
+    let pre_format = |label: &str, path: &str| -> bool {
+        if process_path(o, Path::new(path)) {
+            return true;
+        }
+        if !o.quiet {
+            eprintln!("pre-formatting the {label} version failed");
+        }
+        false
+    };
+
+    let mut ok = pre_format("base", base);
+    ok &= pre_format("local", local);
+    ok &= pre_format("remote", remote);
+    if !ok {
+        return false;
+    }
+
+    // git merge-file's nonzero exit is the conflict count, not an error;
+    // only spawn / signal failures are fatal here.
+    let status = match std::process::Command::new("git")
+        .args(["merge-file", local, base, remote])
+        .status()
+    {
+        Ok(s) => s,
+        Err(e) => {
+            if !o.quiet {
+                eprintln!("failed to run git merge-file: {e}");
+            }
+            return false;
+        }
+    };
+    if status.code().is_none() {
+        if !o.quiet {
+            eprintln!("git merge-file terminated by signal");
+        }
+        return false;
+    }
+
+    if !process_path(o, Path::new(local)) {
+        return false;
+    }
+
+    if let Err(e) = std::fs::rename(local, merged) {
+        if !o.quiet {
+            eprintln!("failed to move {local} to {merged}: {e}");
+        }
+        return false;
+    }
+
+    // Forward merge-file's status so `git mergetool` sees conflict count.
+    status.success()
 }

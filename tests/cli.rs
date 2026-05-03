@@ -363,6 +363,61 @@ fn unknown_long_flag_starting_with_w() {
 }
 
 #[test]
+fn mergetool_formats_and_merges_non_conflicting_change() {
+    let d = tempfile::tempdir().unwrap();
+    let base = tmpfile(&d, "base.nix", "{a=1;}\n");
+    let local = tmpfile(&d, "local.nix", "{a=1;b=2;}\n");
+    let remote = tmpfile(&d, "remote.nix", "{a=1;}\n");
+    let merged = d.path().join("merged.nix");
+    std::fs::write(&merged, "placeholder").unwrap();
+
+    let out = ours(
+        &[
+            "--mergetool",
+            base.to_str().unwrap(),
+            local.to_str().unwrap(),
+            remote.to_str().unwrap(),
+            merged.to_str().unwrap(),
+        ],
+        None,
+    );
+    assert!(
+        out.status.success(),
+        "stderr={:?}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    let result = std::fs::read_to_string(&merged).unwrap();
+    assert_eq!(result, "{\n  a = 1;\n  b = 2;\n}\n");
+    assert!(!local.exists(), "LOCAL should be renamed onto MERGED");
+}
+
+#[test]
+fn mergetool_rejects_non_nix_merged() {
+    let d = tempfile::tempdir().unwrap();
+    let base = tmpfile(&d, "base.nix", "{}\n");
+    let local = tmpfile(&d, "local.nix", "{}\n");
+    let remote = tmpfile(&d, "remote.nix", "{}\n");
+    let merged = tmpfile(&d, "merged.txt", "");
+
+    let out = ours(
+        &[
+            "--mergetool",
+            base.to_str().unwrap(),
+            local.to_str().unwrap(),
+            remote.to_str().unwrap(),
+            merged.to_str().unwrap(),
+        ],
+        None,
+    );
+    assert_eq!(out.status.code(), Some(1));
+    let stderr = String::from_utf8_lossy(&out.stderr);
+    assert!(
+        stderr.contains("Skipping non-Nix file"),
+        "stderr={stderr:?}"
+    );
+}
+
+#[test]
 fn unknown_flag_exits_1() {
     let out = ours(&["--bogus"], None);
     assert_eq!(out.status.code(), Some(1));

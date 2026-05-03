@@ -2,6 +2,7 @@
   lib,
   stdenv,
   rustPlatform,
+  git,
   nixfmt,
 }:
 rustPlatform.buildRustPackage {
@@ -13,7 +14,8 @@ rustPlatform.buildRustPackage {
   # output, so it must be on PATH during checkPhase. Pass `nixfmt = null`
   # (e.g. from pkgsStatic) to skip the suite where the reference can't build.
   doCheck = nixfmt != null;
-  nativeCheckInputs = lib.optional (nixfmt != null) nixfmt;
+  # `git` is required by the --mergetool tests.
+  nativeCheckInputs = lib.optional (nixfmt != null) nixfmt ++ [ git ];
   # The binary is named `nixfmt` (see Cargo.toml [[bin]]), not the pname.
   # Without this, lib.getExe guesses `nixfmt-rs` and treefmt-nix breaks.
   meta.mainProgram = "nixfmt";
