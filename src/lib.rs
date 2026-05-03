@@ -168,8 +168,7 @@ pub fn format_ir(source: &str) -> Result<String> {
 #[must_use]
 pub fn format_error(source: &str, filename: Option<&str>, error: &ParseError) -> String {
     let context = error::context::ErrorContext::new(source, filename);
-    let formatter = error::format::ErrorFormatter::new(&context);
-    formatter.format(error)
+    format!("{}", error::format::render(&context, error))
 }
 
 // Include test modules
