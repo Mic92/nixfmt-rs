@@ -35,7 +35,7 @@ Common flags:
      --message-format=FMT
                         How to render diagnostics: 'human' (default) or 'json'
                         (one JSON object per line on stderr, LSP Diagnostic shape)
-  -? --help             Display help message
+  -h -? --help          Display help message
   -V --version          Print version information
      --numeric-version  Print just the version number
 ";
@@ -59,73 +59,53 @@ struct Opts {
     files: Vec<String>,
 }
 
-fn parse_args() -> Result<Opts, String> {
+fn parse_args() -> Result<Opts, lexopt::Error> {
+    use lexopt::prelude::*;
     let mut o = Opts {
         width: 100,
         indent: 2,
         ..Opts::default()
     };
-    let mut args = std::env::args().skip(1);
-    while let Some(arg) = args.next() {
-        let (flag, inline) = match arg.split_once('=') {
-            Some((f, v)) => (f.to_string(), Some(v.to_string())),
-            None => (arg.clone(), None),
-        };
-        let mut value = |name: &str| -> Result<String, String> {
-            if let Some(v) = inline.clone() {
-                return Ok(v);
-            }
-            args.next()
-                .ok_or_else(|| format!("Missing value for flag: {name}"))
-        };
-        let mut int = |name: &str| -> Result<usize, String> {
-            value(name)?
-                .parse()
-                .map_err(|_| format!("Invalid integer for {name}"))
-        };
-        match flag.as_str() {
-            "-?" | "--help" => {
+    let mut p = lexopt::Parser::from_env();
+    while let Some(arg) = p.next()? {
+        match arg {
+            Short('h' | '?') | Long("help") => {
                 print!("{HELP}");
                 exit(0);
             }
-            "-V" | "--version" => {
+            Short('V') | Long("version") => {
                 println!("nixfmt-rs {VERSION}");
                 exit(0);
             }
-            "--numeric-version" => {
+            Long("numeric-version") => {
                 println!("{VERSION}");
                 exit(0);
             }
-            "-w" | "--width" => o.width = int("--width")?,
-            "--indent" => o.indent = int("--indent")?,
-            "-c" | "--check" => o.check = true,
-            "-q" | "--quiet" => o.quiet = true,
-            "-s" | "--strict" => o.strict = true,
-            "-v" | "--verify" => o.verify = true,
-            "-a" | "--ast" => o.ast = true,
-            "--ir" => o.ir = true,
-            "--parse-only" => o.parse_only = true,
-            "-m" | "--mergetool" => o.mergetool = true,
-            "--message-format" => {
-                let v = value("--message-format")?;
+            Short('w') | Long("width") => o.width = p.value()?.parse()?,
+            Long("indent") => o.indent = p.value()?.parse()?,
+            Short('c') | Long("check") => o.check = true,
+            Short('q') | Long("quiet") => o.quiet = true,
+            Short('s') | Long("strict") => o.strict = true,
+            Short('v') | Long("verify") => o.verify = true,
+            Short('a') | Long("ast") => o.ast = true,
+            Long("ir") => o.ir = true,
+            Long("parse-only") => o.parse_only = true,
+            Short('m') | Long("mergetool") => o.mergetool = true,
+            Long("message-format") => {
+                let v = p.value()?.string()?;
                 o.json_diagnostics = match v.as_str() {
                     "human" => false,
                     "json" => true,
-                    other => return Err(format!("Unknown --message-format: {other}")),
+                    other => {
+                        return Err(lexopt::Error::Custom(
+                            format!("Unknown --message-format: {other}").into(),
+                        ));
+                    }
                 };
             }
-            "-f" | "--filename" => o.filename = Some(value("--filename")?),
-            "--" => {
-                o.files.extend(args.by_ref());
-            }
-            s if s.starts_with("-w") && !s.starts_with("--") && s.len() > 2 => {
-                o.width = s[2..]
-                    .parse()
-                    .map_err(|_| "Invalid integer for --width".to_string())?;
-            }
-            "-" => o.files.push("-".to_string()),
-            s if s.starts_with('-') => return Err(format!("Unknown flag: {s}")),
-            _ => o.files.push(arg),
+            Short('f') | Long("filename") => o.filename = Some(p.value()?.string()?),
+            Value(path) => o.files.push(path.string()?),
+            _ => return Err(arg.unexpected()),
         }
     }
     Ok(o)

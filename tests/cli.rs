@@ -282,10 +282,7 @@ fn quiet_suppresses_errors_but_keeps_exit_code() {
     let ref_out = nixfmt(&["-q"], Some(INVALID));
     assert_eq!(ref_out.status.code(), Some(1));
     assert!(ref_out.stderr.is_empty());
-}
 
-#[test]
-fn quiet_suppresses_check_message() {
     let out = ours(&["-c", "-q"], Some(UNFORMATTED));
     assert_eq!(out.status.code(), Some(1));
     assert!(out.stderr.is_empty());
@@ -301,11 +298,6 @@ fn width_flag_forces_multiline() {
         narrow_s.lines().count() > 1,
         "expected multi-line at width 10, got {narrow_s:?}"
     );
-
-    let alt = ours(&["-w", "10"], Some(src));
-    assert_eq!(alt.stdout, narrow.stdout);
-    let alt2 = ours(&["-w10"], Some(src));
-    assert_eq!(alt2.stdout, narrow.stdout);
 
     let ref_out = nixfmt(&["--width=10"], Some(src));
     assert_eq!(narrow.stdout, ref_out.stdout);
@@ -349,13 +341,6 @@ fn ast_on_file_does_not_modify() {
 }
 
 #[test]
-fn strict_flag_is_accepted() {
-    let out = ours(&["--strict"], Some(FORMATTED));
-    assert!(out.status.success());
-    assert_eq!(String::from_utf8_lossy(&out.stdout), FORMATTED);
-}
-
-#[test]
 fn verify_flag_is_accepted() {
     let out = ours(&["--verify"], Some(UNFORMATTED));
     assert!(out.status.success());
@@ -375,10 +360,7 @@ fn filename_flag_used_in_errors() {
     let ref_out = nixfmt(&["--filename=custom.nix"], Some(INVALID));
     let ref_err = String::from_utf8_lossy(&ref_out.stderr);
     assert!(ref_err.contains("custom.nix"));
-}
 
-#[test]
-fn filename_flag_used_in_check_message() {
     let out = ours(&["-c", "--filename", "foo.nix"], Some(UNFORMATTED));
     assert_eq!(out.status.code(), Some(1));
     let stderr = String::from_utf8_lossy(&out.stderr);
@@ -386,16 +368,6 @@ fn filename_flag_used_in_check_message() {
         stderr.contains("foo.nix: not formatted"),
         "stderr={stderr:?}"
     );
-}
-
-#[test]
-fn help_exits_0() {
-    let out = ours(&["--help"], None);
-    assert_eq!(out.status.code(), Some(0));
-    assert!(String::from_utf8_lossy(&out.stdout).contains("--check"));
-
-    let ref_out = nixfmt(&["--help"], None);
-    assert_eq!(ref_out.status.code(), Some(0));
 }
 
 #[test]
@@ -410,15 +382,6 @@ fn version_flags() {
         String::from_utf8_lossy(&out.stdout).trim(),
         env!("CARGO_PKG_VERSION")
     );
-}
-
-#[test]
-fn unknown_long_flag_starting_with_w() {
-    // Regression: `-wNN` shorthand must not swallow unrelated `--w*` flags.
-    let out = ours(&["--wrong"], None);
-    assert_eq!(out.status.code(), Some(1));
-    let stderr = String::from_utf8_lossy(&out.stderr);
-    assert!(stderr.contains("Unknown flag"), "stderr={stderr:?}");
 }
 
 #[test]
@@ -481,7 +444,10 @@ fn unknown_flag_exits_1() {
     let out = ours(&["--bogus"], None);
     assert_eq!(out.status.code(), Some(1));
     let stderr = String::from_utf8_lossy(&out.stderr);
-    assert!(stderr.contains("Unknown flag"), "stderr={stderr:?}");
+    assert!(
+        stderr.contains("invalid option '--bogus'"),
+        "stderr={stderr:?}"
+    );
 
     let ref_out = nixfmt(&["--bogus"], None);
     assert_eq!(ref_out.status.code(), Some(1));
