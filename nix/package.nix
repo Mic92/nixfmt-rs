@@ -41,9 +41,16 @@ rustPlatform.buildRustPackage {
 
   doInstallCheck = true;
   nativeInstallCheckInputs = [ versionCheckHook ];
-  # The binary is named `nixfmt` (see Cargo.toml [[bin]]), not the pname.
-  # Without this, lib.getExe guesses `nixfmt-rs` and treefmt-nix breaks.
-  meta.mainProgram = "nixfmt";
+  meta = {
+    description = "Rust implementation of nixfmt with exact Haskell compatibility";
+    homepage = "https://github.com/Mic92/nixfmt-rs";
+    changelog = "https://github.com/Mic92/nixfmt-rs/releases";
+    license = lib.licenses.mpl20;
+    maintainers = with lib.maintainers; [ mic92 ];
+    # The binary is named `nixfmt` (see Cargo.toml [[bin]]), not the pname.
+    # Without this, lib.getExe guesses `nixfmt-rs` and treefmt-nix breaks.
+    mainProgram = "nixfmt";
+  };
 
   # Reproducibility: buildRustPackage does not yet remap $NIX_BUILD_TOP, so
   # panic-location strings from vendored crates leak the per-build sandbox
