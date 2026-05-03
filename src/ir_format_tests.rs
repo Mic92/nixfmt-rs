@@ -135,4 +135,17 @@ oracle_tests! {
         "{ a\n# comment\n, b }: a",
         "{ a\n# comment\n, ... }: a",
     ],
+
+    // Multi-line string literals embed '\n' inside a single Text element.
+    // Continuation lines must keep the IR-tree indentation; previously they
+    // collapsed to column 0, drifting from the reference --ir output.
+    test_simple_string_with_embedded_newline => [
+        "{ x = \"\n  hello\n\"; }",
+        "{ start = \"\n  ${pkgs.foo}/bin/run\n\"; }",
+    ],
+
+    // Indented strings with embedded newlines exercise the same path.
+    test_indented_string_with_embedded_newline => [
+        "{ s = ''\n  line one\n  line two\n''; }",
+    ],
 }
