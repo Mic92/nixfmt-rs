@@ -367,30 +367,30 @@ impl Lexer {
                     path.push(self.advance().unwrap());
                 }
                 _ => {
-                    return Err(Box::new(crate::error::ParseError {
+                    return Err(crate::error::ParseError {
                         span: self.current_pos(),
                         kind: crate::error::ErrorKind::InvalidSyntax {
                             description: format!("invalid character '{ch}' in path"),
                             hint: Some("paths can only contain alphanumeric characters, '.', '_', '-', and '/'".to_string()),
                         },
-                    }))
+                    })
                 }
             }
         }
 
-        Err(Box::new(crate::error::ParseError {
+        Err(crate::error::ParseError {
             span: self.current_pos(),
             kind: crate::error::ErrorKind::UnclosedDelimiter {
                 delimiter: '<',
                 opening_span,
             },
-        }))
+        })
     }
 
     /// Build an `UnexpectedToken` error at the current cursor.
     #[cold]
     fn err_unexpected<T>(&self, expected: &[&str], found: &str) -> crate::error::Result<T> {
-        Err(Box::new(crate::error::ParseError {
+        Err(crate::error::ParseError {
             span: self.current_pos(),
             kind: crate::error::ErrorKind::UnexpectedToken {
                 expected: expected
@@ -399,7 +399,7 @@ impl Lexer {
                     .collect(),
                 found: found.to_string(),
             },
-        }))
+        })
     }
 
     /// Helper for two-character tokens: advance and check if next char matches

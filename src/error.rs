@@ -13,56 +13,53 @@ pub struct ParseError {
     pub(crate) kind: ErrorKind,
 }
 
-#[allow(clippy::unnecessary_box_returns)] // returned straight into Result<_, Box<ParseError>>
 impl ParseError {
     pub(crate) fn unexpected(
         span: Span,
         expected: impl Into<Vec<String>>,
         found: impl Into<String>,
-    ) -> Box<Self> {
-        Box::new(Self {
+    ) -> Self {
+        Self {
             span,
             kind: ErrorKind::UnexpectedToken {
                 expected: expected.into(),
                 found: found.into(),
             },
-        })
+        }
     }
 
     pub(crate) fn invalid(
         span: Span,
         description: impl Into<String>,
         hint: Option<String>,
-    ) -> Box<Self> {
-        Box::new(Self {
+    ) -> Self {
+        Self {
             span,
             kind: ErrorKind::InvalidSyntax {
                 description: description.into(),
                 hint,
             },
-        })
+        }
     }
 
-    #[must_use]
-    pub(crate) fn unclosed(span: Span, delimiter: char, opening_span: Span) -> Box<Self> {
-        Box::new(Self {
+    pub(crate) const fn unclosed(span: Span, delimiter: char, opening_span: Span) -> Self {
+        Self {
             span,
             kind: ErrorKind::UnclosedDelimiter {
                 delimiter,
                 opening_span,
             },
-        })
+        }
     }
 
-    #[must_use]
-    pub(crate) fn missing(span: Span, token: &str, after: &str) -> Box<Self> {
-        Box::new(Self {
+    pub(crate) fn missing(span: Span, token: &str, after: &str) -> Self {
+        Self {
             span,
             kind: ErrorKind::MissingToken {
                 token: token.into(),
                 after: after.into(),
             },
-        })
+        }
     }
 
     /// Get the primary message for this error
@@ -214,8 +211,4 @@ pub enum ErrorKind {
 }
 
 /// Convenience alias for `Result<T, ParseError>`.
-///
-/// Boxed so the error variant stays pointer-sized; parse functions return
-/// large `Ok` payloads and a wide error would otherwise bloat every `Result`
-/// (and the `memmove`s threading them through the recursive descent).
-pub type Result<T> = std::result::Result<T, Box<ParseError>>;
+pub type Result<T> = std::result::Result<T, ParseError>;
