@@ -46,7 +46,7 @@ impl Parser {
                     _ => {
                         let text = p.parse_simple_string_part();
                         if !text.is_empty() {
-                            parts.push(StringPart::TextPart(text));
+                            parts.push(StringPart::TextPart(text.into_boxed_str()));
                         }
                     }
                 }
@@ -230,7 +230,7 @@ impl Parser {
                 _ => {
                     let text = self.parse_indented_string_part();
                     if !text.is_empty() {
-                        parts.push(StringPart::TextPart(text));
+                        parts.push(StringPart::TextPart(text.into_boxed_str()));
                     }
                 }
             }
@@ -304,9 +304,10 @@ impl Parser {
         // through `lexeme()`, which classified that comment as `trail_comment`;
         // re-queue it as leading trivia so it is not dropped.
         if let Some(tc) = open.trail_comment.take() {
-            self.lexer
-                .trivia_buffer
-                .insert(0, Trivium::LineComment(format!(" {}", tc.0)));
+            self.lexer.trivia_buffer.insert(
+                0,
+                Trivium::LineComment(format!(" {}", tc.0).into_boxed_str()),
+            );
         }
         self.advance()?;
 
@@ -387,7 +388,9 @@ fn classify_indented_string(ann: Ann<Vec<Vec<StringPart>>>) -> Term {
         .map(|line| {
             line.into_iter()
                 .map(|part| match part {
-                    StringPart::TextPart(t) => StringPart::TextPart(convert_escapes(&t)),
+                    StringPart::TextPart(t) => {
+                        StringPart::TextPart(convert_escapes(&t).into_boxed_str())
+                    }
                     interp @ StringPart::Interpolation(_) => interp,
                 })
                 .collect()
@@ -423,19 +426,19 @@ fn split_on_newlines(parts: Vec<StringPart>) -> Vec<Vec<StringPart>> {
     for part in parts {
         match part {
             StringPart::TextPart(text) => {
-                let mut remaining = text.as_str();
+                let mut remaining: &str = &text;
                 loop {
                     if let Some(pos) = remaining.find('\n') {
                         let segment = &remaining[..pos];
                         if !segment.is_empty() {
-                            current.push(StringPart::TextPart(segment.to_string()));
+                            current.push(StringPart::TextPart(segment.into()));
                         }
                         result.push(current);
                         current = Vec::new();
                         remaining = &remaining[pos + 1..];
                     } else {
                         if !remaining.is_empty() {
-                            current.push(StringPart::TextPart(remaining.to_string()));
+                            current.push(StringPart::TextPart(remaining.into()));
                         }
                         break;
                     }
@@ -459,7 +462,9 @@ fn merge_adjacent_text(line: Vec<StringPart>) -> Vec<StringPart> {
                     continue;
                 }
                 if let Some(StringPart::TextPart(existing)) = result.last_mut() {
-                    existing.push_str(&text);
+                    let mut combined = String::from(std::mem::take(existing));
+                    combined.push_str(&text);
+                    *existing = combined.into_boxed_str();
                 } else {
                     result.push(StringPart::TextPart(text));
                 }
@@ -529,7 +534,7 @@ fn line_prefix(line: &[StringPart]) -> Option<String> {
             if line.len() == 1 && is_only_spaces(text) {
                 None
             } else {
-                Some(text.clone())
+                Some(text.to_string())
             }
         }
         Some(StringPart::Interpolation(_)) => Some(String::new()),
@@ -560,7 +565,7 @@ fn strip_prefix_from_line(prefix: &str, mut line: Vec<StringPart>) -> Vec<String
     let single = line.len() == 1;
     if let Some(StringPart::TextPart(text)) = line.first_mut() {
         if let Some(stripped) = text.strip_prefix(prefix) {
-            *text = stripped.to_string();
+            *text = stripped.into();
         } else if single && is_only_spaces(text) {
             return Vec::new();
         }

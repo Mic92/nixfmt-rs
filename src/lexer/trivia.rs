@@ -56,17 +56,22 @@ pub(super) fn convert_leading(pts: &[ParseTrivium]) -> Trivia {
 
                     match other {
                         ParseTrivium::LineComment { text, .. } => {
-                            acc.push(Trivium::LineComment(text.clone()));
+                            acc.push(Trivium::LineComment(text.clone().into_boxed_str()));
                         }
                         ParseTrivium::BlockComment(_, lines) if lines.is_empty() => {}
                         ParseTrivium::BlockComment(false, lines) if lines.len() == 1 => {
-                            acc.push(Trivium::LineComment(format!(" {}", lines[0].trim())));
+                            acc.push(Trivium::LineComment(
+                                format!(" {}", lines[0].trim()).into_boxed_str(),
+                            ));
                         }
                         ParseTrivium::BlockComment(is_doc, lines) => {
-                            acc.push(Trivium::BlockComment(*is_doc, lines.clone()));
+                            acc.push(Trivium::BlockComment(
+                                *is_doc,
+                                lines.iter().cloned().map(String::into_boxed_str).collect(),
+                            ));
                         }
                         ParseTrivium::LanguageAnnotation(text) => {
-                            acc.push(Trivium::LanguageAnnotation(text.clone()));
+                            acc.push(Trivium::LanguageAnnotation(text.clone().into_boxed_str()));
                         }
                         ParseTrivium::Newlines(_) => unreachable!(),
                     }

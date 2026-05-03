@@ -148,7 +148,7 @@ fn test_lexeme_with_comments() {
     let brace = lexer.lexeme().unwrap();
     assert!(matches!(brace.value, Token::TBraceOpen));
     assert_eq!(brace.pre_trivia.len(), 1); // Should have the leading comment
-    assert!(matches!(&brace.pre_trivia[0], Trivium::LineComment(s) if s == " leading comment"));
+    assert!(matches!(&brace.pre_trivia[0], Trivium::LineComment(s) if &**s == " leading comment"));
 
     // Second token: a
     let ident = lexer.lexeme().unwrap();

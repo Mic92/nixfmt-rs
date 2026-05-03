@@ -39,9 +39,11 @@ fn is_path_char(c: char) -> bool {
 /// one part so the formatter sees the literal source slice.
 fn push_path_text(parts: &mut Vec<StringPart>, s: &str) {
     if let Some(StringPart::TextPart(last)) = parts.last_mut() {
-        last.push_str(s);
+        let mut combined = String::from(std::mem::take(last));
+        combined.push_str(s);
+        *last = combined.into_boxed_str();
     } else {
-        parts.push(StringPart::TextPart(s.to_owned()));
+        parts.push(StringPart::TextPart(s.into()));
     }
 }
 
@@ -74,7 +76,9 @@ impl Parser {
             // tail must be read as raw chars so `a/b` is one path, not `a / b`.
             match &p.current.value {
                 // e.g. common/file.nix, foo-bar/baz.nix
-                Token::Identifier(ident) => parts.push(StringPart::TextPart(ident.to_string())),
+                Token::Identifier(ident) => {
+                    parts.push(StringPart::TextPart(ident.as_str().into()));
+                }
                 // ./ or ../ — the following `/` is consumed by the tail loop.
                 Token::TDot if p.lexer.peek() == Some('.') => {
                     p.lexer.advance();
@@ -155,7 +159,7 @@ impl Parser {
                 }
             }
 
-            Ok(vec![vec![StringPart::TextPart(uri_text.to_string())]])
+            Ok(vec![vec![StringPart::TextPart(uri_text.as_str().into())]])
         })?;
 
         Ok(Term::SimpleString(ann))

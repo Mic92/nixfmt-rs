@@ -52,7 +52,7 @@ impl Pretty for Trivium {
                         if line.is_empty() {
                             offset_doc.emptyline();
                         } else {
-                            offset_doc.comment(line).hardline();
+                            offset_doc.comment(&**line).hardline();
                         }
                     }
                 });
