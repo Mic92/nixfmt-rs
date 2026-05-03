@@ -9,8 +9,8 @@ A drop-in replacement for [nixfmt]: same binary name, same flags, **byte-identic
 
 - **Drop-in.** Verified byte-for-byte against `nixfmt` v1.2.0 across all of
   nixpkgs; swap the binary and nothing in your tree reformats.
-- **Fast.** Formats the entire nixpkgs checkout in under 2 s — ~130× the
-  Haskell implementation single-threaded ([benchmarks](#benchmarks)).
+- **Fast.** Formats the entire nixpkgs checkout in under 2 s — ~23× faster
+  than `nixfmt-tree` ([benchmarks](#benchmarks)).
 - **Embeddable.** Usable as a [Rust library](#library) (`#![forbid(unsafe_code)]`,
   two dependencies) or in the browser via the
   [WebAssembly build](https://mic92.github.io/nixfmt-rs/).
@@ -245,7 +245,6 @@ so every file is actually processed:
 | `nixfmt-rs --check .`             | **1.68 s** | 9.34 s    | 1.00×        |
 | `treefmt` driving nixfmt-rs       | 3.35 s     | 10.14 s   | 1.99×        |
 | `nixfmt-tree` (treefmt + Haskell) | 38.89 s    | 216.2 s   | 23.2×        |
-| `nixfmt --check .` (Haskell)      | 220.67 s   | 214.4 s   | 131×         |
 
 Single large file (`all-packages.nix`, ~12 k lines): 36.8 ms vs 762.7 ms
 (20.7×).
