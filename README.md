@@ -245,7 +245,6 @@ so every file is actually processed:
 | `nixfmt-rs --check .`             | **1.68 s** | 9.34 s    | 1.00×        |
 | `treefmt` driving nixfmt-rs       | 3.35 s     | 10.14 s   | 1.99×        |
 | `nixfmt-tree` (treefmt + Haskell) | 38.89 s    | 216.2 s   | 23.2×        |
-| `nixfmt --check .` (Haskell)      | 220.67 s   | 214.4 s   | 131×         |
 
 Single large file (`all-packages.nix`, ~12 k lines): 36.8 ms vs 762.7 ms
 (20.7×).
