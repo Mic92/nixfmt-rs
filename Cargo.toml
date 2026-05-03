@@ -30,7 +30,7 @@ path = "src/lib.rs"
 [features]
 default = ["cli"]
 # Library consumers disable default features to skip binary-only deps.
-cli = ["dep:ignore", "dep:mimalloc", "debug-dump"]
+cli = ["dep:clap", "dep:ignore", "dep:mimalloc", "debug-dump"]
 # Enables format_ast/format_ir (Haskell-parity --ast/--ir dumps). No extra deps;
 # split from `cli` so the fuzz crate can exercise the dumpers without pulling
 # in ignore/mimalloc.
@@ -42,6 +42,7 @@ sweep = ["dep:rayon", "dep:walkdir"]
 [dependencies]
 memchr = "2"
 compact_str = "0.9"
+clap = { version = "4", features = ["derive"], optional = true }
 criterion = { version = "0.8", optional = true }
 rayon = { version = "1", optional = true }
 walkdir = { version = "2", optional = true }

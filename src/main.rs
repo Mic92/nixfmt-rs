@@ -5,6 +5,7 @@
 
 use std::io::{self, Read, Write};
 
+use clap::{CommandFactory, Parser, ValueEnum};
 #[global_allocator]
 static GLOBAL: mimalloc::MiMalloc = mimalloc::MiMalloc;
 use std::path::Path;
@@ -14,31 +15,6 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use nixfmt_rs::VERSION;
 
 mod json_diag;
-
-const HELP: &str = "\
-nixfmt-rs [OPTIONS] [FILES or -]
-  Format Nix source code (Rust implementation of nixfmt)
-  Use '-' as a file argument to read from stdin.
-
-Common flags:
-  -w --width=INT        Maximum width in characters [default: 100]
-     --indent=INT       Number of spaces to use for indentation [default: 2]
-  -c --check            Check whether files are formatted without modifying them
-  -m --mergetool        Git mergetool mode: format BASE/LOCAL/REMOTE, run
-                        'git merge-file', format and move result to MERGED
-  -q --quiet            Do not report errors
-  -s --strict           Enable a stricter formatting mode (accepted, currently no-op)
-  -v --verify           Apply sanity checks on the output after formatting
-  -a --ast              Pretty print the internal AST to stderr (debug)
-  -f --filename=ITEM    Filename to display when input is read from stdin
-     --ir               Pretty print the internal IR to stderr (debug)
-     --message-format=FMT
-                        How to render diagnostics: 'human' (default) or 'json'
-                        (one JSON object per line on stderr, LSP Diagnostic shape)
-  -? --help             Display help message
-  -V --version          Print version information
-     --numeric-version  Print just the version number
-";
 
 #[derive(Default)]
 #[allow(clippy::struct_excessive_bools)] // flat CLI flag bag
@@ -59,76 +35,135 @@ struct Opts {
     files: Vec<String>,
 }
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq, ValueEnum)]
+enum MessageFormat {
+    Human,
+    Json,
+}
+
+#[derive(Parser, Debug)]
+#[command(
+    name = "nixfmt-rs",
+    about = env!("CARGO_PKG_DESCRIPTION"),
+    long_about = "Format Nix source code (Rust implementation of nixfmt).\nUse '-' as a file argument to read from stdin.",
+    disable_help_flag = true,
+    disable_version_flag = true,
+    trailing_var_arg = true
+)]
+struct CliArgs {
+    #[arg(
+        short = 'w',
+        long = "width",
+        default_value_t = 100,
+        help = "Maximum width in characters"
+    )]
+    width: usize,
+    #[arg(
+        long = "indent",
+        default_value_t = 2,
+        help = "Number of spaces to use for indentation"
+    )]
+    indent: usize,
+    #[arg(
+        short = 'c',
+        long = "check",
+        help = "Check whether files are formatted without modifying them"
+    )]
+    check: bool,
+    #[arg(short = 'q', long = "quiet", help = "Do not report errors")]
+    quiet: bool,
+    #[arg(
+        short = 's',
+        long = "strict",
+        help = "Enable a stricter formatting mode (accepted, currently no-op)"
+    )]
+    strict: bool,
+    #[arg(
+        short = 'v',
+        long = "verify",
+        help = "Apply sanity checks on the output after formatting"
+    )]
+    verify: bool,
+    #[arg(
+        short = 'a',
+        long = "ast",
+        help = "Pretty print the internal AST to stderr (debug)"
+    )]
+    ast: bool,
+    #[arg(long = "ir", help = "Pretty print the internal IR to stderr (debug)")]
+    ir: bool,
+    #[arg(long = "parse-only", help = "Only parse input and report parse errors")]
+    parse_only: bool,
+    #[arg(
+        short = 'm',
+        long = "mergetool",
+        help = "Git mergetool mode: format BASE/LOCAL/REMOTE, run git merge-file, format and move result to MERGED"
+    )]
+    mergetool: bool,
+    #[arg(
+        long = "message-format",
+        value_enum,
+        default_value = "human",
+        help = "How to render diagnostics: human or json"
+    )]
+    message_format: MessageFormat,
+    #[arg(
+        short = 'f',
+        long = "filename",
+        help = "Filename to display when input is read from stdin"
+    )]
+    filename: Option<String>,
+    #[arg(short = '?', long = "help")]
+    help: bool,
+    #[arg(short = 'V', long = "version")]
+    version: bool,
+    #[arg(long = "numeric-version", help = "Print just the version number")]
+    numeric_version: bool,
+    #[arg(value_name = "FILES or -")]
+    files: Vec<String>,
+}
+
 fn parse_args() -> Result<Opts, String> {
-    let mut o = Opts {
-        width: 100,
-        indent: 2,
-        ..Opts::default()
-    };
-    let mut args = std::env::args().skip(1);
-    while let Some(arg) = args.next() {
-        let (flag, inline) = match arg.split_once('=') {
-            Some((f, v)) => (f.to_string(), Some(v.to_string())),
-            None => (arg.clone(), None),
-        };
-        let mut value = |name: &str| -> Result<String, String> {
-            if let Some(v) = inline.clone() {
-                return Ok(v);
+    let cli = CliArgs::try_parse().map_err(|e| {
+        if matches!(e.kind(), clap::error::ErrorKind::UnknownArgument) {
+            let argv = std::env::args().skip(1);
+            if let Some(flag) = argv.into_iter().find(|a| a.starts_with('-')) {
+                return format!("Unknown flag: {flag}");
             }
-            args.next()
-                .ok_or_else(|| format!("Missing value for flag: {name}"))
-        };
-        let mut int = |name: &str| -> Result<usize, String> {
-            value(name)?
-                .parse()
-                .map_err(|_| format!("Invalid integer for {name}"))
-        };
-        match flag.as_str() {
-            "-?" | "--help" => {
-                print!("{HELP}");
-                exit(0);
-            }
-            "-V" | "--version" => {
-                println!("nixfmt-rs {VERSION}");
-                exit(0);
-            }
-            "--numeric-version" => {
-                println!("{VERSION}");
-                exit(0);
-            }
-            "-w" | "--width" => o.width = int("--width")?,
-            "--indent" => o.indent = int("--indent")?,
-            "-c" | "--check" => o.check = true,
-            "-q" | "--quiet" => o.quiet = true,
-            "-s" | "--strict" => o.strict = true,
-            "-v" | "--verify" => o.verify = true,
-            "-a" | "--ast" => o.ast = true,
-            "--ir" => o.ir = true,
-            "--parse-only" => o.parse_only = true,
-            "-m" | "--mergetool" => o.mergetool = true,
-            "--message-format" => {
-                let v = value("--message-format")?;
-                o.json_diagnostics = match v.as_str() {
-                    "human" => false,
-                    "json" => true,
-                    other => return Err(format!("Unknown --message-format: {other}")),
-                };
-            }
-            "-f" | "--filename" => o.filename = Some(value("--filename")?),
-            "--" => {
-                o.files.extend(args.by_ref());
-            }
-            s if s.starts_with("-w") && !s.starts_with("--") && s.len() > 2 => {
-                o.width = s[2..]
-                    .parse()
-                    .map_err(|_| "Invalid integer for --width".to_string())?;
-            }
-            "-" => o.files.push("-".to_string()),
-            s if s.starts_with('-') => return Err(format!("Unknown flag: {s}")),
-            _ => o.files.push(arg),
         }
+        e.to_string()
+    })?;
+
+    if cli.help {
+        let mut cmd = CliArgs::command();
+        cmd.print_help().map_err(|e| e.to_string())?;
+        println!();
+        exit(0);
     }
-    Ok(o)
+    if cli.version {
+        println!("nixfmt-rs {VERSION}");
+        exit(0);
+    }
+    if cli.numeric_version {
+        println!("{VERSION}");
+        exit(0);
+    }
+
+    Ok(Opts {
+        width: cli.width,
+        indent: cli.indent,
+        check: cli.check,
+        quiet: cli.quiet,
+        strict: cli.strict,
+        verify: cli.verify,
+        ast: cli.ast,
+        ir: cli.ir,
+        parse_only: cli.parse_only,
+        mergetool: cli.mergetool,
+        json_diagnostics: matches!(cli.message_format, MessageFormat::Json),
+        filename: cli.filename,
+        files: cli.files,
+    })
 }
 
 fn render_err(o: &Opts, source: &str, name: &str, e: &nixfmt_rs::ParseError) -> String {
