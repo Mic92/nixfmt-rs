@@ -8,8 +8,8 @@ use crate::format_constructor;
 use crate::format_enum;
 use crate::format_record;
 use crate::types::{
-    Ann, Binder, Expression, Item, ParamAttr, Parameter, Selector, SimpleSelector, Span,
-    StringPart, Term, Token, TrailingComment, Trivia, Trivium, Whole,
+    Ann, Binder, Expression, Item, ParamAttr, ParamDefault, Parameter, Selector, SetDefault,
+    SimpleSelector, Span, StringPart, Term, Token, TrailingComment, Trivia, Trivium, Whole,
 };
 
 /// Generate a `PrettySimple` impl for a primitive/atomic type:
@@ -59,34 +59,142 @@ impl PrettySimple for Whole<Expression> {
 
 impl PrettySimple for Expression {
     fn format<W: Writer>(&self, w: &mut W) {
-        format_enum!(self, w, {
-            Term(term) => [term],
-            With(kw, expr1, semi, expr2) => [kw, &**expr1, semi, &**expr2],
-            Let(kw, items, in_kw, body) => [kw, &items.0, in_kw, &**body],
-            Assert(kw, expr1, semi, expr2) => [kw, &**expr1, semi, &**expr2],
-            If(if_kw, cond, then_kw, then_expr, else_kw, else_expr) => [if_kw, &**cond, then_kw, &**then_expr, else_kw, &**else_expr],
-            Abstraction(param, colon, body) => [param, colon, &**body],
-            Application(func, arg) => [&**func, &**arg],
-            Operation(left, op, right) => [&**left, op, &**right],
-            MemberCheck(expr, question, selectors) => [&**expr, question, selectors],
-            Negation(minus, expr) => [minus, &**expr],
-            Inversion(not, expr) => [not, &**expr],
-        });
+        match self {
+            Self::Term(term) => format_constructor!(w, "Term", [term]),
+            Self::With {
+                kw_with,
+                scope,
+                semi,
+                body,
+            } => {
+                format_constructor!(w, "With", [kw_with, &**scope, semi, &**body]);
+            }
+            Self::Let {
+                kw_let,
+                bindings,
+                kw_in,
+                body,
+            } => {
+                format_constructor!(w, "Let", [kw_let, &bindings.0, kw_in, &**body]);
+            }
+            Self::Assert {
+                kw_assert,
+                cond,
+                semi,
+                body,
+            } => {
+                format_constructor!(w, "Assert", [kw_assert, &**cond, semi, &**body]);
+            }
+            Self::If {
+                kw_if,
+                cond,
+                kw_then,
+                then_branch,
+                kw_else,
+                else_branch,
+            } => {
+                format_constructor!(
+                    w,
+                    "If",
+                    [
+                        kw_if,
+                        &**cond,
+                        kw_then,
+                        &**then_branch,
+                        kw_else,
+                        &**else_branch
+                    ]
+                );
+            }
+            Self::Abstraction { param, colon, body } => {
+                format_constructor!(w, "Abstraction", [param, colon, &**body]);
+            }
+            Self::Application { func, arg } => {
+                format_constructor!(w, "Application", [&**func, &**arg]);
+            }
+            Self::Operation { lhs, op, rhs } => {
+                format_constructor!(w, "Operation", [&**lhs, op, &**rhs]);
+            }
+            Self::MemberCheck {
+                lhs,
+                question,
+                path,
+            } => {
+                format_constructor!(w, "MemberCheck", [&**lhs, question, path]);
+            }
+            Self::Negation { minus, expr } => {
+                format_constructor!(w, "Negation", [minus, &**expr]);
+            }
+            Self::Inversion { bang, expr } => {
+                format_constructor!(w, "Inversion", [bang, &**expr]);
+            }
+        }
     }
 }
 
 impl PrettySimple for Term {
     fn format<W: Writer>(&self, w: &mut W) {
-        format_enum!(self, w, {
-            Token(leaf) => [leaf],
-            SimpleString(string) => [string],
-            IndentedString(string) => [string],
-            Path(path) => [path],
-            List(open, items, close) => [open, &items.0, close],
-            Set(rec, open, items, close) => [rec, open, &items.0, close],
-            Selection(term, selectors, or_default) => [&**term, selectors, or_default],
-            Parenthesized(open, expr, close) => [open, &**expr, close],
-        });
+        match self {
+            Self::Token(leaf) => format_constructor!(w, "Token", [leaf]),
+            Self::SimpleString(s) => format_constructor!(w, "SimpleString", [s]),
+            Self::IndentedString(s) => format_constructor!(w, "IndentedString", [s]),
+            Self::Path(p) => format_constructor!(w, "Path", [p]),
+            Self::List { open, items, close } => {
+                format_constructor!(w, "List", [open, &items.0, close]);
+            }
+            Self::Set {
+                rec,
+                open,
+                items,
+                close,
+            } => {
+                format_constructor!(w, "Set", [rec, open, &items.0, close]);
+            }
+            Self::Selection {
+                base,
+                selectors,
+                default,
+            } => {
+                format_constructor!(w, "Selection", [&**base, selectors, default]);
+            }
+            Self::Parenthesized { open, expr, close } => {
+                format_constructor!(w, "Parenthesized", [open, &**expr, close]);
+            }
+        }
+    }
+}
+
+// `SetDefault` and `ParamDefault` are display-equivalent to the original
+// `(Leaf, _)` tuples; format them as 2-tuples so AST output stays
+// byte-identical with Haskell `nixfmt --ast`.
+/// Format two parts as a Haskell 2-tuple `( a, b )` literal.
+fn format_pair<W: Writer, A: PrettySimple, B: PrettySimple>(w: &mut W, a: &A, b: &B) {
+    with_brackets(w, "(", ")", true, |w, paren_color| {
+        w.write_plain(" ");
+        a.format(w);
+        w.newline();
+        w.write_colored(",", paren_color);
+        w.write_plain(" ");
+        b.format(w);
+        w.newline();
+    });
+}
+
+impl PrettySimple for SetDefault {
+    fn format<W: Writer>(&self, w: &mut W) {
+        format_pair(w, &self.or_kw, &*self.value);
+    }
+    fn has_delimiters(&self) -> bool {
+        true
+    }
+}
+
+impl PrettySimple for ParamDefault {
+    fn format<W: Writer>(&self, w: &mut W) {
+        format_pair(w, &self.question, &self.value);
+    }
+    fn has_delimiters(&self) -> bool {
+        true
     }
 }
 
@@ -113,10 +221,24 @@ impl<T: PrettySimple> PrettySimple for Item<T> {
 
 impl PrettySimple for Binder {
     fn format<W: Writer>(&self, w: &mut W) {
-        format_enum!(self, w, {
-            Inherit(kw, from, selectors, semi) => [kw, from, selectors, semi],
-            Assignment(sels, eq, expr, semi) => [sels, eq, expr, semi],
-        });
+        match self {
+            Self::Inherit {
+                kw,
+                from,
+                attrs,
+                semi,
+            } => {
+                format_constructor!(w, "Inherit", [kw, from, attrs, semi]);
+            }
+            Self::Assignment {
+                path,
+                eq,
+                value,
+                semi,
+            } => {
+                format_constructor!(w, "Assignment", [path, eq, value, semi]);
+            }
+        }
     }
 }
 
@@ -189,14 +311,14 @@ impl PrettySimple for Parameter {
     fn format<W: Writer>(&self, w: &mut W) {
         // Use Haskell constructor names for compatibility with nixfmt --ast output
         match self {
-            Self::ID(leaf) => {
+            Self::Id(leaf) => {
                 format_constructor!(w, "IDParameter", [leaf]);
             }
-            Self::Set(open, attrs, close) => {
+            Self::Set { open, attrs, close } => {
                 format_constructor!(w, "SetParameter", [open, attrs, close]);
             }
-            Self::Context(left, at, right) => {
-                format_constructor!(w, "ContextParameter", [&**left, at, &**right]);
+            Self::Context { lhs, at, rhs } => {
+                format_constructor!(w, "ContextParameter", [&**lhs, at, &**rhs]);
             }
         }
     }
@@ -204,10 +326,18 @@ impl PrettySimple for Parameter {
 
 impl PrettySimple for ParamAttr {
     fn format<W: Writer>(&self, w: &mut W) {
-        format_enum!(self, w, {
-            ParamAttr(name, default, comma) => [name, default, comma],
-            ParamEllipsis(ellipsis) => [ellipsis],
-        });
+        match self {
+            Self::Attr {
+                name,
+                default,
+                comma,
+            } => {
+                format_constructor!(w, "ParamAttr", [name, default, comma]);
+            }
+            Self::Ellipsis(ellipsis) => {
+                format_constructor!(w, "ParamEllipsis", [ellipsis]);
+            }
+        }
     }
 }
 

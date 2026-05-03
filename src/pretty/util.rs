@@ -65,10 +65,12 @@ pub(super) fn is_simple_term(term: &Term) -> bool {
         {
             true
         }
-        Term::Selection(term, selectors, def) => {
-            is_simple_term(term) && selectors.iter().all(is_simple_selector) && def.is_none()
-        }
-        Term::Parenthesized(open, expr, close) => {
+        Term::Selection {
+            base: term,
+            selectors,
+            default: def,
+        } => is_simple_term(term) && selectors.iter().all(is_simple_selector) && def.is_none(),
+        Term::Parenthesized { open, expr, close } => {
             is_lone_ann(open) && is_lone_ann(close) && is_simple_expression(expr)
         }
         _ => false,
@@ -79,10 +81,10 @@ pub(super) fn is_simple_term(term: &Term) -> bool {
 pub(super) fn is_simple_expression(expr: &Expression) -> bool {
     match expr {
         Expression::Term(term) => is_simple_term(term),
-        Expression::Application(f, a) => {
+        Expression::Application { func: f, arg: a } => {
             // No more than two arguments.
-            if let Expression::Application(f2, _) = &**f
-                && matches!(**f2, Expression::Application(_, _))
+            if let Expression::Application { func: f2, .. } = &**f
+                && matches!(**f2, Expression::Application { .. })
             {
                 return false;
             }

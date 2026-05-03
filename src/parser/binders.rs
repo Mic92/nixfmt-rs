@@ -34,7 +34,11 @@ impl Parser {
             let open = self.take_and_advance()?;
             let expr = self.parse_expression()?;
             let close = self.expect_token(Token::TParenClose, "')'")?;
-            Some(Term::Parenthesized(open, Box::new(expr), close))
+            Some(Term::Parenthesized {
+                open,
+                expr: Box::new(expr),
+                close,
+            })
         } else {
             None
         };
@@ -65,7 +69,12 @@ impl Parser {
 
         let semi = self.expect_token(Token::TSemicolon, "';'")?;
 
-        Ok(Binder::Inherit(inherit_tok, from, selectors, semi))
+        Ok(Binder::Inherit {
+            kw: inherit_tok,
+            from,
+            attrs: selectors,
+            semi,
+        })
     }
 
     /// Parse assignment: selector = expr ;
@@ -92,17 +101,27 @@ impl Parser {
         // a semicolon and the parser treated the next line as a function argument.
         // Point to the end of the LEFT side (the function) instead of the RIGHT side.
         let expr_end_span = match &expr {
-            Expression::Application(func, _arg) => spans::expr_end(func),
+            Expression::Application { func, .. } => spans::expr_end(func),
             _ => spans::expr_end(&expr),
         };
 
         if matches!(self.current.value, Token::TSemicolon) {
             let semi = self.take_and_advance()?;
-            Ok(Binder::Assignment(selectors, eq, expr, semi))
+            Ok(Binder::Assignment {
+                path: selectors,
+                eq,
+                value: expr,
+                semi,
+            })
         } else if matches!(self.current.value, Token::Sof) {
             // EOF found - check if this is an unclosed nested set
             // If the expression is a set, the closing brace might have belonged to an outer scope
-            if let Expression::Term(Term::Set(_, open_brace, _, close_brace)) = &expr {
+            if let Expression::Term(Term::Set {
+                open: open_brace,
+                close: close_brace,
+                ..
+            }) = &expr
+            {
                 Err(ParseError::unclosed(close_brace.span, '{', open_brace.span))
             } else {
                 Err(ParseError::unexpected(

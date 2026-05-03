@@ -19,7 +19,12 @@ impl Parser {
         let in_tok = self.expect_token(Token::KIn, "'in'")?;
         let body = self.parse_expression()?;
 
-        Ok(Expression::Let(let_tok, bindings, in_tok, Box::new(body)))
+        Ok(Expression::Let {
+            kw_let: let_tok,
+            bindings,
+            kw_in: in_tok,
+            body: Box::new(body),
+        })
     }
 
     /// Parse if expression: if cond then expr else expr
@@ -31,14 +36,14 @@ impl Parser {
         let else_tok = self.expect_token(Token::KElse, "'else'")?;
         let else_expr = self.parse_expression()?;
 
-        Ok(Expression::If(
-            if_tok,
-            Box::new(cond),
-            then_tok,
-            Box::new(then_expr),
-            else_tok,
-            Box::new(else_expr),
-        ))
+        Ok(Expression::If {
+            kw_if: if_tok,
+            cond: Box::new(cond),
+            kw_then: then_tok,
+            then_branch: Box::new(then_expr),
+            kw_else: else_tok,
+            else_branch: Box::new(else_expr),
+        })
     }
 
     /// Parse with expression: with expr ; expr
@@ -47,7 +52,12 @@ impl Parser {
             Token::KWith,
             "'with'",
             "'with' expression",
-            Expression::With,
+            |kw, head, semi, body| Expression::With {
+                kw_with: kw,
+                scope: head,
+                semi,
+                body,
+            },
         )
     }
 
@@ -57,7 +67,12 @@ impl Parser {
             Token::KAssert,
             "'assert'",
             "'assert' condition",
-            Expression::Assert,
+            |kw, head, semi, body| Expression::Assert {
+                kw_assert: kw,
+                cond: head,
+                semi,
+                body,
+            },
         )
     }
 

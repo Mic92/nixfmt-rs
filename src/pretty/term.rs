@@ -21,7 +21,7 @@ pub(super) fn push_pretty_term_list(doc: &mut Doc, open: &Leaf, items: &Items<Te
 /// extra outer group around `List`.
 pub(super) fn push_pretty_term(doc: &mut Doc, term: &Term) {
     match term {
-        Term::List(open, items, close) => push_pretty_term_list(doc, open, items, close),
+        Term::List { open, items, close } => push_pretty_term_list(doc, open, items, close),
         _ => term.pretty(doc),
     }
 }
@@ -29,12 +29,17 @@ pub(super) fn push_pretty_term(doc: &mut Doc, term: &Term) {
 /// Mirrors `prettyTermWide` in Nixfmt/Pretty.hs.
 pub(super) fn push_pretty_term_wide(doc: &mut Doc, term: &Term) {
     match term {
-        Term::Set(krec, open, items, close) => {
+        Term::Set {
+            rec: krec,
+            open,
+            items,
+            close,
+        } => {
             push_pretty_set(doc, Width::Wide, krec.as_ref(), open, items, close);
         }
         // `prettyTermWide` delegates to `prettyTerm`, which unlike `instance
         // Pretty Term` does *not* wrap lists in an extra group.
-        Term::List(open, items, close) => push_pretty_term_list(doc, open, items, close),
+        Term::List { open, items, close } => push_pretty_term_list(doc, open, items, close),
         _ => term.pretty(doc),
     }
 }
@@ -167,17 +172,17 @@ pub(super) fn push_parenthesized_inner(doc: &mut Doc, expr: &Expression) {
                 push_absorb_expr(inner, Width::Regular, expr);
             });
         }
-        Expression::Application(_, _) => {
+        Expression::Application { .. } => {
             push_pretty_app(doc, true, &[], true, expr);
         }
-        Expression::Term(Term::Selection(term, _, _)) if is_absorbable_term(term) => {
+        Expression::Term(Term::Selection { base: term, .. }) if is_absorbable_term(term) => {
             doc.line_prime();
             doc.group(|inner| {
                 expr.pretty(inner);
             });
             doc.line_prime();
         }
-        Expression::Term(Term::Selection(_, _, _)) => {
+        Expression::Term(Term::Selection { .. }) => {
             doc.group(|inner| {
                 expr.pretty(inner);
             });

@@ -12,7 +12,11 @@ fn flatten_operation_chain<'a>(
     out: &mut Vec<(Option<&'a Leaf>, &'a Expression)>,
 ) {
     match expr {
-        Expression::Operation(left, op_leaf, right) if op_leaf.value == target.value => {
+        Expression::Operation {
+            lhs: left,
+            op: op_leaf,
+            rhs: right,
+        } if op_leaf.value == target.value => {
             flatten_operation_chain(target, left, current_op, out);
             flatten_operation_chain(target, right, Some(op_leaf), out);
         }
@@ -26,13 +30,13 @@ fn push_absorb_operation(doc: &mut Doc, expr: &Expression) {
             doc.hardspace();
             term.pretty(doc);
         }
-        Expression::Operation(_, _, _) => {
+        Expression::Operation { .. } => {
             doc.group(|group_doc| {
                 group_doc.line();
                 expr.pretty(group_doc);
             });
         }
-        Expression::Application(_, _) => {
+        Expression::Application { .. } => {
             doc.group(|g| push_pretty_app(g, false, &[line()], false, expr));
         }
         _ => {

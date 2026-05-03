@@ -6,17 +6,17 @@ use super::term::{push_pretty_term, push_pretty_term_wide, push_render_list};
 use super::util::{has_trivia, is_simple_expression, is_simple_term};
 
 const fn is_list_arg(e: &Expression) -> bool {
-    matches!(e, Expression::Term(Term::List(_, _, _)))
+    matches!(e, Expression::Term(Term::List { .. }))
 }
 
 const fn is_selection_arg(e: &Expression) -> bool {
-    matches!(e, Expression::Term(Term::Selection(_, _, _)))
+    matches!(e, Expression::Term(Term::Selection { .. }))
 }
 
 /// `absorbInner` from Pretty.hs: short lists of simple terms get a soft `line`
 /// separator so they may stay on one line; everything else falls back to `pretty`.
 fn push_absorb_inner(doc: &mut Doc, arg: &Expression) {
-    if let Expression::Term(Term::List(open, items, close)) = arg {
+    if let Expression::Term(Term::List { open, items, close }) = arg {
         let all_simple = items.0.iter().all(|item| match item {
             Item::Item(t) => is_simple_term(t),
             Item::Comments(_) => true,
@@ -61,7 +61,7 @@ fn push_absorb_app(doc: &mut Doc, expr: &Expression, indent_function: bool, comm
         });
     };
 
-    let Expression::Application(f, a) = expr else {
+    let Expression::Application { func: f, arg: a } = expr else {
         // Base case: the function expression itself. The first token's
         // pre-trivia/trailing comment was already emitted by `push_pretty_app`,
         // so render the head with that trivia stripped.
@@ -82,7 +82,7 @@ fn push_absorb_app(doc: &mut Doc, expr: &Expression, indent_function: bool, comm
 
     // Two consecutive list arguments stay together: if one wraps, both wrap.
     if is_list_arg(a)
-        && let Expression::Application(f2, l1) = &**f
+        && let Expression::Application { func: f2, arg: l1 } = &**f
         && is_list_arg(l1)
     {
         doc.group_ann(GroupAnn::Transparent, |outer| {
@@ -131,9 +131,18 @@ fn push_absorb_last(doc: &mut Doc, arg: &Expression) {
         return push_priority_nest(doc, |n| push_pretty_term(n, t));
     }
 
-    if let Expression::Term(Term::Parenthesized(open, inner, close)) = arg {
+    if let Expression::Term(Term::Parenthesized {
+        open,
+        expr: inner,
+        close,
+    }) = arg
+    {
         // Parenthesised single-ID-parameter abstraction with absorbable body.
-        if let Expression::Abstraction(Parameter::ID(name), colon, body) = &**inner
+        if let Expression::Abstraction {
+            param: Parameter::Id(name),
+            colon,
+            body,
+        } = &**inner
             && let Expression::Term(body_term) = &**body
             && is_absorbable_term(body_term)
             && !has_trivia(open)
@@ -150,7 +159,7 @@ fn push_absorb_last(doc: &mut Doc, arg: &Expression) {
             });
         }
         // Parenthesised `ident { ... }` application with absorbable body.
-        if let Expression::Application(f, a) = &**inner
+        if let Expression::Application { func: f, arg: a } = &**inner
             && let Expression::Term(Term::Token(ident)) = &**f
             && matches!(ident.value, Token::Identifier(_))
             && let Expression::Term(body_term) = &**a
@@ -183,7 +192,7 @@ pub(super) fn push_pretty_app(
     has_post: bool,
     expr: &Expression,
 ) {
-    let Expression::Application(f, a) = expr else {
+    let Expression::Application { func: f, arg: a } = expr else {
         unreachable!("push_pretty_app requires an Application");
     };
 
@@ -200,7 +209,7 @@ pub(super) fn push_pretty_app(
     // Two trailing list arguments are rendered as a pair of regular groups so
     // they wrap together; lists are never "simple", so renderSimple cannot apply.
     if is_list_arg(a)
-        && let Expression::Application(f2, l1) = &**f
+        && let Expression::Application { func: f2, arg: l1 } = &**f
         && is_list_arg(l1)
     {
         doc.group(|g| {
