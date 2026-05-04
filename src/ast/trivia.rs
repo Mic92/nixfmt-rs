@@ -2,7 +2,7 @@
 
 /// A single trivia element.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub enum Trivium {
+pub enum TriviaPiece {
     EmptyLine(),
     LineComment(Box<str>),
     /// `BlockComment(is_doc`, lines)
@@ -20,7 +20,7 @@ pub enum Trivium {
 /// Trivia runs are built once at lexeme boundaries and then read-only, so a
 /// frozen slice (single allocation) fits better than a growable `Vec`.
 #[derive(Debug, Clone, Default)]
-pub struct Trivia(Option<Box<[Trivium]>>);
+pub struct Trivia(Option<Box<[TriviaPiece]>>);
 
 impl Trivia {
     /// Empty trivia list (no allocation).
@@ -30,33 +30,33 @@ impl Trivia {
     }
 
     /// Single-element trivia list.
-    pub fn one(t: Trivium) -> Self {
+    pub fn one(t: TriviaPiece) -> Self {
         Self(Some(Box::new([t])))
     }
 
     /// Append a trivium.
     ///
     /// Reallocates the backing slice; callers on hot paths should accumulate
-    /// into a `Vec<Trivium>` and convert once. Existing call sites only hit
+    /// into a `Vec<TriviaPiece>` and convert once. Existing call sites only hit
     /// this on comment-bearing tokens, which are rare.
-    pub fn push(&mut self, t: Trivium) {
-        let mut v: Vec<Trivium> = std::mem::take(self).into();
+    pub fn push(&mut self, t: TriviaPiece) {
+        let mut v: Vec<TriviaPiece> = std::mem::take(self).into();
         v.push(t);
         *self = v.into();
     }
 
     /// Insert at `idx`. Same reallocation caveat as [`Self::push`].
-    pub fn insert(&mut self, idx: usize, t: Trivium) {
-        let mut v: Vec<Trivium> = std::mem::take(self).into();
+    pub fn insert(&mut self, idx: usize, t: TriviaPiece) {
+        let mut v: Vec<TriviaPiece> = std::mem::take(self).into();
         v.insert(idx, t);
         *self = v.into();
     }
 
     /// Append all items from `iter`, allocating only if it yields any.
-    pub fn extend<I: IntoIterator<Item = Trivium>>(&mut self, iter: I) {
+    pub fn extend<I: IntoIterator<Item = TriviaPiece>>(&mut self, iter: I) {
         let mut iter = iter.into_iter();
         if let Some(first) = iter.next() {
-            let mut v: Vec<Trivium> = std::mem::take(self).into();
+            let mut v: Vec<TriviaPiece> = std::mem::take(self).into();
             v.push(first);
             v.extend(iter);
             *self = v.into();
@@ -79,7 +79,7 @@ impl PartialEq for Trivia {
 impl Eq for Trivia {}
 
 impl std::ops::Deref for Trivia {
-    type Target = [Trivium];
+    type Target = [TriviaPiece];
 
     #[inline]
     fn deref(&self) -> &Self::Target {
@@ -90,8 +90,8 @@ impl std::ops::Deref for Trivia {
     }
 }
 
-impl From<Vec<Trivium>> for Trivia {
-    fn from(value: Vec<Trivium>) -> Self {
+impl From<Vec<TriviaPiece>> for Trivia {
+    fn from(value: Vec<TriviaPiece>) -> Self {
         if value.is_empty() {
             Self(None)
         } else {
@@ -100,15 +100,15 @@ impl From<Vec<Trivium>> for Trivia {
     }
 }
 
-impl From<Trivia> for Vec<Trivium> {
+impl From<Trivia> for Vec<TriviaPiece> {
     fn from(val: Trivia) -> Self {
         val.0.map(Self::from).unwrap_or_default()
     }
 }
 
 impl IntoIterator for Trivia {
-    type Item = Trivium;
-    type IntoIter = std::vec::IntoIter<Trivium>;
+    type Item = TriviaPiece;
+    type IntoIter = std::vec::IntoIter<TriviaPiece>;
 
     fn into_iter(self) -> Self::IntoIter {
         Vec::from(self).into_iter()
@@ -116,8 +116,8 @@ impl IntoIterator for Trivia {
 }
 
 impl<'a> IntoIterator for &'a Trivia {
-    type Item = &'a Trivium;
-    type IntoIter = std::slice::Iter<'a, Trivium>;
+    type Item = &'a TriviaPiece;
+    type IntoIter = std::slice::Iter<'a, TriviaPiece>;
 
     fn into_iter(self) -> Self::IntoIter {
         self.iter()
@@ -129,7 +129,7 @@ impl<'a> IntoIterator for &'a Trivia {
 pub struct TrailingComment(pub Box<str>);
 
 /// Haskell `convertTrailing`.
-impl From<&TrailingComment> for Trivium {
+impl From<&TrailingComment> for TriviaPiece {
     fn from(tc: &TrailingComment) -> Self {
         Self::LineComment(format!(" {}", tc.0).into_boxed_str())
     }

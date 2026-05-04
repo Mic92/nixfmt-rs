@@ -15,7 +15,7 @@ mod tests;
 
 /// Intermediate trivia representation during parsing
 #[derive(Debug, Clone)]
-pub enum ParseTrivium {
+pub enum RawTrivia {
     /// Multiple newlines
     Newlines(usize),
     /// Line comment with text and column position
@@ -64,7 +64,7 @@ pub struct Lexer {
     trivia_start: Option<LexerPos>,
     /// Scratch buffer reused by `parse_trivia` so the per-token trivia list
     /// does not allocate on every call.
-    trivia_scratch: Vec<ParseTrivium>,
+    trivia_scratch: Vec<RawTrivia>,
 }
 
 impl Lexer {
@@ -142,7 +142,7 @@ impl Lexer {
             // Fast path hit: only whitespace between this token and the next.
             trailing_comment = None;
             self.trivia_buffer = if newlines > 1 {
-                Trivia::one(crate::ast::Trivium::EmptyLine())
+                Trivia::one(crate::ast::TriviaPiece::EmptyLine())
             } else {
                 Trivia::new()
             };
@@ -253,7 +253,7 @@ impl Lexer {
                 Some('\n' | '\r') => {
                     let count = self.parse_newlines();
                     self.recent_newlines = count;
-                    self.trivia_scratch.push(ParseTrivium::Newlines(count));
+                    self.trivia_scratch.push(RawTrivia::Newlines(count));
                 }
                 Some('#') => {
                     let c = self.parse_line_comment();

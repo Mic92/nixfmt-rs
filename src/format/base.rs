@@ -1,7 +1,7 @@
 //! `Pretty` impls for the wrapper / leaf types every other renderer builds on:
 //! trivia, [`Annotated`], [`Item`], [`Trailed`] and bare [`Token`].
 
-use crate::ast::{Annotated, Item, Token, Trailed, TrailingComment, Trivia, Trivium};
+use crate::ast::{Annotated, Item, Token, Trailed, TrailingComment, Trivia, TriviaPiece};
 use crate::doc::{Doc, Pretty};
 
 impl Pretty for TrailingComment {
@@ -12,7 +12,7 @@ impl Pretty for TrailingComment {
     }
 }
 
-impl Pretty for Trivium {
+impl Pretty for TriviaPiece {
     fn pretty(&self, doc: &mut Doc) {
         match self {
             Self::EmptyLine() => {
@@ -50,7 +50,7 @@ impl Pretty for Trivia {
 
         // Special case: single language annotation renders inline
         if self.len() == 1
-            && let Trivium::LanguageAnnotation(_) = &self[0]
+            && let TriviaPiece::LanguageAnnotation(_) = &self[0]
         {
             self[0].pretty(doc);
             return;

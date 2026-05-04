@@ -21,7 +21,7 @@ pub use expr::{
 pub use items::{Item, Items};
 pub use span::Span;
 pub use token::{Leaf, Token};
-pub use trivia::{TrailingComment, Trivia, Trivium};
+pub use trivia::{TrailingComment, Trivia, TriviaPiece};
 
 #[cfg(test)]
 mod tests {

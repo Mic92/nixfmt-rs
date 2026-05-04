@@ -9,11 +9,11 @@
 //! Block comments are normalized according to nixfmt's Haskell implementation,
 //! including star alignment removal and indentation fixing.
 
-use super::{Lexer, ParseTrivium};
+use super::{Lexer, RawTrivia};
 
 impl Lexer {
     /// Parse a line comment starting with '#'
-    pub(super) fn parse_line_comment(&mut self) -> ParseTrivium {
+    pub(super) fn parse_line_comment(&mut self) -> RawTrivia {
         let col = self.column;
         self.advance(); // consume '#'
 
@@ -21,11 +21,11 @@ impl Lexer {
         let len = memchr::memchr2(b'\n', b'\r', rest).unwrap_or(rest.len());
         let text = self.advance_bytes_no_newline(len).trim_end().to_owned();
 
-        ParseTrivium::LineComment { text, col }
+        RawTrivia::LineComment { text, col }
     }
 
     /// Parse block comment /* ... */
-    pub(super) fn parse_block_comment(&mut self) -> ParseTrivium {
+    pub(super) fn parse_block_comment(&mut self) -> RawTrivia {
         let start_col = self.column;
         self.advance(); // consume '/'
         self.advance(); // consume '*'
@@ -56,20 +56,20 @@ impl Lexer {
         let lines = drop_while_empty_start(lines);
         let lines = drop_while_empty_end(lines);
 
-        ParseTrivium::BlockComment(is_doc, lines)
+        RawTrivia::BlockComment(is_doc, lines)
     }
 
     /// Try to parse a language annotation like /* lua */
-    pub(super) fn try_parse_language_annotation(&mut self) -> Option<ParseTrivium> {
+    pub(super) fn try_parse_language_annotation(&mut self) -> Option<RawTrivia> {
         self.try_with_cursor(|this| {
             let pt = this.parse_block_comment();
 
-            if let ParseTrivium::BlockComment(false, lines) = &pt
+            if let RawTrivia::BlockComment(false, lines) = &pt
                 && lines.len() == 1
             {
                 let content = lines[0].trim();
                 if is_valid_language_identifier(content) && this.is_next_string_delimiter() {
-                    return Some(ParseTrivium::LanguageAnnotation(content.to_string()));
+                    return Some(RawTrivia::LanguageAnnotation(content.to_string()));
                 }
             }
 

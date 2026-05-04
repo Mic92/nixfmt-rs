@@ -6,7 +6,7 @@ use super::{
 };
 use crate::ast::{
     Annotated, Binder, Expression, Item, ParamAttr, ParamDefault, Parameter, Selector, SetDefault,
-    SimpleSelector, Span, StringPart, Term, Token, Trailed, TrailingComment, Trivia, Trivium,
+    SimpleSelector, Span, StringPart, Term, Token, Trailed, TrailingComment, Trivia, TriviaPiece,
 };
 use crate::format_constructor;
 use crate::format_enum;
@@ -266,7 +266,7 @@ impl PrettySimple for SimpleSelector {
     }
 }
 
-impl PrettySimple for Trivium {
+impl PrettySimple for TriviaPiece {
     fn format<W: Writer>(&self, w: &mut W) {
         format_enum!(self, w, {
             EmptyLine() => [],

@@ -1,7 +1,7 @@
 //! Lexer unit tests
 
 use super::*;
-use crate::ast::Trivium;
+use crate::ast::TriviaPiece;
 
 #[test]
 fn test_split_lines() {
@@ -148,7 +148,9 @@ fn test_lexeme_with_comments() {
     let brace = lexer.lexeme().unwrap();
     assert!(matches!(brace.value, Token::TBraceOpen));
     assert_eq!(brace.pre_trivia.len(), 1); // Should have the leading comment
-    assert!(matches!(&brace.pre_trivia[0], Trivium::LineComment(s) if &**s == " leading comment"));
+    assert!(
+        matches!(&brace.pre_trivia[0], TriviaPiece::LineComment(s) if &**s == " leading comment")
+    );
 
     // Second token: a
     let ident = lexer.lexeme().unwrap();
@@ -192,6 +194,6 @@ fn test_lexeme_preserves_trivia() {
         a_tok
             .pre_trivia
             .iter()
-            .any(|t| matches!(t, Trivium::EmptyLine()))
+            .any(|t| matches!(t, TriviaPiece::EmptyLine()))
     );
 }
