@@ -255,17 +255,19 @@ impl Expression {
     pub fn is_simple(&self) -> bool {
         match self {
             Self::Term(term) => term.is_simple(),
-            Self::Application { func: f, arg: a } => {
-                // No more than two arguments.
-                if let Self::Application { func: f2, .. } = &**f
-                    && matches!(**f2, Self::Application { .. })
-                {
-                    return false;
-                }
-                f.is_simple() && a.is_simple()
-            }
+            Self::Application { func: f, arg: a } => Self::app_is_simple(f, a),
             _ => false,
         }
+    }
+
+    pub fn app_is_simple(f: &Self, a: &Self) -> bool {
+        // No more than two arguments.
+        if let Self::Application { func: f2, .. } = f
+            && matches!(**f2, Self::Application { .. })
+        {
+            return false;
+        }
+        f.is_simple() && a.is_simple()
     }
 }
 

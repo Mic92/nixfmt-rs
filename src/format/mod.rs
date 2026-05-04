@@ -23,9 +23,9 @@ mod stmt;
 mod string;
 mod term;
 
-use app::emit_app;
+use app::{emit_app, emit_app_parts};
 use op::emit_operation;
-use stmt::{emit_if, emit_let, emit_with, insert_into_app};
+use stmt::{emit_if, emit_let, emit_with};
 use string::{emit_indented_string, emit_simple_string};
 use term::{emit_list, emit_paren, emit_set};
 
@@ -185,12 +185,12 @@ impl Emit for Expression {
                 //       <> ";" <> hardline <> pretty expr
                 doc.group(|g| {
                     let assert_term = Self::Term(Term::Token(assert_kw.clone()));
-                    let (f, a) = insert_into_app(assert_term, (**cond).clone());
-                    let app = Self::Application {
-                        func: Box::new(f),
-                        arg: Box::new(a),
-                    };
-                    emit_app(g, false, &[], false, &app);
+                    match &**cond {
+                        Self::Application { func, arg } => {
+                            emit_app_parts(g, false, &[], false, func, arg, Some(&assert_term));
+                        }
+                        a => emit_app_parts(g, false, &[], false, &assert_term, a, None),
+                    }
                     semicolon.emit(g);
                     g.hardline();
                     expr.emit(g);

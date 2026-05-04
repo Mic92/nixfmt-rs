@@ -29,24 +29,6 @@ impl Expression {
     }
 }
 
-/// Prepend an expression as the function head of a (possibly nested) application.
-/// Mirrors Haskell `insertIntoApp` used by the `Assert` pretty instance.
-pub(super) fn insert_into_app(insert: Expression, expr: Expression) -> (Expression, Expression) {
-    match expr {
-        Expression::Application { func: f, arg: a } => {
-            let (f2, a2) = insert_into_app(insert, *f);
-            (
-                Expression::Application {
-                    func: Box::new(f2),
-                    arg: Box::new(a2),
-                },
-                *a,
-            )
-        }
-        other => (insert, other),
-    }
-}
-
 /// Render a `with` expression.
 /// Mirrors Haskell `prettyWith False` (Pretty.hs); the `prettyWith True`
 /// path is open-coded inside `absorb_expr`.
