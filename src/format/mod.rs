@@ -23,7 +23,7 @@ mod stmt;
 mod string;
 mod term;
 
-use app::{emit_app, emit_app_parts};
+use app::{AppCtx, emit_app, emit_app_parts};
 use op::emit_operation;
 use stmt::{emit_if, emit_let, emit_with};
 use string::{emit_indented_string, emit_simple_string};
@@ -114,7 +114,7 @@ impl Emit for Expression {
         match self {
             Self::Term(t) => t.emit(doc),
             Self::Apply { .. } => {
-                emit_app(doc, false, &[], false, self);
+                emit_app(doc, AppCtx::default(), self);
             }
             Self::Operation {
                 lhs: left,
@@ -187,9 +187,9 @@ impl Emit for Expression {
                     let assert_term = Self::Term(Term::Token(assert_kw.clone()));
                     match &**cond {
                         Self::Apply { func, arg } => {
-                            emit_app_parts(g, false, &[], false, func, arg, Some(&assert_term));
+                            emit_app_parts(g, AppCtx::default(), func, arg, Some(&assert_term));
                         }
-                        a => emit_app_parts(g, false, &[], false, &assert_term, a, None),
+                        a => emit_app_parts(g, AppCtx::default(), &assert_term, a, None),
                     }
                     semicolon.emit(g);
                     g.hardline();

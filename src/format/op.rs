@@ -1,7 +1,7 @@
 use crate::ast::{Expression, Leaf, Token};
-use crate::doc::{Doc, Emit, line};
+use crate::doc::{Doc, Emit};
 
-use super::app::emit_app;
+use super::app::{AppCtx, emit_app};
 
 fn flatten_operation_chain<'a>(
     target: &'a Leaf,
@@ -35,7 +35,7 @@ fn absorb_operation(doc: &mut Doc, expr: &Expression) {
             });
         }
         Expression::Apply { .. } => {
-            doc.group(|g| emit_app(g, false, &[line()], false, expr));
+            doc.group(|g| emit_app(g, AppCtx::RHS, expr));
         }
         _ => {
             doc.hardspace();

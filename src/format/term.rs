@@ -5,7 +5,7 @@ use crate::ast::{
 use crate::doc::{Doc, Elem, Emit, hardline, hardspace, line, linebreak};
 
 use super::Width;
-use super::app::emit_app;
+use super::app::{AppCtx, emit_app};
 use super::string::emit_simple_string;
 
 impl Emit for SimpleSelector {
@@ -275,7 +275,7 @@ impl Expression {
                 doc.group(|inner| self.absorb(inner, Width::Regular));
             }
             Self::Apply { .. } => {
-                emit_app(doc, true, &[], true, self);
+                emit_app(doc, AppCtx::PAREN, self);
             }
             Self::Term(Term::Selection { base: term, .. }) if term.is_absorbable() => {
                 doc.linebreak();

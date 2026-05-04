@@ -4,7 +4,7 @@ use crate::ast::{
 use crate::doc::{Doc, Elem, Emit, hardspace, line};
 
 use super::Width;
-use super::app::emit_app;
+use super::app::{AppCtx, emit_app};
 use super::op::emit_operation_chain;
 
 impl Term {
@@ -157,7 +157,7 @@ impl Expression {
             // Function call: absorb if all arguments except the last fit on the line,
             // start on a new line otherwise.
             Self::Apply { .. } => {
-                doc.nested(|d| emit_app(d, false, &[line()], false, self));
+                doc.nested(|d| emit_app(d, AppCtx::RHS, self));
             }
 
             // `with ...;` keeps the leading `line` inside the group so it can collapse
