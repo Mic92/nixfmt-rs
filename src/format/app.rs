@@ -1,5 +1,33 @@
 use crate::ast::{Expression, FirstToken, Item, Parameter, Term, Token, Trivia};
-use crate::doc::{Doc, Elem, Emit, GroupKind, line};
+use crate::doc::{Doc, Elem, Emit, GroupKind, Spacing, line};
+
+/// Per-call-site knobs for [`emit_app`]. Mirrors the positional flags of
+/// Haskell `prettyApp indentFunction pre hasPost`.
+#[derive(Default, Clone, Copy)]
+pub(super) struct AppCtx<'a> {
+    /// Wrap the head expression in `nested { group { linebreak; … } }`.
+    pub indent_function: bool,
+    /// Elements emitted at the very start of the rendered group.
+    pub pre: &'a [Elem],
+    /// Append a trailing `linebreak` inside the group (before the closer).
+    pub has_post: bool,
+}
+
+impl AppCtx<'static> {
+    /// Body of a `( … )`: indented head, trailing break before `)`.
+    pub const PAREN: Self = Self {
+        indent_function: true,
+        pre: &[],
+        has_post: true,
+    };
+    /// RHS of `=` / operator operand: leading `line` so the call may start on
+    /// the next line when it doesn't fit.
+    pub const RHS: Self = Self {
+        indent_function: false,
+        pre: &[Elem::Spacing(Spacing::Space)],
+        has_post: false,
+    };
+}
 
 use super::absorb::absorb_paren;
 use super::term::render_list;
@@ -212,17 +240,11 @@ fn absorb_last(doc: &mut Doc, arg: &Expression) {
 }
 
 /// Render function applications (Haskell `prettyApp indentFunction pre hasPost f a`).
-pub(super) fn emit_app(
-    doc: &mut Doc,
-    indent_function: bool,
-    pre: &[Elem],
-    has_post: bool,
-    expr: &Expression,
-) {
+pub(super) fn emit_app(doc: &mut Doc, ctx: AppCtx<'_>, expr: &Expression) {
     let Expression::Apply { func: f, arg: a } = expr else {
         unreachable!("emit_app requires an Apply");
     };
-    emit_app_parts(doc, indent_function, pre, has_post, f, a, None);
+    emit_app_parts(doc, ctx, f, a, None);
 }
 
 /// As [`emit_app`], but with `func`/`arg` destructured and an optional `head`
@@ -231,9 +253,7 @@ pub(super) fn emit_app(
 /// synthetic `Apply` node (the Haskell `insertIntoApp` approach).
 pub(super) fn emit_app_parts(
     doc: &mut Doc,
-    indent_function: bool,
-    pre: &[Elem],
-    has_post: bool,
+    ctx: AppCtx<'_>,
     f: &Expression,
     a: &Expression,
     head: Option<&Expression>,
@@ -241,7 +261,7 @@ pub(super) fn emit_app_parts(
     let comment = first_token_comment(head.unwrap_or(f));
 
     let post_hardline = |doc: &mut Doc| {
-        if has_post && !comment.is_empty() {
+        if ctx.has_post && !comment.is_empty() {
             doc.hardline();
         }
     };
@@ -252,9 +272,9 @@ pub(super) fn emit_app_parts(
     // they wrap together; lists are never "simple", so renderSimple cannot apply.
     if let Some((f2, l1, h2)) = list_pair(f, a, head) {
         doc.group(|g| {
-            g.0.extend_from_slice(pre);
+            g.0.extend_from_slice(ctx.pre);
             g.transparent_group(|inner| {
-                absorb_app(inner, f2, indent_function, &comment, h2);
+                absorb_app(inner, f2, ctx.indent_function, &comment, h2);
             });
             g.line();
             g.nested(|n| {
@@ -264,7 +284,7 @@ pub(super) fn emit_app_parts(
             g.nested(|n| {
                 n.group(|gr| absorb_inner(gr, a));
             });
-            if has_post {
+            if ctx.has_post {
                 g.linebreak();
             }
         });
@@ -272,9 +292,9 @@ pub(super) fn emit_app_parts(
         return;
     }
 
-    let mut rendered_f = Doc::from(pre.to_vec());
+    let mut rendered_f = Doc::from(ctx.pre.to_vec());
     rendered_f.transparent_group(|g| {
-        absorb_app(g, f, indent_function, &comment, head);
+        absorb_app(g, f, ctx.indent_function, &comment, head);
     });
 
     // renderSimple. A prepended `head` is only ever the `assert` keyword,
@@ -296,7 +316,7 @@ pub(super) fn emit_app_parts(
         g.extend(rendered_f);
         g.line();
         absorb_last(g, a);
-        if has_post {
+        if ctx.has_post {
             g.linebreak();
         }
     });
