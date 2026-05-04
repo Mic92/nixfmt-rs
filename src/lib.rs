@@ -131,10 +131,10 @@ pub(crate) fn ast_to_ir(ast: &File) -> doc::IR {
 #[cfg(any(test, feature = "debug-dump"))]
 #[doc(hidden)]
 pub fn format_ast(source: &str) -> Result<String> {
-    use dump::PrettySimple;
+    use dump::Dump;
     let ast = parse(source)?;
     let mut writer = colored_writer::ColoredWriter::new(source);
-    ast.format(&mut writer);
+    ast.dump(&mut writer);
     Ok(writer.finish())
 }
 
@@ -145,11 +145,11 @@ pub fn format_ast(source: &str) -> Result<String> {
 #[cfg(any(test, feature = "debug-dump"))]
 #[doc(hidden)]
 pub fn format_ir(source: &str) -> Result<String> {
-    use dump::PrettySimple;
+    use dump::Dump;
     let ast = parse(source)?;
     let ir = ast_to_ir(&ast);
     let mut writer = colored_writer::ColoredWriter::new(source);
-    ir.format(&mut writer);
+    ir.dump(&mut writer);
     Ok(writer.finish())
 }
 

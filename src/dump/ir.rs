@@ -1,12 +1,12 @@
-//! `PrettySimple` implementations for IR (intermediate representation) nodes
+//! `Dump` implementations for IR (intermediate representation) nodes
 
-use super::{PrettySimple, Writer, format_bracket_list};
+use super::{Dump, Writer, dump_list};
 use crate::doc::{Doc, Elem, GroupKind, IR, Spacing, TextKind};
 use crate::format_constructor;
 
-impl PrettySimple for Doc {
-    fn format<W: Writer>(&self, w: &mut W) {
-        self.0.format(w);
+impl Dump for Doc {
+    fn dump<W: Writer>(&self, w: &mut W) {
+        self.0.dump(w);
     }
     fn is_simple(&self) -> bool {
         self.0.is_simple()
@@ -19,11 +19,11 @@ impl PrettySimple for Doc {
     }
 }
 
-impl PrettySimple for IR {
-    fn format<W: Writer>(&self, w: &mut W) {
+impl Dump for IR {
+    fn dump<W: Writer>(&self, w: &mut W) {
         // Same layout as Vec<Elem>, but without bumping depth so the top-level
         // dump stays at column 0 like the Haskell reference output.
-        format_bracket_list(w, &self.0, false);
+        dump_list(w, &self.0, false);
         if !self.0.is_empty() {
             // Final newline to match nixfmt output.
             w.newline();
@@ -31,9 +31,9 @@ impl PrettySimple for IR {
     }
 }
 
-impl PrettySimple for Spacing {
-    fn format<W: Writer>(&self, w: &mut W) {
-        crate::format_enum!(self, w, {
+impl Dump for Spacing {
+    fn dump<W: Writer>(&self, w: &mut W) {
+        crate::dump_enum!(self, w, {
             Newlines(n) => [n],
             Softbreak => [],
             Break => [],
@@ -54,8 +54,8 @@ impl PrettySimple for Spacing {
     }
 }
 
-impl PrettySimple for GroupKind {
-    fn format<W: Writer>(&self, w: &mut W) {
+impl Dump for GroupKind {
+    fn dump<W: Writer>(&self, w: &mut W) {
         // Reference `nixfmt --ir` uses Haskell constructor names; preserve
         // them so the snapshot diffing against the reference stays exact.
         w.write_plain(match self {
@@ -70,8 +70,8 @@ impl PrettySimple for GroupKind {
     }
 }
 
-impl PrettySimple for TextKind {
-    fn format<W: Writer>(&self, w: &mut W) {
+impl Dump for TextKind {
+    fn dump<W: Writer>(&self, w: &mut W) {
         w.write_plain(match self {
             Self::Regular => "RegularT",
             Self::Comment => "Comment",
@@ -85,9 +85,9 @@ impl PrettySimple for TextKind {
     }
 }
 
-impl PrettySimple for Elem {
-    fn format<W: Writer>(&self, w: &mut W) {
-        crate::format_enum!(self, w, {
+impl Dump for Elem {
+    fn dump<W: Writer>(&self, w: &mut W) {
+        crate::dump_enum!(self, w, {
             Text(nest, off, ann, text) => [nest, off, ann, text],
             Spacing(sp) => [sp],
             Group(ann, doc) => [ann, doc],

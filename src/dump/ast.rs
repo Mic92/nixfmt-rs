@@ -1,23 +1,23 @@
-//! `PrettySimple` implementations for AST nodes
+//! `Dump` implementations for AST nodes
 
 use super::{
-    NUMBER_COLOR, PrettySimple, STRING_CONTENT_COLOR, STRING_QUOTE_COLOR, Writer, escape_string,
-    format_bracket_list, sub_expr, with_brackets,
+    Dump, NUMBER_COLOR, STRING_CONTENT_COLOR, STRING_QUOTE_COLOR, Writer, dump_list, escape_string,
+    sub_expr, with_brackets,
 };
 use crate::ast::{
     Annotated, Binder, Expression, Item, ParamAttr, ParamDefault, Parameter, Selector, SetDefault,
     SimpleSelector, Span, StringPart, Term, Token, Trailed, TrailingComment, Trivia, TriviaPiece,
 };
+use crate::dump_enum;
 use crate::format_constructor;
-use crate::format_enum;
 use crate::format_record;
 
-/// Generate a `PrettySimple` impl for a primitive/atomic type:
+/// Generate a `Dump` impl for a primitive/atomic type:
 /// `is_simple` and `is_atomic` are always `true`; only `format` varies.
 macro_rules! simple_atom {
     ($ty:ty, |$self_:ident, $w:ident| $body:expr) => {
-        impl PrettySimple for $ty {
-            fn format<W: Writer>(&self, $w: &mut W) {
+        impl Dump for $ty {
+            fn dump<W: Writer>(&self, $w: &mut W) {
                 let $self_ = self;
                 $body
             }
@@ -38,8 +38,8 @@ simple_atom!(&str, |s, w| {
     w.write_colored(&escape_string(s), STRING_CONTENT_COLOR);
     w.write_colored("\"", STRING_QUOTE_COLOR);
 });
-simple_atom!(String, |s, w| s.as_str().format(w));
-simple_atom!(Box<str>, |s, w| (&**s).format(w));
+simple_atom!(String, |s, w| s.as_str().dump(w));
+simple_atom!(Box<str>, |s, w| (&**s).dump(w));
 
 // isize / usize: number literals (pretty-simple's NumberLit)
 simple_atom!(isize, |n, w| w.write_colored(&n.to_string(), NUMBER_COLOR));
@@ -51,15 +51,15 @@ simple_atom!(bool, |b, w| w.write_plain(if *b {
     "False"
 }));
 
-impl PrettySimple for Trailed<Expression> {
-    fn format<W: Writer>(&self, w: &mut W) {
-        self.value.format(w);
+impl Dump for Trailed<Expression> {
+    fn dump<W: Writer>(&self, w: &mut W) {
+        self.value.dump(w);
         w.newline(); // Final newline at end of output
     }
 }
 
-impl PrettySimple for Expression {
-    fn format<W: Writer>(&self, w: &mut W) {
+impl Dump for Expression {
+    fn dump<W: Writer>(&self, w: &mut W) {
         match self {
             Self::Term(term) => format_constructor!(w, "Term", [term]),
             Self::With {
@@ -133,8 +133,8 @@ impl PrettySimple for Expression {
     }
 }
 
-impl PrettySimple for Term {
-    fn format<W: Writer>(&self, w: &mut W) {
+impl Dump for Term {
+    fn dump<W: Writer>(&self, w: &mut W) {
         match self {
             Self::Token(leaf) => format_constructor!(w, "Token", [leaf]),
             Self::SimpleString(s) => format_constructor!(w, "SimpleString", [s]),
@@ -169,20 +169,20 @@ impl PrettySimple for Term {
 // `(Leaf, _)` tuples; format them as 2-tuples so AST output stays
 // byte-identical with Haskell `nixfmt --ast`.
 /// Format two parts as a Haskell 2-tuple `( a, b )` literal.
-fn format_pair<W: Writer, A: PrettySimple, B: PrettySimple>(w: &mut W, a: &A, b: &B) {
+fn format_pair<W: Writer, A: Dump, B: Dump>(w: &mut W, a: &A, b: &B) {
     with_brackets(w, "(", ")", true, |w, paren_color| {
         w.write_plain(" ");
-        a.format(w);
+        a.dump(w);
         w.newline();
         w.write_colored(",", paren_color);
         w.write_plain(" ");
-        b.format(w);
+        b.dump(w);
         w.newline();
     });
 }
 
-impl PrettySimple for SetDefault {
-    fn format<W: Writer>(&self, w: &mut W) {
+impl Dump for SetDefault {
+    fn dump<W: Writer>(&self, w: &mut W) {
         format_pair(w, &self.or_kw, &*self.value);
     }
     fn has_delimiters(&self) -> bool {
@@ -190,8 +190,8 @@ impl PrettySimple for SetDefault {
     }
 }
 
-impl PrettySimple for ParamDefault {
-    fn format<W: Writer>(&self, w: &mut W) {
+impl Dump for ParamDefault {
+    fn dump<W: Writer>(&self, w: &mut W) {
         format_pair(w, &self.question, &self.value);
     }
     fn has_delimiters(&self) -> bool {
@@ -199,8 +199,8 @@ impl PrettySimple for ParamDefault {
     }
 }
 
-impl<T: PrettySimple> PrettySimple for Item<T> {
-    fn format<W: Writer>(&self, w: &mut W) {
+impl<T: Dump> Dump for Item<T> {
+    fn dump<W: Writer>(&self, w: &mut W) {
         match self {
             Self::Item(inner) => {
                 format_constructor!(w, "Item", [inner]);
@@ -220,8 +220,8 @@ impl<T: PrettySimple> PrettySimple for Item<T> {
     }
 }
 
-impl PrettySimple for Binder {
-    fn format<W: Writer>(&self, w: &mut W) {
+impl Dump for Binder {
+    fn dump<W: Writer>(&self, w: &mut W) {
         match self {
             Self::Inherit {
                 kw,
@@ -243,14 +243,14 @@ impl PrettySimple for Binder {
     }
 }
 
-impl PrettySimple for Selector {
-    fn format<W: Writer>(&self, w: &mut W) {
+impl Dump for Selector {
+    fn dump<W: Writer>(&self, w: &mut W) {
         format_constructor!(w, "Selector", [&self.dot, &self.selector]);
     }
 }
 
-impl PrettySimple for SimpleSelector {
-    fn format<W: Writer>(&self, w: &mut W) {
+impl Dump for SimpleSelector {
+    fn dump<W: Writer>(&self, w: &mut W) {
         // Use Haskell constructor names for compatibility with nixfmt --ast output
         match self {
             Self::ID(leaf) => {
@@ -266,9 +266,9 @@ impl PrettySimple for SimpleSelector {
     }
 }
 
-impl PrettySimple for TriviaPiece {
-    fn format<W: Writer>(&self, w: &mut W) {
-        format_enum!(self, w, {
+impl Dump for TriviaPiece {
+    fn dump<W: Writer>(&self, w: &mut W) {
+        dump_enum!(self, w, {
             EmptyLine() => [],
             LineComment(text) => [text],
             BlockComment(is_doc, lines) => [is_doc, lines],
@@ -296,8 +296,8 @@ impl PrettySimple for TriviaPiece {
 }
 
 // Haskell `Trivia` is `Seq Trivium` since nixfmt 1.2.0; Show renders as `fromList [..]`.
-impl PrettySimple for Trivia {
-    fn format<W: Writer>(&self, w: &mut W) {
+impl Dump for Trivia {
+    fn dump<W: Writer>(&self, w: &mut W) {
         w.write_plain("fromList");
         sub_expr(w, &self.to_vec());
     }
@@ -308,8 +308,8 @@ impl PrettySimple for Trivia {
     }
 }
 
-impl PrettySimple for Parameter {
-    fn format<W: Writer>(&self, w: &mut W) {
+impl Dump for Parameter {
+    fn dump<W: Writer>(&self, w: &mut W) {
         // Use Haskell constructor names for compatibility with nixfmt --ast output
         match self {
             Self::Id(leaf) => {
@@ -325,8 +325,8 @@ impl PrettySimple for Parameter {
     }
 }
 
-impl PrettySimple for ParamAttr {
-    fn format<W: Writer>(&self, w: &mut W) {
+impl Dump for ParamAttr {
+    fn dump<W: Writer>(&self, w: &mut W) {
         match self {
             Self::Attr {
                 name,
@@ -342,8 +342,8 @@ impl PrettySimple for ParamAttr {
     }
 }
 
-impl PrettySimple for StringPart {
-    fn format<W: Writer>(&self, w: &mut W) {
+impl Dump for StringPart {
+    fn dump<W: Writer>(&self, w: &mut W) {
         match self {
             Self::TextPart(text) => {
                 format_constructor!(w, "TextPart", [text]);
@@ -351,7 +351,7 @@ impl PrettySimple for StringPart {
             Self::Interpolation(whole) => {
                 w.write_plain("Interpolation");
                 w.write_plain(" ");
-                whole.value.format(w);
+                whole.value.dump(w);
             }
         }
     }
@@ -370,10 +370,10 @@ impl PrettySimple for StringPart {
     }
 }
 
-/// `PrettySimple` for Token - constructor applications for data-carrying tokens
-impl PrettySimple for Token {
-    fn format<W: Writer>(&self, w: &mut W) {
-        format_enum!(self, w, {
+/// `Dump` for Token - constructor applications for data-carrying tokens
+impl Dump for Token {
+    fn dump<W: Writer>(&self, w: &mut W) {
+        dump_enum!(self, w, {
             Integer(s) => [&s.as_str()],
             Float(s) => [&s.as_str()],
             Identifier(s) => [&s.as_str()],
@@ -394,14 +394,14 @@ impl PrettySimple for Token {
 #[derive(Debug)]
 struct SpanWrapper(Span);
 
-impl PrettySimple for SpanWrapper {
-    fn format<W: Writer>(&self, w: &mut W) {
+impl Dump for SpanWrapper {
+    fn dump<W: Writer>(&self, w: &mut W) {
         use crate::error::ErrorContext;
 
         w.write_plain("Pos ");
         let ctx = ErrorContext::new(w.source(), None);
         let pos = ctx.position(self.0.start());
-        pos.line.format(w);
+        pos.line.dump(w);
     }
 
     fn is_simple(&self) -> bool {
@@ -409,11 +409,11 @@ impl PrettySimple for SpanWrapper {
     }
 }
 
-/// `PrettySimple` for `TrailingComment` - constructor with comment contents
+/// `Dump` for `TrailingComment` - constructor with comment contents
 /// In Haskell's Show output, this becomes a Parens with simple elements,
 /// so it formats inline as: ( `TrailingComment` "text" )
-impl PrettySimple for TrailingComment {
-    fn format<W: Writer>(&self, w: &mut W) {
+impl Dump for TrailingComment {
+    fn dump<W: Writer>(&self, w: &mut W) {
         with_brackets(w, "(", ")", true, |w, _| {
             w.write_plain(" ");
             format_constructor!(w, "TrailingComment", [&&*self.0]);
@@ -426,8 +426,8 @@ impl PrettySimple for TrailingComment {
     }
 }
 
-impl<T: PrettySimple> PrettySimple for Annotated<T> {
-    fn format<W: Writer>(&self, w: &mut W) {
+impl<T: Dump> Dump for Annotated<T> {
+    fn dump<W: Writer>(&self, w: &mut W) {
         // Reference `nixfmt --ast` emits the Haskell constructor name.
         w.write_plain("Ann");
 
@@ -443,16 +443,16 @@ impl<T: PrettySimple> PrettySimple for Annotated<T> {
     }
 }
 
-/// Generic `PrettySimple` for Vec<T>
+/// Generic `Dump` for Vec<T>
 /// Based on pretty-simple's Brackets in Show output
 /// Implements the `list` function logic:
 /// - Vec<T> in Rust corresponds to a single "row" [[T]] in Haskell's `CommaSeparated`
 /// - Empty vec: []
 /// - All elements simple: [ elem1, elem2, ... ] (inline, space-separated with commas)
 /// - Any element complex: multiline with comma-first
-impl<T: PrettySimple> PrettySimple for Vec<T> {
-    fn format<W: Writer>(&self, w: &mut W) {
-        format_bracket_list(w, self, true);
+impl<T: Dump> Dump for Vec<T> {
+    fn dump<W: Writer>(&self, w: &mut W) {
+        dump_list(w, self, true);
     }
 
     fn is_simple(&self) -> bool {
@@ -484,10 +484,10 @@ impl<T: PrettySimple> PrettySimple for Vec<T> {
     }
 }
 
-/// Generic `PrettySimple` for Option<T>
+/// Generic `Dump` for Option<T>
 /// Based on Haskell's Show instance for Maybe
-impl<T: PrettySimple> PrettySimple for Option<T> {
-    fn format<W: Writer>(&self, w: &mut W) {
+impl<T: Dump> Dump for Option<T> {
+    fn dump<W: Writer>(&self, w: &mut W) {
         match self {
             Some(value) => {
                 format_constructor!(w, "Just", [value]);
@@ -503,17 +503,17 @@ impl<T: PrettySimple> PrettySimple for Option<T> {
     }
 }
 
-/// `PrettySimple` for tuples (A, B)
+/// `Dump` for tuples (A, B)
 /// Based on Haskell's Show instance for tuples
-impl<A: PrettySimple, B: PrettySimple> PrettySimple for (A, B) {
-    fn format<W: Writer>(&self, w: &mut W) {
+impl<A: Dump, B: Dump> Dump for (A, B) {
+    fn dump<W: Writer>(&self, w: &mut W) {
         with_brackets(w, "(", ")", true, |w, paren_color| {
             w.write_plain(" ");
-            self.0.format(w);
+            self.0.dump(w);
             w.newline();
             w.write_colored(",", paren_color);
             w.write_plain(" ");
-            self.1.format(w);
+            self.1.dump(w);
             w.newline();
         });
     }
@@ -523,10 +523,10 @@ impl<A: PrettySimple, B: PrettySimple> PrettySimple for (A, B) {
     }
 }
 
-/// `PrettySimple` for `Box<[T]>` — renders like a `Vec<T>` (sequence brackets).
-impl<T: PrettySimple> PrettySimple for Box<[T]> {
-    fn format<W: Writer>(&self, w: &mut W) {
-        format_bracket_list(w, self, true);
+/// `Dump` for `Box<[T]>` — renders like a `Vec<T>` (sequence brackets).
+impl<T: Dump> Dump for Box<[T]> {
+    fn dump<W: Writer>(&self, w: &mut W) {
+        dump_list(w, self, true);
     }
 
     fn is_simple(&self) -> bool {
@@ -549,11 +549,11 @@ impl<T: PrettySimple> PrettySimple for Box<[T]> {
     }
 }
 
-/// `PrettySimple` for Box<T>
+/// `Dump` for Box<T>
 /// Box is transparent in Haskell's Show output
-impl<T: PrettySimple> PrettySimple for Box<T> {
-    fn format<W: Writer>(&self, w: &mut W) {
-        (**self).format(w);
+impl<T: Dump> Dump for Box<T> {
+    fn dump<W: Writer>(&self, w: &mut W) {
+        (**self).dump(w);
     }
 
     fn is_simple(&self) -> bool {

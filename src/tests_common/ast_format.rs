@@ -5,7 +5,7 @@
 
 use super::diff;
 use crate::colored_writer::ColoredWriter;
-use crate::dump::PrettySimple;
+use crate::dump::Dump;
 use std::process::Command;
 
 /// Which reference-nixfmt mode to invoke and where its output lands.
@@ -103,7 +103,7 @@ pub fn test_ast_format(input: &str) {
     let ast = crate::parse(input).expect("Failed to parse input");
 
     let mut writer = ColoredWriter::new(input);
-    ast.format(&mut writer);
+    ast.dump(&mut writer);
     let our_output = writer.finish();
 
     let expected = run_reference_nixfmt(input, RefMode::Ast);
@@ -139,7 +139,7 @@ pub fn test_ir_format(input: &str) {
     let ir = crate::ast_to_ir(&ast);
 
     let mut writer = ColoredWriter::new(input);
-    ir.format(&mut writer);
+    ir.dump(&mut writer);
     let our_output = writer.finish();
 
     let expected = run_reference_nixfmt(input, RefMode::Ir);

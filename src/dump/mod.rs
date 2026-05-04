@@ -1,4 +1,4 @@
-//! `PrettySimple` trait for formatting AST and IR nodes to match nixfmt Haskell's output
+//! `Dump` trait for rendering AST and IR nodes to match nixfmt Haskell's output
 //!
 //! This implementation is based on the pretty-simple Haskell library:
 //! <https://github.com/cdepillabout/pretty-simple>
@@ -47,8 +47,8 @@ pub const STRING_QUOTE_COLOR: &str = "\x1b[0;97;1m";
 pub const STRING_CONTENT_COLOR: &str = "\x1b[0;94;1m";
 
 /// Trait for types that can be formatted as Haskell-style output
-pub trait PrettySimple: Debug {
-    fn format<W: Writer>(&self, w: &mut W);
+pub trait Dump: Debug {
+    fn dump<W: Writer>(&self, w: &mut W);
 
     /// Check if this value is "simple" (can be formatted inline)
     /// Based on pretty-simple's isSimple function
@@ -174,13 +174,13 @@ pub fn escape_string(s: &str) -> std::borrow::Cow<'_, str> {
 ///               in if isSimple x
 ///                  then nest 2 doc  -- space before simple
 ///                  else nest indentAmount $ line' <> doc  -- newline before complex
-pub fn sub_expr<T: PrettySimple, W: Writer>(w: &mut W, arg: &T) {
+pub fn sub_expr<T: Dump, W: Writer>(w: &mut W, arg: &T) {
     if arg.is_simple() {
         w.write_plain(" ");
-        arg.format(w);
+        arg.dump(w);
     } else if arg.has_delimiters() {
         w.newline();
-        arg.format(w);
+        arg.dump(w);
     } else {
         // Complex argument: wrap in parens. `renders_inline_parens` only controls
         // whether the closing paren stays on the same line or drops to the next.
@@ -188,7 +188,7 @@ pub fn sub_expr<T: PrettySimple, W: Writer>(w: &mut W, arg: &T) {
         w.newline();
         with_brackets(w, "(", ")", true, |w, _| {
             w.write_plain(" ");
-            arg.format(w);
+            arg.dump(w);
             if inline {
                 w.write_plain(" ");
             } else {
@@ -233,13 +233,13 @@ pub fn with_brackets<W: Writer>(
 /// - Non-empty, complex delimited values get a newline before them
 /// - Simple delimited values (like [ `EmptyLine` ]) stay inline
 /// - Everything else: space before
-pub fn format_delimited_value<T: PrettySimple, W: Writer>(w: &mut W, value: &T) {
+pub fn dump_delimited<T: Dump, W: Writer>(w: &mut W, value: &T) {
     if value.has_delimiters() && !value.is_empty() && !value.is_simple() {
         w.newline();
     } else {
         w.write_plain(" ");
     }
-    value.format(w);
+    value.dump(w);
 }
 
 /// Shared bracket-list rendering for `Vec<T>` and `IR`.
@@ -253,7 +253,7 @@ pub fn format_delimited_value<T: PrettySimple, W: Writer>(w: &mut W, value: &T) 
 /// level. `Vec<T>` does this (matching pretty-simple's `Open` annotation),
 /// whereas the top-level `IR` dump stays at depth 0 so its first column lines
 /// up with the Haskell reference output.
-pub fn format_bracket_list<T: PrettySimple, W: Writer>(w: &mut W, items: &[T], bump_depth: bool) {
+pub fn dump_list<T: Dump, W: Writer>(w: &mut W, items: &[T], bump_depth: bool) {
     if items.is_empty() {
         with_brackets(w, "[", "]", false, |_, _| {});
         return;
@@ -264,7 +264,7 @@ pub fn format_bracket_list<T: PrettySimple, W: Writer>(w: &mut W, items: &[T], b
             && only.is_simple()
         {
             w.write_plain(" ");
-            only.format(w);
+            only.dump(w);
             w.write_plain(" ");
         } else {
             for (i, item) in items.iter().enumerate() {
@@ -272,7 +272,7 @@ pub fn format_bracket_list<T: PrettySimple, W: Writer>(w: &mut W, items: &[T], b
                     w.newline();
                     w.write_colored(",", bracket_color);
                 }
-                format_delimited_value(w, item);
+                dump_delimited(w, item);
             }
             w.newline();
         }
@@ -320,7 +320,7 @@ macro_rules! format_record {
         $w.write_plain(" ");
         $w.write_plain($name);
         $w.write_plain(" =");
-        $crate::dump::format_delimited_value($w, $value);
+        $crate::dump::dump_delimited($w, $value);
         $(
             format_record!(@fields $w, $brace_color; comma; ($rest_name, $rest_value));
         )*
@@ -333,7 +333,7 @@ macro_rules! format_record {
         $w.write_plain(" ");
         $w.write_plain($name);
         $w.write_plain(" =");
-        $crate::dump::format_delimited_value($w, $value);
+        $crate::dump::dump_delimited($w, $value);
     };
 }
 
@@ -342,7 +342,7 @@ macro_rules! format_record {
 ///
 /// Usage without wildcard:
 /// ```ignore
-/// format_enum!(self, w, {
+/// dump_enum!(self, w, {
 ///     Variant1(field) => [field],
 ///     Variant2(field1, field2) => [field1, field2],
 /// });
@@ -350,13 +350,13 @@ macro_rules! format_record {
 ///
 /// Usage with wildcard (for fallback case):
 /// ```ignore
-/// format_enum!(self, w, {
+/// dump_enum!(self, w, {
 ///     Variant1(field) => [field],
 ///     _ => { w.write_plain(&format!("{:?}", self)); }
 /// });
 /// ```
 #[macro_export]
-macro_rules! format_enum {
+macro_rules! dump_enum {
     // Version without wildcard
     ($self:expr, $w:expr, {
         $( $variant:ident $( ( $($field:ident),* $(,)? ) )? => [ $($arg:expr),* $(,)? ] ),* $(,)?
