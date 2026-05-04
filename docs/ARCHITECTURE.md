@@ -6,7 +6,7 @@ intermediate representations are dumpable (`--ast`, `--ir`) so the two
 implementations can be diffed at every seam.
 
 ```
-            src/lexer/        src/parser/       src/pretty/      src/predoc.rs
+            src/lexer/        src/parser/       src/format/      src/doc/
 Nix text ───► tokens+trivia ───► AST (Annotated<T>) ───► Doc IR ───► fixup ───► layout ───► text
             Nixfmt/Lexer.hs   Nixfmt/Parser.hs  Nixfmt/Pretty.hs   Nixfmt/Predoc.hs
                               Nixfmt/Types.hs
@@ -27,11 +27,11 @@ annotations) plus an optional same-line trailing comment. Mirrors
 Recursive descent producing the AST in `src/ast/`, which is a
 field-for-field transcription of `Nixfmt/Types.hs` (`Annotated`, `Trivium`,
 `Item`, `Expression`, `Term`, …). Because the types line up, the
-`--ast` dump (rendered by `src/pretty_simple/`) is byte-identical to
+`--ast` dump (rendered by `src/dump/`) is byte-identical to
 Haskell `show` filtered through *pretty-simple*, which is what the
 regression suite asserts.
 
-## Pretty — `src/pretty/`
+## Format — `src/format/`
 
 `impl Pretty for <AST node>` turns the tree into the **Doc IR**. This
 is where all formatting policy lives: absorption (`absorbRHS`,
@@ -41,7 +41,7 @@ carries a doc comment naming the `Nixfmt/Pretty.hs` definition it
 ports, because IR-level divergences are debugged by reading the two
 side by side.
 
-## Predoc — `src/predoc.rs`
+## Doc — `src/doc/`
 
 The Wadler/Leijen-style layout engine, ported from `Nixfmt/Predoc.hs`.
 
@@ -64,9 +64,9 @@ enum GroupKind { Regular, Transparent, Priority }
 The `--ir` flag prints the post-`fixup` Doc so it can be diffed against
 `nixfmt --ir`.
 
-## Debug printers — `src/pretty_simple/`, `src/colored_writer.rs`
+## Debug printers — `src/dump/`, `src/colored_writer.rs`
 
-`pretty_simple` reproduces Haskell `Show` + the *pretty-simple* layout
+`dump` reproduces Haskell `Show` + the *pretty-simple* layout
 rules (the `is_simple` / `is_atomic` / `has_delimiters` triad) so that
 `--ast` output matches upstream exactly without us having to serialise
 through an actual `Show` string.

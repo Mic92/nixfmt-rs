@@ -5,7 +5,7 @@ This crate has four tiers of tests. Pick the lowest tier that catches your bug.
 ## 1. Smoke / unit tests (`src/**/*.rs` `#[cfg(test)]`)
 
 Tiny, fast assertions colocated with the code they exercise (lexer, parser,
-predoc layout helpers). Add here when testing a single function in isolation.
+doc layout helpers). Add here when testing a single function in isolation.
 
 ## 2. Regression tests (`src/regression_tests/`)
 

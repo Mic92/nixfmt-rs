@@ -1,5 +1,5 @@
 use crate::ast::{Expression, Leaf, Token};
-use crate::predoc::{Doc, Pretty, line};
+use crate::doc::{Doc, Pretty, line};
 
 use super::app::pretty_app;
 

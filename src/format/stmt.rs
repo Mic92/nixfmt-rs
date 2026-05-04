@@ -1,10 +1,10 @@
 use crate::ast::{Binder, Expression, Items, Leaf, Parameter, Trivia, Trivium};
-use crate::predoc::{Doc, Elem, Pretty, hardline, line};
+use crate::doc::{Doc, Elem, Pretty, hardline, line};
 
 use super::Width;
 
 impl Expression {
-    pub(in crate::pretty) fn absorb_abs(&self, doc: &mut Doc, depth: usize) {
+    pub(in crate::format) fn absorb_abs(&self, doc: &mut Doc, depth: usize) {
         match self {
             Self::Abstraction {
                 param: Parameter::Id(param),

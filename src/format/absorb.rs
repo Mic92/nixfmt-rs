@@ -1,7 +1,7 @@
 use crate::ast::{
     Annotated, Binder, Expression, FirstToken, Item, Items, Parameter, Term, Token, Trivia,
 };
-use crate::predoc::{Doc, Elem, Pretty, hardspace, line};
+use crate::doc::{Doc, Elem, Pretty, hardspace, line};
 
 use super::Width;
 use super::app::pretty_app;
@@ -64,7 +64,7 @@ impl Expression {
     /// absorbable term is emitted bare/wide, a `with ... ; <absorbable>` body
     /// gets the compact single-group treatment, and anything else falls back
     /// to the regular [`Pretty`] impl.
-    pub(in crate::pretty) fn absorb(&self, doc: &mut Doc, width: Width) {
+    pub(in crate::format) fn absorb(&self, doc: &mut Doc, width: Width) {
         match self {
             Self::Term(t) if t.is_absorbable() => match width {
                 Width::Wide => t.pretty_wide(doc),
@@ -110,7 +110,7 @@ impl Expression {
     ///
     /// Match arms mirror Haskell `absorbRHS` one-to-one and in order so
     /// behavioural differences against the reference are easy to locate.
-    pub(in crate::pretty) fn absorb_rhs(&self, doc: &mut Doc) {
+    pub(in crate::format) fn absorb_rhs(&self, doc: &mut Doc) {
         match self {
             // Exception to the absorbable-expr case below: do not force-expand attrsets
             // that only contain a single `inherit` statement.

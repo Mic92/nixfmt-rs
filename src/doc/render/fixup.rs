@@ -4,7 +4,7 @@
 //! empty groups, and bake `Nest` deltas into each `Text` so the renderer
 //! never sees `Nest`.
 
-use crate::predoc::{Doc, Elem, GroupKind, Spacing, TextKind};
+use crate::doc::{Doc, Elem, GroupKind, Spacing, TextKind};
 
 impl Elem {
     /// Check if element is hard spacing (always rendered as-is)

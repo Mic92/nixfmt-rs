@@ -4,7 +4,7 @@
 
 use super::Look;
 use super::fits::{first_line_fits, first_line_width, fits, next_indent};
-use crate::predoc::{Doc, Elem, GroupKind, Spacing, TextKind, text_width};
+use crate::doc::{Doc, Elem, GroupKind, Spacing, TextKind, text_width};
 
 pub struct RenderConfig {
     /// Maximum line width (default: 100)

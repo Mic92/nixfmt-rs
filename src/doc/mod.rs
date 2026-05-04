@@ -104,7 +104,7 @@ pub enum Elem {
 /// Wraps a `Vec<Elem>` and exposes builder methods (`text`, `group`, `nested`,
 /// …) defined in [`builder`]. The inner `Vec` is `pub(crate)` so the renderer
 /// and fixup pass can perform in-place `Vec` surgery without going through the
-/// builder API; everything outside `predoc` should treat `Doc` as opaque and
+/// builder API; everything outside `doc` should treat `Doc` as opaque and
 /// use the methods.
 #[derive(Debug, Default, Clone, PartialEq, Eq)]
 pub struct Doc(pub(crate) Vec<Elem>);

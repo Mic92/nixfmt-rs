@@ -1,6 +1,6 @@
 //! Builder methods for constructing a [`Doc`]: text/comment pushers,
 //! group/nest combinators and spacing constructors. Kept separate from the
-//! renderer so `pretty/` callers only see the building vocabulary.
+//! renderer so `format/` callers only see the building vocabulary.
 //!
 //! The original Haskell implementation models this as a `Writer Doc` monad and
 //! the first Rust port mirrored that with free `push_*(doc, …)` functions. The

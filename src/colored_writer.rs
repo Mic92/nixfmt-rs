@@ -1,6 +1,6 @@
 //! Colored Writer implementation using the trait-based approach
 
-use crate::pretty_simple::Writer;
+use crate::dump::Writer;
 
 const RESET: &str = "\x1b[0m";
 
