@@ -15,7 +15,6 @@ mod params;
 mod stmt;
 mod string;
 mod term;
-mod util;
 
 use absorb::push_absorb_rhs;
 use app::push_pretty_app;
@@ -25,7 +24,13 @@ use string::{push_pretty_indented_string, push_pretty_simple_string};
 use term::{
     push_pretty_parenthesized, push_pretty_set, push_pretty_term_list, push_pretty_term_wide,
 };
-use util::Width;
+
+/// Whether a set/absorbed term should prefer its expanded (multi-line) layout.
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum Width {
+    Regular,
+    Wide,
+}
 
 impl Pretty for TrailingComment {
     fn pretty(&self, doc: &mut Doc) {

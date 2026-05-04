@@ -1,9 +1,21 @@
 use crate::predoc::{Doc, DocE, Pretty, hardline, hardspace, line};
 use crate::types::{Ann, Binder, Expression, Item, Items, Leaf, Term, Token, Trivium};
 
+use super::Width;
 use super::absorb::push_absorb_expr;
 use super::app::push_pretty_app;
-use super::util::{Width, push_empty_brackets};
+
+/// Render an empty bracketed container (`[]`, `{}`), preserving a user-inserted
+/// line break between the delimiters. Shared by empty list / set / param-set.
+pub(super) fn push_empty_brackets(doc: &mut Doc, open: &Leaf, close: &Leaf) {
+    open.pretty(doc);
+    if open.span.start_line() == close.span.start_line() {
+        doc.hardspace();
+    } else {
+        doc.hardline();
+    }
+    close.pretty(doc);
+}
 
 /// Mirrors `prettyTerm (List ..)` in Nixfmt/Pretty.hs (no surrounding group).
 pub(super) fn push_pretty_term_list(doc: &mut Doc, open: &Leaf, items: &Items<Term>, close: &Leaf) {

@@ -2,7 +2,10 @@ use crate::predoc::{Doc, DocE, Pretty, TextAnn, newline, text_width, try_compact
 use crate::types::{Expression, StringPart};
 
 use super::term::push_parenthesized_inner;
-use super::util::is_spaces;
+
+fn is_spaces(s: &str) -> bool {
+    s.chars().all(char::is_whitespace)
+}
 
 /// Wrap content in `${ ... }` with a group: try to compact it onto one line
 /// (within `max_width` columns), otherwise break with `linebreak`.

@@ -3,8 +3,8 @@ use crate::types::{Binder, Expression, Items, Leaf, Parameter, Trivia, Trivium};
 
 use super::term::push_pretty_items;
 
+use super::Width;
 use super::absorb::push_absorb_expr;
-use super::util::Width;
 
 pub(super) fn push_absorb_abs(doc: &mut Doc, depth: usize, expr: &Expression) {
     match expr {

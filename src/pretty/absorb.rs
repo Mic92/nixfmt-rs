@@ -3,10 +3,10 @@ use crate::types::{
     Ann, Binder, Expression, FirstToken, Item, Items, Parameter, Term, Token, Trivia,
 };
 
+use super::Width;
 use super::app::push_pretty_app;
 use super::op::push_pretty_operation;
 use super::term::{push_pretty_term, push_pretty_term_wide};
-use super::util::Width;
 
 impl Term {
     /// Haskell `isAbsorbable` / `isAbsorbableTerm` (Pretty.hs).

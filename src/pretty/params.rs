@@ -5,7 +5,7 @@ use crate::types::{
 };
 
 use super::absorb::push_absorb_rhs;
-use super::util::push_empty_brackets;
+use super::term::push_empty_brackets;
 
 impl Pretty for ParamAttr {
     fn pretty(&self, doc: &mut Doc) {
