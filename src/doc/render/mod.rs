@@ -71,7 +71,7 @@ impl Doc {
     /// Normalise a freshly built document for rendering: lift hard spacings
     /// and comments out of groups, merge adjacent spacings, drop empty groups.
     pub fn fixup(mut self) -> Self {
-        fixup::fixup_mut(&mut self.0, 0, 0);
+        fixup::fixup_mut(&mut self.0, 0, 0, false);
         self
     }
 }

@@ -90,7 +90,22 @@ fn split_liftable(ann: GroupKind, mut body: Doc) -> GroupFixup {
 /// (`write_idx <= read_idx`), recursing into group bodies via `&mut` so the
 /// existing `Vec` allocations are reused. Mirrors Haskell `fixup`
 /// clause-by-clause; see the per-arm comments for the corresponding rule.
-pub(super) fn fixup_mut(doc: &mut Vec<Elem>, mut nest_acc: isize, mut offset_acc: isize) {
+///
+/// `pull_hardspace` means "a `Hardspace` immediately precedes `doc` in the
+/// parent and should merge with `doc`'s leading content". This implements the
+/// `Spacing Hardspace : Group ann xs` rule without an O(n) `insert(0, ..)`.
+/// Returns whether that virtual `Hardspace` was absorbed into `doc`'s output;
+/// if not, the caller keeps it in place.
+#[allow(clippy::too_many_lines)]
+pub(super) fn fixup_mut(
+    doc: &mut Vec<Elem>,
+    mut nest_acc: isize,
+    mut offset_acc: isize,
+    pull_hardspace: bool,
+) -> bool {
+    // Only meaningful while `write_idx == 0`; once anything is written the
+    // virtual Hardspace is positionally before it and can no longer merge.
+    let mut virtual_hs = pull_hardspace;
     let mut read_idx = 0usize;
     let mut write_idx = 0usize;
     while read_idx < doc.len() {
@@ -104,7 +119,11 @@ pub(super) fn fixup_mut(doc: &mut Vec<Elem>, mut nest_acc: isize, mut offset_acc
 
             // `Spacing a : Spacing b : ys` — fold into the next slot, or into
             // the previous written slot when a `Nest` marker sat in between.
-            Elem::Spacing(a) => {
+            Elem::Spacing(mut a) => {
+                if write_idx == 0 && virtual_hs {
+                    a = Spacing::Hardspace.merge(a);
+                    virtual_hs = false;
+                }
                 if let Some(Elem::Spacing(b)) = doc.get(read_idx) {
                     doc[read_idx] = Elem::Spacing(a.merge(*b));
                 } else if matches!(
@@ -139,15 +158,21 @@ pub(super) fn fixup_mut(doc: &mut Vec<Elem>, mut nest_acc: isize, mut offset_acc
 
             Elem::Group(ann, mut body) => {
                 // `Spacing Hardspace : Group ann xs : ys` — pull a just-written
-                // hardspace into the group so it can merge with a leading soft
-                // spacing during the recursive fixup.
-                if write_idx > 0 && matches!(doc[write_idx - 1], Elem::Spacing(Spacing::Hardspace))
-                {
-                    write_idx -= 1;
-                    doc[write_idx] = HOLE;
-                    body.0.insert(0, Elem::Spacing(Spacing::Hardspace));
+                // (or virtual) hardspace into the group so it can merge with a
+                // leading soft spacing during the recursive fixup.
+                let pull = if write_idx > 0 {
+                    matches!(doc[write_idx - 1], Elem::Spacing(Spacing::Hardspace))
+                } else {
+                    virtual_hs
+                };
+                if fixup_mut(&mut body.0, nest_acc, offset_acc, pull) {
+                    if write_idx > 0 {
+                        write_idx -= 1;
+                        doc[write_idx] = HOLE;
+                    } else {
+                        virtual_hs = false;
+                    }
                 }
-                fixup_mut(&mut body.0, nest_acc, offset_acc);
 
                 match split_liftable(ann, body) {
                     GroupFixup::Keep(body) => {
@@ -202,4 +227,5 @@ pub(super) fn fixup_mut(doc: &mut Vec<Elem>, mut nest_acc: isize, mut offset_acc
         }
     }
     doc.truncate(write_idx);
+    pull_hardspace && !virtual_hs
 }
