@@ -174,7 +174,7 @@ pub fn escape_string(s: &str) -> std::borrow::Cow<'_, str> {
 ///               in if isSimple x
 ///                  then nest 2 doc  -- space before simple
 ///                  else nest indentAmount $ line' <> doc  -- newline before complex
-pub fn sub_expr<T: Dump, W: Writer>(w: &mut W, arg: &T) {
+pub fn sub_expr<T: Dump + ?Sized, W: Writer>(w: &mut W, arg: &T) {
     if arg.is_simple() {
         w.write_plain(" ");
         arg.dump(w);
@@ -233,7 +233,7 @@ pub fn with_brackets<W: Writer>(
 /// - Non-empty, complex delimited values get a newline before them
 /// - Simple delimited values (like [ `EmptyLine` ]) stay inline
 /// - Everything else: space before
-pub fn dump_delimited<T: Dump, W: Writer>(w: &mut W, value: &T) {
+pub fn dump_delimited<T: Dump + ?Sized, W: Writer>(w: &mut W, value: &T) {
     if value.has_delimiters() && !value.is_empty() && !value.is_simple() {
         w.newline();
     } else {

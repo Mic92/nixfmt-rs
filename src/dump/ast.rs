@@ -299,12 +299,12 @@ impl Dump for TriviaPiece {
 impl Dump for Trivia {
     fn dump<W: Writer>(&self, w: &mut W) {
         w.write_plain("fromList");
-        sub_expr(w, &self.to_vec());
+        sub_expr::<[_], _>(w, self);
     }
 
     fn renders_inline_parens(&self) -> bool {
         // `( fromList [ EmptyLine ] )` stays on one line when the inner list is simple.
-        self.to_vec().is_simple()
+        <[_] as Dump>::is_simple(self)
     }
 }
 
@@ -443,14 +443,14 @@ impl<T: Dump> Dump for Annotated<T> {
     }
 }
 
-/// Generic `Dump` for Vec<T>
+/// Generic `Dump` for slices.
 /// Based on pretty-simple's Brackets in Show output
 /// Implements the `list` function logic:
-/// - Vec<T> in Rust corresponds to a single "row" [[T]] in Haskell's `CommaSeparated`
-/// - Empty vec: []
+/// - `[T]` in Rust corresponds to a single "row" [[T]] in Haskell's `CommaSeparated`
+/// - Empty: []
 /// - All elements simple: [ elem1, elem2, ... ] (inline, space-separated with commas)
 /// - Any element complex: multiline with comma-first
-impl<T: Dump> Dump for Vec<T> {
+impl<T: Dump> Dump for [T] {
     fn dump<W: Writer>(&self, w: &mut W) {
         dump_list(w, self, true);
     }
@@ -460,19 +460,17 @@ impl<T: Dump> Dump for Vec<T> {
         // isListSimple [[e]] = isSimple e && case e of Other s -> not $ any isSpace s ; _ -> True
         // isListSimple _:_ = False
         // isListSimple [] = True
-        if self.is_empty() {
-            return true;
-        }
+        //
         // Single element: simple if it's atomic OR (simple AND has delimiters)
         // In Haskell: [[e]] matches only when the row has ONE element
         // - [EmptyLine] → row: [Other "EmptyLine"] → 1 element → atomic → simple
         // - [TextPart "x"] → row: [Other, StringLit] → 2 elements → NOT simple
         // - [[]] → row: [Brackets []] → 1 element, simple delimited → simple
-        if self.len() == 1 {
-            let item = &self[0];
-            return item.is_atomic() || (item.is_simple() && item.has_delimiters());
+        match self {
+            [] => true,
+            [item] => item.is_atomic() || (item.is_simple() && item.has_delimiters()),
+            _ => false,
         }
-        false
     }
 
     fn has_delimiters(&self) -> bool {
@@ -481,6 +479,21 @@ impl<T: Dump> Dump for Vec<T> {
 
     fn is_empty(&self) -> bool {
         <Self>::is_empty(self)
+    }
+}
+
+impl<T: Dump> Dump for Vec<T> {
+    fn dump<W: Writer>(&self, w: &mut W) {
+        <[T] as Dump>::dump(self, w);
+    }
+    fn is_simple(&self) -> bool {
+        <[T] as Dump>::is_simple(self)
+    }
+    fn has_delimiters(&self) -> bool {
+        true
+    }
+    fn is_empty(&self) -> bool {
+        <[T]>::is_empty(self)
     }
 }
 
@@ -507,15 +520,7 @@ impl<T: Dump> Dump for Option<T> {
 /// Based on Haskell's Show instance for tuples
 impl<A: Dump, B: Dump> Dump for (A, B) {
     fn dump<W: Writer>(&self, w: &mut W) {
-        with_brackets(w, "(", ")", true, |w, paren_color| {
-            w.write_plain(" ");
-            self.0.dump(w);
-            w.newline();
-            w.write_colored(",", paren_color);
-            w.write_plain(" ");
-            self.1.dump(w);
-            w.newline();
-        });
+        format_pair(w, &self.0, &self.1);
     }
 
     fn has_delimiters(&self) -> bool {
@@ -523,27 +528,17 @@ impl<A: Dump, B: Dump> Dump for (A, B) {
     }
 }
 
-/// `Dump` for `Box<[T]>` — renders like a `Vec<T>` (sequence brackets).
+/// `Dump` for `Box<[T]>` — renders like a slice.
 impl<T: Dump> Dump for Box<[T]> {
     fn dump<W: Writer>(&self, w: &mut W) {
-        dump_list(w, self, true);
+        <[T] as Dump>::dump(self, w);
     }
-
     fn is_simple(&self) -> bool {
-        if self.is_empty() {
-            return true;
-        }
-        if self.len() == 1 {
-            let item = &self[0];
-            return item.is_atomic() || (item.is_simple() && item.has_delimiters());
-        }
-        false
+        <[T] as Dump>::is_simple(self)
     }
-
     fn has_delimiters(&self) -> bool {
         true
     }
-
     fn is_empty(&self) -> bool {
         <[T]>::is_empty(self)
     }
