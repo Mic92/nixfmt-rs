@@ -164,3 +164,23 @@ fn fuzz_paren_open_trail_comment_absorbable() {
     // Non-absorbable body: was already idempotent.
     test_format("(# c\nx)");
 }
+
+/// A `# c` trailing `in` is moved onto its own line on pass 1, where it becomes
+/// leading trivia of the body. With the comment still trailing, the let body's
+/// width budget was off by the `in `​ prefix, so a function application that
+/// just exceeds the limit was laid out single-line on pass 1 and then wrapped
+/// on pass 2. Only `let … in` triggers this; `with`/`assert`/lambda heads and a
+/// leading comment on the body are idempotent. Upstream fix carried in
+/// `nix/patches/0006-*.patch`.
+#[test]
+fn fuzz_let_in_trail_comment_app_width() {
+    let long = "x".repeat(97);
+    roundtrip(&format!("let in#c\n f {long} g"));
+    // Boundary: 96 fits, 97–99 used to flip; pin both sides.
+    roundtrip(&format!("let in#c\n f {} g", "x".repeat(96)));
+    roundtrip(&format!("let in#c\n f {} g", "x".repeat(99)));
+    // Other heads with the same shape were already idempotent; guard against
+    // over-application of any fix.
+    roundtrip(&format!("with p;#c\n f {long} g"));
+    roundtrip(&format!("let in\n#c\nf {long} g"));
+}

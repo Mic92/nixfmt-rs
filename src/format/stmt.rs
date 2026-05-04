@@ -1,4 +1,4 @@
-use crate::ast::{Binder, Expression, Items, Leaf, Parameter};
+use crate::ast::{Binder, Expression, FirstToken, Items, Leaf, Parameter};
 use crate::doc::{Doc, Elem, Emit, hardline, line};
 
 use super::Width;
@@ -50,12 +50,21 @@ pub(super) fn emit_let(
         g.nested(|n| binders.emit(n));
     });
     doc.hardline();
-    // inPart = group $ pretty in_ <> hardline <> trivia <> pretty expr
+    // inPart = group $ pretty in_ <> hardline <> pretty expr'
     doc.group(|g| {
         in_kw.value.emit(g);
         g.hardline();
-        moved_trivia.emit(g);
-        expr.emit(g);
+        if moved_trivia.is_empty() {
+            expr.emit(g);
+        } else {
+            // Prepend to the body's first token so layout matches pass 2,
+            // where these re-lex there anyway. Clone is rare (commented `in`).
+            let mut expr = expr.clone();
+            let slot = expr.first_token_mut();
+            moved_trivia.extend(std::mem::take(slot.pre_trivia));
+            *slot.pre_trivia = moved_trivia;
+            expr.emit(g);
+        }
     });
 }
 
