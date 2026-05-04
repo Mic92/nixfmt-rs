@@ -33,6 +33,30 @@ pub enum Spacing {
     Newlines(usize),
 }
 
+impl Spacing {
+    /// Combine two adjacent spacings into one, taking the stronger (per the
+    /// `Ord` impl) and accumulating `Newlines` counts.
+    pub(super) fn merge(self, other: Self) -> Self {
+        use Spacing::{Break, Emptyline, Hardspace, Newlines, Softbreak, Softspace, Space};
+
+        let (lo, hi) = if self <= other {
+            (self, other)
+        } else {
+            (other, self)
+        };
+
+        match (lo, hi) {
+            (Break, Softspace | Hardspace) => Space,
+            (Softbreak, Hardspace) => Softspace,
+            (Newlines(x), Newlines(y)) => Newlines(x + y),
+            (Emptyline, Newlines(x)) => Newlines(x + 2),
+            (Hardspace, Newlines(x)) => Newlines(x),
+            (_, Newlines(x)) => Newlines(x + 1),
+            _ => hi,
+        }
+    }
+}
+
 /// Group annotation
 ///
 /// Controls how groups are expanded during layout
