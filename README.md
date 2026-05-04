@@ -16,6 +16,9 @@ A drop-in replacement for [nixfmt]: same binary name, same flags, **byte-identic
   [WebAssembly build](https://mic92.github.io/nixfmt-rs/).
 - **Helpful errors.** rustc-style diagnostics with source snippets and
   fix-it hints ([examples](#error-messages)).
+- **Correct.** Idempotent and AST-preserving by construction; both
+  invariants are [continuously fuzzed](fuzz) and have surfaced bugs
+  in upstream nixfmt as well as our own.
 
 [nixfmt]: https://github.com/NixOS/nixfmt
 
