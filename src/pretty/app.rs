@@ -1,29 +1,27 @@
-use crate::predoc::{Doc, DocE, GroupAnn, Pretty, line, unexpand_spacing_prime};
-use crate::types::{Expression, FirstToken, Item, Parameter, Term, Token, Trivia};
+use crate::ast::{Expression, FirstToken, Item, Parameter, Term, Token, Trivia};
+use crate::predoc::{Doc, Elem, GroupKind, Pretty, line};
 
-use super::absorb::push_absorb_paren;
-use super::term::{push_pretty_term, push_pretty_term_wide, push_render_list};
+use super::absorb::absorb_paren;
+use super::term::render_list;
 
 /// `absorbInner` from Pretty.hs: short lists of simple terms get a soft `line`
 /// separator so they may stay on one line; everything else falls back to `pretty`.
-fn push_absorb_inner(doc: &mut Doc, arg: &Expression) {
+fn absorb_inner(doc: &mut Doc, arg: &Expression) {
     if let Expression::Term(Term::List { open, items, close }) = arg {
         let all_simple = items.0.iter().all(|item| match item {
             Item::Item(t) => t.is_simple(),
             Item::Comments(_) => true,
         });
         if items.0.len() <= 6 && all_simple {
-            push_render_list(doc, &line(), open, items, close);
+            render_list(doc, &line(), open, items, close);
             return;
         }
     }
     arg.pretty(doc);
 }
 
-/// Return the pre-trivia of the first token of `expr` after applying
-/// `move_trailing_comment_up` to it, without cloning the expression.
-/// This is the projection half of Haskell's
-/// `mapFirstToken' ((\a -> (a{preTrivia=[]}, preTrivia)) . moveTrailingCommentUp)`.
+/// Collect the leading trivia that would precede `expr`'s first token if its
+/// trailing comment were hoisted into `pre_trivia`, without mutating `expr`.
 fn first_token_comment(expr: &Expression) -> Trivia {
     let slot = expr.first_token();
     let mut t = slot.pre_trivia.clone();
@@ -33,9 +31,8 @@ fn first_token_comment(expr: &Expression) -> Trivia {
     t
 }
 
-/// Rebuild `expr` with the first token's `pre_trivia` and `trail_comment`
-/// cleared. Only invoked on the leftmost (non-`Application`) head of a call
-/// chain, which is almost always a small `Term`, so the deep clone is cheap.
+/// Rebuild `expr` with the first token's trivia cleared. Only invoked on the
+/// leftmost head of a call chain (a small `Term`), so the deep clone is cheap.
 fn strip_first_comment(expr: &Expression) -> Expression {
     let mut e = expr.clone();
     let slot = e.first_token_mut();
@@ -45,23 +42,23 @@ fn strip_first_comment(expr: &Expression) -> Expression {
 }
 
 /// Walk the function-call chain. Mirrors Haskell `absorbApp` (Pretty.hs).
-fn push_absorb_app(doc: &mut Doc, expr: &Expression, indent_function: bool, comment: &Trivia) {
+fn absorb_app(doc: &mut Doc, expr: &Expression, indent_function: bool, comment: &Trivia) {
     let recurse_head = |doc: &mut Doc, head: &Expression| {
-        doc.group_ann(GroupAnn::Transparent, |g| {
-            push_absorb_app(g, head, indent_function, comment);
+        doc.transparent_group(|g| {
+            absorb_app(g, head, indent_function, comment);
         });
     };
 
     let Expression::Application { func: f, arg: a } = expr else {
         // Base case: the function expression itself. The first token's
-        // pre-trivia/trailing comment was already emitted by `push_pretty_app`,
+        // pre-trivia/trailing comment was already emitted by `pretty_app`,
         // so render the head with that trivia stripped.
         if !comment.is_empty() {
             strip_first_comment(expr).pretty(doc);
         } else if indent_function {
             doc.nested(|n| {
                 n.group(|g| {
-                    g.line_prime();
+                    g.linebreak();
                     expr.pretty(g);
                 });
             });
@@ -76,14 +73,14 @@ fn push_absorb_app(doc: &mut Doc, expr: &Expression, indent_function: bool, comm
         && let Expression::Application { func: f2, arg: l1 } = &**f
         && matches!(**l1, Expression::Term(Term::List { .. }))
     {
-        doc.group_ann(GroupAnn::Transparent, |outer| {
+        doc.transparent_group(|outer| {
             recurse_head(outer, f2);
             outer.nested(|n| {
                 n.group(|g| {
                     g.line();
-                    g.group(|inner| push_absorb_inner(inner, l1));
+                    g.group(|inner| absorb_inner(inner, l1));
                     g.line();
-                    g.group(|inner| push_absorb_inner(inner, a));
+                    g.group(|inner| absorb_inner(inner, a));
                 });
             });
         });
@@ -95,31 +92,28 @@ fn push_absorb_app(doc: &mut Doc, expr: &Expression, indent_function: bool, comm
     // Selections must not priority-expand: only the `.`-suffix would move,
     // which looks odd.
     let arg_ann = if matches!(**a, Expression::Term(Term::Selection { .. })) {
-        GroupAnn::RegularG
+        GroupKind::Regular
     } else {
-        GroupAnn::Priority
+        GroupKind::Priority
     };
     doc.nested(|n| {
-        n.group_ann(arg_ann, |g| push_absorb_inner(g, a));
+        n.group_with(arg_ann, |g| absorb_inner(g, a));
     });
 }
 
 /// `group' Priority $ nest …`
-fn push_priority_nest(doc: &mut Doc, f: impl FnOnce(&mut Doc)) {
-    doc.group_ann(GroupAnn::Priority, |g| {
+fn priority_nest(doc: &mut Doc, f: impl FnOnce(&mut Doc)) {
+    doc.priority_group(|g| {
         g.nested(f);
     });
 }
 
 /// Render the last argument of a function call. Mirrors Haskell `absorbLast`.
-fn push_absorb_last(doc: &mut Doc, arg: &Expression) {
+fn absorb_last(doc: &mut Doc, arg: &Expression) {
     if let Expression::Term(t) = arg
         && t.is_absorbable()
     {
-        // Haskell: `group' Priority $ nest $ prettyTerm t`. `prettyTerm`
-        // (unlike `instance Pretty Term`) does *not* wrap a `List` in an
-        // extra group.
-        return push_priority_nest(doc, |n| push_pretty_term(n, t));
+        return priority_nest(doc, |n| t.pretty_bare(n));
     }
 
     if let Expression::Term(Term::Parenthesized {
@@ -140,12 +134,12 @@ fn push_absorb_last(doc: &mut Doc, arg: &Expression) {
             && !name.has_trivia()
             && !colon.has_trivia()
         {
-            return push_priority_nest(doc, |n| {
+            return priority_nest(doc, |n| {
                 open.pretty(n);
                 name.pretty(n);
                 colon.pretty(n);
                 n.hardspace();
-                push_pretty_term_wide(n, body_term);
+                body_term.pretty_wide(n);
                 close.pretty(n);
             });
         }
@@ -159,15 +153,15 @@ fn push_absorb_last(doc: &mut Doc, arg: &Expression) {
             && !ident.has_trivia()
             && !close.has_trivia()
         {
-            return push_priority_nest(doc, |n| {
+            return priority_nest(doc, |n| {
                 open.pretty(n);
                 ident.pretty(n);
                 n.hardspace();
-                push_pretty_term_wide(n, body_term);
+                body_term.pretty_wide(n);
                 close.pretty(n);
             });
         }
-        return push_absorb_paren(doc, open, inner, close);
+        return absorb_paren(doc, open, inner, close);
     }
 
     doc.group(|g| {
@@ -176,15 +170,15 @@ fn push_absorb_last(doc: &mut Doc, arg: &Expression) {
 }
 
 /// Render function applications (Haskell `prettyApp indentFunction pre hasPost f a`).
-pub(super) fn push_pretty_app(
+pub(super) fn pretty_app(
     doc: &mut Doc,
     indent_function: bool,
-    pre: &[DocE],
+    pre: &[Elem],
     has_post: bool,
     expr: &Expression,
 ) {
     let Expression::Application { func: f, arg: a } = expr else {
-        unreachable!("push_pretty_app requires an Application");
+        unreachable!("pretty_app requires an Application");
     };
 
     let comment = first_token_comment(f);
@@ -205,19 +199,19 @@ pub(super) fn push_pretty_app(
     {
         doc.group(|g| {
             g.0.extend_from_slice(pre);
-            g.group_ann(GroupAnn::Transparent, |inner| {
-                push_absorb_app(inner, f2, indent_function, &comment);
+            g.transparent_group(|inner| {
+                absorb_app(inner, f2, indent_function, &comment);
             });
             g.line();
             g.nested(|n| {
-                n.group(|gr| push_absorb_inner(gr, l1));
+                n.group(|gr| absorb_inner(gr, l1));
             });
             g.line();
             g.nested(|n| {
-                n.group(|gr| push_absorb_inner(gr, a));
+                n.group(|gr| absorb_inner(gr, a));
             });
             if has_post {
-                g.line_prime();
+                g.linebreak();
             }
         });
         post_hardline(doc);
@@ -225,18 +219,18 @@ pub(super) fn push_pretty_app(
     }
 
     let mut rendered_f = Doc::from(pre.to_vec());
-    rendered_f.group_ann(GroupAnn::Transparent, |g| {
-        push_absorb_app(g, f, indent_function, &comment);
+    rendered_f.transparent_group(|g| {
+        absorb_app(g, f, indent_function, &comment);
     });
 
     // renderSimple
     if expr.is_simple()
-        && let Some(unexpanded) = unexpand_spacing_prime(None, &rendered_f)
+        && let Some(unexpanded) = rendered_f.try_compact(None)
     {
         doc.group(|g| {
             g.extend(unexpanded);
             g.hardspace();
-            push_absorb_last(g, a);
+            absorb_last(g, a);
         });
         post_hardline(doc);
         return;
@@ -245,9 +239,9 @@ pub(super) fn push_pretty_app(
     doc.group(|g| {
         g.extend(rendered_f);
         g.line();
-        push_absorb_last(g, a);
+        absorb_last(g, a);
         if has_post {
-            g.line_prime();
+            g.linebreak();
         }
     });
     post_hardline(doc);

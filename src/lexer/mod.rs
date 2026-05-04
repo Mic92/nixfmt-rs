@@ -2,42 +2,16 @@
 //!
 //! Ports the comment normalization logic from nixfmt's Lexer.hs
 
-use crate::types::{Token, Trivia};
+use crate::ast::{Token, Trivia};
 
 mod comments;
+mod cursor;
 mod numbers;
+mod scan;
 mod trivia;
 
 #[cfg(test)]
 mod tests;
-
-/// Update `line`/`column` to account for having advanced over `slice`.
-/// Nix source is overwhelmingly ASCII, so the no-newline ASCII case is the
-/// fast path; only count chars when non-ASCII bytes are present.
-///
-/// Free function rather than `&mut self` so callers may borrow
-/// `self.source` for `slice` while mutating the two counters.
-#[inline]
-fn bump_line_col(line: &mut usize, column: &mut usize, slice: &str) {
-    match memchr::memrchr(b'\n', slice.as_bytes()) {
-        None => {
-            *column += if slice.is_ascii() {
-                slice.len()
-            } else {
-                slice.chars().count()
-            };
-        }
-        Some(last_nl) => {
-            *line += memchr::memchr_iter(b'\n', slice.as_bytes()).count();
-            let tail = &slice[last_nl + 1..];
-            *column = if tail.is_ascii() {
-                tail.len()
-            } else {
-                tail.chars().count()
-            };
-        }
-    }
-}
 
 /// Intermediate trivia representation during parsing
 #[derive(Debug, Clone)]
@@ -132,7 +106,7 @@ impl Lexer {
 
     /// Parse a lexeme (token with trivia annotations)
     /// This is the main entry point for the parser
-    pub(crate) fn lexeme(&mut self) -> crate::error::Result<crate::types::Ann<Token>> {
+    pub(crate) fn lexeme(&mut self) -> crate::error::Result<crate::ast::Annotated<Token>> {
         let mut leading_trivia = std::mem::take(&mut self.trivia_buffer);
 
         let _ = self.skip_hspace();
@@ -155,8 +129,7 @@ impl Lexer {
 
         let token_end = self.byte_pos;
         let end_line = self.line;
-        let token_span =
-            crate::types::Span::with_lines(token_start, token_end, start_line, end_line);
+        let token_span = crate::ast::Span::with_lines(token_start, token_end, start_line, end_line);
 
         // String/path delimiters: defer trivia so the parser sees raw source content.
         let skip_trivia = matches!(token, Token::TDoubleQuote | Token::TDoubleSingleQuote);
@@ -169,7 +142,7 @@ impl Lexer {
             // Fast path hit: only whitespace between this token and the next.
             trailing_comment = None;
             self.trivia_buffer = if newlines > 1 {
-                Trivia::one(crate::types::Trivium::EmptyLine())
+                Trivia::one(crate::ast::Trivium::EmptyLine())
             } else {
                 Trivia::new()
             };
@@ -180,7 +153,7 @@ impl Lexer {
             self.trivia_buffer = next;
         }
 
-        Ok(crate::types::Ann {
+        Ok(crate::ast::Annotated {
             pre_trivia: leading_trivia,
             span: token_span,
             value: token,
@@ -198,395 +171,14 @@ impl Lexer {
     /// parser does not need direct access to the scratch buffer.
     pub(crate) fn parse_and_convert_trivia(
         &mut self,
-    ) -> (Option<crate::types::TrailingComment>, Trivia) {
+    ) -> (Option<crate::ast::TrailingComment>, Trivia) {
         self.parse_trivia();
         trivia::convert_trivia(&self.trivia_scratch, self.column)
     }
 
     /// Get current position as a zero-length span (in byte offsets)
-    pub(crate) const fn current_pos(&self) -> crate::types::Span {
-        crate::types::Span::point(self.byte_pos)
-    }
-
-    /// Parse next token (without trivia handling)
-    /// Trivia should ONLY be managed by `lexeme()`, not by this function.
-    /// This matches Haskell nixfmt's `rawSymbol` which parses tokens without trivia.
-    pub(super) fn next_token(&mut self) -> crate::error::Result<Token> {
-        let _ = self.skip_hspace();
-
-        let Some(b) = self.peek_byte() else {
-            return Ok(Token::Sof); // Use SOF as EOF token
-        };
-        // All token-start characters are ASCII; non-ASCII falls through to the
-        // error arm which decodes the full codepoint for the message.
-        let ch = b as char;
-
-        // Nix identifiers are ASCII-only: [a-zA-Z_][a-zA-Z0-9_'-]*. Must be
-        // checked before the punctuation match below.
-        if ch.is_ascii_alphabetic() || ch == '_' {
-            return Ok(self.parse_ident_or_keyword());
-        }
-
-        match ch {
-            '{' => Ok(self.single(Token::TBraceOpen)),
-            '}' => Ok(self.single(Token::TBraceClose)),
-            '[' => Ok(self.single(Token::TBrackOpen)),
-            ']' => Ok(self.single(Token::TBrackClose)),
-            '(' => Ok(self.single(Token::TParenOpen)),
-            ')' => Ok(self.single(Token::TParenClose)),
-            '=' => Ok(self.try_two_char('=', Token::TEqual, Token::TAssign)),
-            '@' => Ok(self.single(Token::TAt)),
-            ':' => Ok(self.single(Token::TColon)),
-            ',' => Ok(self.single(Token::TComma)),
-            ';' => Ok(self.single(Token::TSemicolon)),
-            '?' => Ok(self.single(Token::TQuestion)),
-            '.' => Ok(self.parse_dot_token()),
-            '+' => Ok(self.try_two_char('+', Token::TConcat, Token::TPlus)),
-            '-' => Ok(self.try_two_char('>', Token::TImplies, Token::TMinus)),
-            '*' => Ok(self.single(Token::TMul)),
-            '/' => Ok(self.try_two_char('/', Token::TUpdate, Token::TDiv)),
-            '!' => Ok(self.try_two_char('=', Token::TUnequal, Token::TNot)),
-            '<' if self.peek_ahead(1).is_some_and(char::is_alphanumeric) => self.parse_env_path(),
-            '<' => {
-                self.advance();
-                Ok(match self.peek() {
-                    Some('=') => self.single(Token::TLessEqual),
-                    Some('|') => self.single(Token::TPipeBackward),
-                    _ => Token::TLess,
-                })
-            }
-            '>' => Ok(self.try_two_char('=', Token::TGreaterEqual, Token::TGreater)),
-            '&' => {
-                if self.at("&&") {
-                    self.advance_by(2);
-                    Ok(Token::TAnd)
-                } else {
-                    // Don't advance: keep the error span on the '&' itself.
-                    self.err_unexpected(&["'&&'"], "'&'")
-                }
-            }
-            '|' => {
-                if self.at("||") {
-                    self.advance_by(2);
-                    Ok(Token::TOr)
-                } else if self.at("|>") {
-                    self.advance_by(2);
-                    Ok(Token::TPipeForward)
-                } else {
-                    self.err_unexpected(&["'||'", "'|>'"], "'|'")
-                }
-            }
-            '"' => Ok(self.single(Token::TDoubleQuote)),
-            '\'' => {
-                if self.at("''") {
-                    self.advance_by(2);
-                    Ok(Token::TDoubleSingleQuote)
-                } else {
-                    self.err_unexpected(&["''"], "'")
-                }
-            }
-            '$' => {
-                if self.at("${") {
-                    self.advance_by(2);
-                    Ok(Token::TInterOpen)
-                } else {
-                    self.err_unexpected(&["'${'"], "'$'")
-                }
-            }
-            '0'..='9' => Ok(self.parse_number()),
-            '~' => Ok(self.single(Token::TTilde)),
-            _ => {
-                // `ch` was derived from a single byte; for the error message
-                // decode the actual codepoint so multi-byte input is reported
-                // correctly.
-                let ch = self.peek().unwrap();
-                self.err_unexpected(&[], &format!("'{ch}'"))
-            }
-        }
-    }
-
-    /// Parse identifier or keyword
-    fn parse_ident_or_keyword(&mut self) -> Token {
-        // Nix identifiers are ASCII-only: [a-zA-Z_][a-zA-Z0-9_'-]*.
-        let len = self
-            .take_ascii_while(|b| b.is_ascii_alphanumeric() || matches!(b, b'_' | b'-' | b'\''))
-            .len();
-        let start_byte = self.byte_pos - len;
-        let bytes = self.source.as_bytes();
-        let text = &self.source[start_byte..self.byte_pos];
-
-        // First-byte + length dispatch keeps the common "not a keyword" path
-        // to a single comparison instead of up to nine `memcmp`s.
-
-        match (len, bytes[start_byte]) {
-            (6, b'a') if text == "assert" => Token::KAssert,
-            (4, b'e') if text == "else" => Token::KElse,
-            (2, b'i') if text == "if" => Token::KIf,
-            (2, b'i') if text == "in" => Token::KIn,
-            (7, b'i') if text == "inherit" => Token::KInherit,
-            (3, b'l') if text == "let" => Token::KLet,
-            (3, b'r') if text == "rec" => Token::KRec,
-            (4, b't') if text == "then" => Token::KThen,
-            (4, b'w') if text == "with" => Token::KWith,
-            _ => Token::Identifier(text.into()),
-        }
-    }
-
-    /// `.` may start `...`, a leading-dot float, or be `TDot`.
-    fn parse_dot_token(&mut self) -> Token {
-        if self.at("...") {
-            self.advance_by(3);
-            Token::TEllipsis
-        } else if self.peek_ahead(1).is_some_and(|c| c.is_ascii_digit()) {
-            self.advance();
-            let mut num = String::from(".");
-            num.push_str(&self.consume_digits());
-            if let Some(exp) = self.parse_exponent() {
-                num.push_str(&exp);
-            }
-            Token::Float(num.into())
-        } else {
-            self.advance();
-            Token::TDot
-        }
-    }
-
-    /// Parse angle bracket path: <nixpkgs>
-    fn parse_env_path(&mut self) -> crate::error::Result<Token> {
-        let opening_span = self.current_pos();
-        self.advance(); // consume '<'
-
-        let mut path = String::new();
-        while let Some(ch) = self.peek() {
-            match ch {
-                '>' => {
-                    self.advance();
-                    return Ok(Token::EnvPath(path.into()));
-                }
-                _ if ch.is_alphanumeric() || matches!(ch, '_' | '-' | '/' | '.') => {
-                    path.push(self.advance().unwrap());
-                }
-                _ => {
-                    return Err(crate::error::ParseError {
-                        span: self.current_pos(),
-                        kind: crate::error::ErrorKind::InvalidSyntax {
-                            description: format!("invalid character '{ch}' in path"),
-                            hint: Some("paths can only contain alphanumeric characters, '.', '_', '-', and '/'".to_string()),
-                        },
-                    })
-                }
-            }
-        }
-
-        Err(crate::error::ParseError {
-            span: self.current_pos(),
-            kind: crate::error::ErrorKind::UnclosedDelimiter {
-                delimiter: '<',
-                opening_span,
-            },
-        })
-    }
-
-    /// Build an `UnexpectedToken` error at the current cursor.
-    #[cold]
-    fn err_unexpected<T>(&self, expected: &[&str], found: &str) -> crate::error::Result<T> {
-        Err(crate::error::ParseError {
-            span: self.current_pos(),
-            kind: crate::error::ErrorKind::UnexpectedToken {
-                expected: expected
-                    .iter()
-                    .map(std::string::ToString::to_string)
-                    .collect(),
-                found: found.to_string(),
-            },
-        })
-    }
-
-    /// Helper for two-character tokens: advance and check if next char matches
-    /// Returns `if_match` if second char matches, otherwise `if_single`
-    fn try_two_char(&mut self, second: char, if_match: Token, if_single: Token) -> Token {
-        self.advance();
-        if self.peek() == Some(second) {
-            self.advance();
-            if_match
-        } else {
-            if_single
-        }
-    }
-
-    /// Remaining input from the cursor.
-    #[inline]
-    fn rest(&self) -> &str {
-        &self.source[self.byte_pos..]
-    }
-
-    /// Peek at current byte without consuming (None at EOF).
-    #[inline]
-    pub(crate) fn peek_byte(&self) -> Option<u8> {
-        self.source.as_bytes().get(self.byte_pos).copied()
-    }
-
-    /// Peek at current character without consuming
-    #[inline]
-    pub(crate) fn peek(&self) -> Option<char> {
-        let b = self.peek_byte()?;
-        if b < 0x80 {
-            Some(b as char)
-        } else {
-            self.rest().chars().next()
-        }
-    }
-
-    /// Peek ahead n characters
-    #[inline]
-    pub(crate) fn peek_ahead(&self, n: usize) -> Option<char> {
-        // `n` is at most 3 in practice, so a short char walk is fine.
-        self.rest().chars().nth(n)
-    }
-
-    /// Check whether the upcoming input matches `s` byte-for-byte.
-    /// Replaces open-coded `peek() == Some(a) && peek_ahead(1) == Some(b)` ladders.
-    #[inline]
-    pub(crate) fn at(&self, s: &str) -> bool {
-        self.source.as_bytes()[self.byte_pos..].starts_with(s.as_bytes())
-    }
-
-    /// Advance `n` characters.
-    #[inline]
-    pub(crate) fn advance_by(&mut self, n: usize) {
-        for _ in 0..n {
-            self.advance();
-        }
-    }
-
-    /// Snapshot the cursor (position only, no trivia).
-    #[inline]
-    pub(super) const fn mark(&self) -> LexerPos {
-        LexerPos {
-            byte_pos: self.byte_pos,
-            line: self.line,
-            column: self.column,
-        }
-    }
-
-    /// Restore the cursor from a snapshot taken by `mark()`.
-    #[inline]
-    pub(super) const fn reset(&mut self, mark: LexerPos) {
-        self.byte_pos = mark.byte_pos;
-        self.line = mark.line;
-        self.column = mark.column;
-    }
-
-    /// Run `f`; on `None`, rewind cursor (`byte_pos/line/column`) only.
-    /// Does NOT restore `trivia_buffer`/`recent_*` — callers must not mutate
-    /// those inside `f`.
-    #[inline]
-    pub(super) fn try_with_cursor<T>(
-        &mut self,
-        f: impl FnOnce(&mut Self) -> Option<T>,
-    ) -> Option<T> {
-        let mark = self.mark();
-        let r = f(self);
-        if r.is_none() {
-            self.reset(mark);
-        }
-        r
-    }
-
-    /// Advance one char and return `tok`; for trivial single-char arms in
-    /// `next_token`.
-    #[inline]
-    fn single(&mut self, tok: Token) -> Token {
-        self.advance();
-        tok
-    }
-
-    /// Consume and return current character
-    #[inline]
-    pub(crate) fn advance(&mut self) -> Option<char> {
-        let b = self.peek_byte()?;
-        if b < 0x80 {
-            self.byte_pos += 1;
-            if b == b'\n' {
-                self.line += 1;
-                self.column = 0;
-            } else {
-                self.column += 1;
-            }
-            Some(b as char)
-        } else {
-            let ch = self.rest().chars().next()?;
-            self.byte_pos += ch.len_utf8();
-            self.column += 1;
-            Some(ch)
-        }
-    }
-
-    /// Advance past the longest prefix containing none of the three given
-    /// bytes and return it. Newlines inside the run update `line`/`column`.
-    /// SIMD-accelerated via `memchr3`, used for string-body scanning.
-    #[inline]
-    pub(crate) fn scan_until3(&mut self, a: u8, b: u8, c: u8) -> &str {
-        let rest = &self.source.as_bytes()[self.byte_pos..];
-        let len = memchr::memchr3(a, b, c, rest).unwrap_or(rest.len());
-        if len == 0 {
-            return "";
-        }
-        let start = self.byte_pos;
-        let end = start + len;
-        self.byte_pos = end;
-        bump_line_col(&mut self.line, &mut self.column, &self.source[start..end]);
-        &self.source[start..end]
-    }
-
-    /// Move the cursor to absolute byte offset `target` (which must be on a
-    /// char boundary and `>= self.byte_pos`), updating `line`/`column` from
-    /// the skipped slice. Used after a `memchr` jump.
-    pub(super) fn seek_to(&mut self, target: usize) {
-        debug_assert!(target >= self.byte_pos);
-        let start = self.byte_pos;
-        self.byte_pos = target;
-        bump_line_col(
-            &mut self.line,
-            &mut self.column,
-            &self.source[start..target],
-        );
-    }
-
-    /// Bulk-advance over the next `len` bytes of source, which must contain no
-    /// `\n`. Updates `column` by the number of *chars* in that slice.
-    /// Returns the consumed text. Used by string/comment scanners after a
-    /// `memchr` hit so the per-char `advance()` loop is skipped for the run.
-    #[inline]
-    pub(super) fn advance_bytes_no_newline(&mut self, len: usize) -> &str {
-        let start = self.byte_pos;
-        let end = start + len;
-        debug_assert!(!self.source.as_bytes()[start..end].contains(&b'\n'));
-        self.byte_pos = end;
-        bump_line_col(&mut self.line, &mut self.column, &self.source[start..end]);
-        &self.source[start..end]
-    }
-
-    /// Consume the longest run of ASCII bytes satisfying `pred` and return it
-    /// as a `&str` borrow into `self.source`. `pred` must never accept `b'\n'`
-    /// (so `column` can be bumped by byte count without line tracking).
-    #[inline]
-    pub(super) fn take_ascii_while(&mut self, pred: impl Fn(u8) -> bool) -> &str {
-        let bytes = self.source.as_bytes();
-        let start = self.byte_pos;
-        let mut i = start;
-        while i < bytes.len() && pred(bytes[i]) {
-            i += 1;
-        }
-        self.byte_pos = i;
-        self.column += i - start;
-        &self.source[start..i]
-    }
-
-    /// Check if we're at end of input
-    #[inline]
-    fn is_eof(&self) -> bool {
-        self.byte_pos >= self.source.len()
+    pub(crate) const fn current_pos(&self) -> crate::ast::Span {
+        crate::ast::Span::point(self.byte_pos)
     }
 
     /// Skip horizontal whitespace (spaces and tabs, but not newlines)

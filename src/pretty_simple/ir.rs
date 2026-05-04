@@ -2,7 +2,7 @@
 
 use super::{PrettySimple, Writer, format_bracket_list};
 use crate::format_constructor;
-use crate::predoc::{Doc, DocE, GroupAnn, IR, Spacing, TextAnn};
+use crate::predoc::{Doc, Elem, GroupKind, IR, Spacing, TextKind};
 
 impl PrettySimple for Doc {
     fn format<W: Writer>(&self, w: &mut W) {
@@ -21,7 +21,7 @@ impl PrettySimple for Doc {
 
 impl PrettySimple for IR {
     fn format<W: Writer>(&self, w: &mut W) {
-        // Same layout as Vec<DocE>, but without bumping depth so the top-level
+        // Same layout as Vec<Elem>, but without bumping depth so the top-level
         // dump stays at column 0 like the Haskell reference output.
         format_bracket_list(w, &self.0, false);
         if !self.0.is_empty() {
@@ -54,12 +54,14 @@ impl PrettySimple for Spacing {
     }
 }
 
-impl PrettySimple for GroupAnn {
+impl PrettySimple for GroupKind {
     fn format<W: Writer>(&self, w: &mut W) {
-        crate::format_enum!(self, w, {
-            RegularG => [],
-            Priority => [],
-            Transparent => [],
+        // Reference `nixfmt --ir` uses Haskell constructor names; preserve
+        // them so the snapshot diffing against the reference stays exact.
+        w.write_plain(match self {
+            Self::Regular => "RegularG",
+            Self::Priority => "Priority",
+            Self::Transparent => "Transparent",
         });
     }
 
@@ -68,13 +70,13 @@ impl PrettySimple for GroupAnn {
     }
 }
 
-impl PrettySimple for TextAnn {
+impl PrettySimple for TextKind {
     fn format<W: Writer>(&self, w: &mut W) {
-        crate::format_enum!(self, w, {
-            RegularT => [],
-            Comment => [],
-            TrailingComment => [],
-            Trailing => [],
+        w.write_plain(match self {
+            Self::Regular => "RegularT",
+            Self::Comment => "Comment",
+            Self::TrailingComment => "TrailingComment",
+            Self::Trailing => "Trailing",
         });
     }
 
@@ -83,7 +85,7 @@ impl PrettySimple for TextAnn {
     }
 }
 
-impl PrettySimple for DocE {
+impl PrettySimple for Elem {
     fn format<W: Writer>(&self, w: &mut W) {
         crate::format_enum!(self, w, {
             Text(nest, off, ann, text) => [nest, off, ann, text],

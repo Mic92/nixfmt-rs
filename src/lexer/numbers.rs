@@ -11,7 +11,7 @@
 //! - Scientific notation with optional sign (e.g., `1e10`, `2e-5`)
 
 use super::Lexer;
-use crate::types::Token;
+use crate::ast::Token;
 
 impl Lexer {
     /// Parse a number literal (integer or float)

@@ -1,33 +1,30 @@
-use crate::predoc::{Doc, DocE, GroupAnn, Pretty, hardline, line};
-use crate::types::{Binder, Expression, Items, Leaf, Parameter, Trivia, Trivium};
+use crate::ast::{Binder, Expression, Items, Leaf, Parameter, Trivia, Trivium};
+use crate::predoc::{Doc, Elem, Pretty, hardline, line};
 
-use super::term::push_pretty_items;
+use super::Width;
 
-use super::absorb::push_absorb_expr;
-use super::util::Width;
-
-pub(super) fn push_absorb_abs(doc: &mut Doc, depth: usize, expr: &Expression) {
-    match expr {
-        Expression::Abstraction {
-            param: Parameter::Id(param),
-            colon,
-            body,
-        } => {
-            doc.hardspace();
-            param.pretty(doc);
-            colon.pretty(doc);
-            push_absorb_abs(doc, depth + 1, body);
-        }
-        _ if expr.is_absorbable() => {
-            doc.hardspace();
-            doc.group_ann(GroupAnn::Priority, |priority_group| {
-                push_absorb_expr(priority_group, Width::Regular, expr);
-            });
-        }
-        _ => {
-            let separator = if depth <= 2 { line() } else { hardline() };
-            doc.push_raw(separator);
-            expr.pretty(doc);
+impl Expression {
+    pub(in crate::pretty) fn absorb_abs(&self, doc: &mut Doc, depth: usize) {
+        match self {
+            Self::Abstraction {
+                param: Parameter::Id(param),
+                colon,
+                body,
+            } => {
+                doc.hardspace();
+                param.pretty(doc);
+                colon.pretty(doc);
+                body.absorb_abs(doc, depth + 1);
+            }
+            _ if self.is_absorbable() => {
+                doc.hardspace();
+                doc.priority_group(|pg| self.absorb(pg, Width::Regular));
+            }
+            _ => {
+                let separator = if depth <= 2 { line() } else { hardline() };
+                doc.push_raw(separator);
+                self.pretty(doc);
+            }
         }
     }
 }
@@ -52,7 +49,7 @@ pub(super) fn insert_into_app(insert: Expression, expr: Expression) -> (Expressi
 
 /// Render a `with` expression.
 /// Mirrors Haskell `prettyWith False` (Pretty.hs); the `prettyWith True`
-/// path is open-coded inside `push_absorb_expr`.
+/// path is open-coded inside `absorb_expr`.
 /// `instance Pretty Expression` clause for `Let` (Pretty.hs).
 pub(super) fn pretty_let(
     doc: &mut Doc,
@@ -66,7 +63,6 @@ pub(super) fn pretty_let(
     in_kw_clean.pre_trivia = Trivia::new();
     in_kw_clean.trail_comment = None;
 
-    // convertTrailing
     let mut moved_trivia_vec: Vec<Trivium> = in_kw.pre_trivia.clone().into();
     if let Some(trailing) = &in_kw.trail_comment {
         moved_trivia_vec.push(trailing.into());
@@ -77,7 +73,7 @@ pub(super) fn pretty_let(
     doc.group(|g| {
         let_kw.pretty(g);
         g.hardline();
-        g.nested(|n| push_pretty_items(n, binders));
+        g.nested(|n| binders.pretty(n));
     });
     doc.hardline();
     // inPart = group $ pretty in_ <> hardline <> trivia <> pretty expr
@@ -110,32 +106,49 @@ pub(super) fn pretty_with(
 
 /// Recursive renderer for `if`/`else if` chains.
 /// Mirrors Haskell `prettyIf` (Pretty.hs, inside the `If` clause).
-pub(super) fn pretty_if(doc: &mut Doc, sep: DocE, expr: &Expression) {
-    match expr {
+#[allow(clippy::too_many_arguments)]
+pub(super) fn pretty_if(
+    doc: &mut Doc,
+    sep: Elem,
+    if_kw: &Leaf,
+    cond: &Expression,
+    then_kw: &Leaf,
+    then_branch: &Expression,
+    else_kw: &Leaf,
+    else_branch: &Expression,
+) {
+    doc.group(|g| {
+        if_kw.pretty(g);
+        g.line();
+        g.nested(|n| cond.pretty(n));
+        g.line();
+        then_kw.pretty(g);
+    });
+    doc.surrounded(&[sep], |d| {
+        d.nested(|n| {
+            n.group(|g| then_branch.pretty(g));
+        });
+    });
+    else_kw.move_trailing_comment_up().pretty(doc);
+    doc.hardspace();
+    match else_branch {
         Expression::If {
-            kw_if: if_kw,
+            kw_if,
             cond,
-            kw_then: then_kw,
-            then_branch: expr0,
-            kw_else: else_kw,
-            else_branch: expr1,
-        } => {
-            doc.group(|g| {
-                if_kw.pretty(g);
-                g.line();
-                g.nested(|n| cond.pretty(n));
-                g.line();
-                then_kw.pretty(g);
-            });
-            doc.surrounded(&[sep], |d| {
-                d.nested(|n| {
-                    n.group(|g| expr0.pretty(g));
-                });
-            });
-            else_kw.move_trailing_comment_up().pretty(doc);
-            doc.hardspace();
-            pretty_if(doc, hardline(), expr1);
-        }
+            kw_then,
+            then_branch,
+            kw_else,
+            else_branch,
+        } => pretty_if(
+            doc,
+            hardline(),
+            kw_if,
+            cond,
+            kw_then,
+            then_branch,
+            kw_else,
+            else_branch,
+        ),
         x => {
             doc.line();
             doc.nested(|n| {

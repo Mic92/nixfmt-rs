@@ -1,10 +1,13 @@
 //! Error types for parsing and formatting
 
-use crate::types::Span;
+use crate::ast::Span;
 use std::fmt;
 
-pub mod context;
-pub mod format;
+mod context;
+mod format;
+
+pub use context::ErrorContext;
+pub use format::render;
 
 /// A parse error with span and structured error kind
 #[derive(Debug, Clone, PartialEq, Eq)]

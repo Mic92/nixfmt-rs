@@ -11,9 +11,9 @@ oracle_tests! {
 
     /// Regression test: simple parameter pattern should have outer Group wrapper
     ///
-    /// Issue: nixfmt-rs was missing the outer `Group RegularG` wrapper that the
-    /// reference implementation adds when pretty-printing a Whole Expression (File).
-    /// This has been fixed by wrapping `Whole<T>::pretty` in `Doc::group()`.
+    /// Issue: nixfmt-rs was missing the outer `Group Regular` wrapper that the
+    /// reference implementation adds when pretty-printing a Trailed Expression (File).
+    /// This has been fixed by wrapping `Trailed<T>::pretty` in `Doc::group()`.
     test_simple_parameter_pattern => ["{ a, b }: x"],
 
     // Member selection with default exercises selector spacing and "or" clause layout
@@ -21,10 +21,10 @@ oracle_tests! {
 
     test_update_absorbable_rhs_structure => ["attrs // { inherit value; }"],
 
-    // Selection as a non-final argument must use a RegularG (not Priority) group.
+    // Selection as a non-final argument must use a Regular (not Priority) group.
     test_app_selection_inner_arg => ["f a.b c"],
 
-    // Two consecutive list arguments share a RegularG so they wrap together.
+    // Two consecutive list arguments share a Regular so they wrap together.
     test_app_two_consecutive_list_args => ["f [ 1 ] [ 2 ] x"],
 
     // Two trailing list arguments take the dedicated prettyApp branch.
@@ -39,10 +39,10 @@ oracle_tests! {
     // Inherit with explicit source exercises nested grouping and spacing branch
     test_inherit_with_source_structure => ["let inherit (inputs) foo bar; in foo"],
 
-    // Selection starting from a parenthesized term forces softline_prime separator
+    // Selection starting from a parenthesized term forces softbreak separator
     test_selection_from_parenthesized_term_structure => ["({ inherit foo; }).foo or true"],
 
-    // Selection from a record term forces line_prime separator before selectors
+    // Selection from a record term forces linebreak separator before selectors
     test_selection_from_record_term_structure => ["rec { nested = { }; }.nested or { }"],
 
     // Comments generate Comment and TrailingComment annotations
@@ -53,7 +53,7 @@ oracle_tests! {
 
     test_multiline_string_structure => ["''\n  line1\n  line2\n''"],
 
-    // String interpolation exercises nested grouping with line_prime
+    // String interpolation exercises nested grouping with linebreak
     test_string_interpolation_structure => ["\"prefix ${expr} suffix\""],
 
     test_nested_groups_structure => ["[ { a = 1; } { b = 2; } ]"],
@@ -62,7 +62,7 @@ oracle_tests! {
 
     test_boolean_not_structure => ["!true"],
 
-    // Parenthesized complex expressions with line_prime separators
+    // Parenthesized complex expressions with linebreak separators
     test_parenthesized_complex_structure => ["(let x = 1; in x)"],
 
     test_list_with_comments_structure => ["[\n  # comment\n  1\n  2\n]"],

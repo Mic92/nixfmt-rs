@@ -3,7 +3,7 @@
 //! These methods traverse AST nodes to find their rightmost/ending spans,
 //! which is useful for error reporting and source location tracking.
 
-use crate::types::{Expression, SimpleSelector, Span, Term};
+use crate::ast::{Expression, SimpleSelector, Span, Term};
 
 impl Expression {
     /// Get the ending span of an expression (the span of its last/rightmost token)

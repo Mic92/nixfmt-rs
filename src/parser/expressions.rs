@@ -6,8 +6,8 @@
 //! - `with ...; ...` - With expressions (scope introduction)
 //! - `assert ...; ...` - Assert expressions
 
+use crate::ast::{Expression, Leaf, Token};
 use crate::error::Result;
-use crate::types::{Expression, Leaf, Token};
 
 use super::Parser;
 

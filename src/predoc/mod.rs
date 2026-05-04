@@ -6,10 +6,8 @@
 mod builder;
 mod render;
 
-pub use builder::{hardline, hardspace, line, line_prime, newline};
-#[cfg(any(test, feature = "debug-dump"))]
-pub use render::fixup;
-pub use render::{RenderConfig, render_with_config};
+pub use builder::{hardline, hardspace, line, linebreak, newline};
+pub use render::RenderConfig;
 
 /// Spacing types for layout
 ///
@@ -35,13 +33,37 @@ pub enum Spacing {
     Newlines(usize),
 }
 
+impl Spacing {
+    /// Combine two adjacent spacings into one, taking the stronger (per the
+    /// `Ord` impl) and accumulating `Newlines` counts.
+    pub(super) fn merge(self, other: Self) -> Self {
+        use Spacing::{Break, Emptyline, Hardspace, Newlines, Softbreak, Softspace, Space};
+
+        let (lo, hi) = if self <= other {
+            (self, other)
+        } else {
+            (other, self)
+        };
+
+        match (lo, hi) {
+            (Break, Softspace | Hardspace) => Space,
+            (Softbreak, Hardspace) => Softspace,
+            (Newlines(x), Newlines(y)) => Newlines(x + y),
+            (Emptyline, Newlines(x)) => Newlines(x + 2),
+            (Hardspace, Newlines(x)) => Newlines(x),
+            (_, Newlines(x)) => Newlines(x + 1),
+            _ => hi,
+        }
+    }
+}
+
 /// Group annotation
 ///
 /// Controls how groups are expanded during layout
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum GroupAnn {
+pub enum GroupKind {
     /// Regular group - expand if doesn't fit
-    RegularG,
+    Regular,
     /// Priority group - try to keep compressed longer
     /// Used to compact things left and right of multiline elements
     Priority,
@@ -54,9 +76,9 @@ pub enum GroupAnn {
 ///
 /// Controls how text contributes to line length calculations
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum TextAnn {
+pub enum TextKind {
     /// Regular text
-    RegularT,
+    Regular,
     /// Comment (doesn't count towards line length limits)
     Comment,
     /// Trailing comment (single-line comment at end of line)
@@ -66,11 +88,11 @@ pub enum TextAnn {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub enum DocE {
+pub enum Elem {
     /// (`nesting_depth`, offset, annotation, text)
-    Text(usize, usize, TextAnn, String),
+    Text(usize, usize, TextKind, String),
     Spacing(Spacing),
-    Group(GroupAnn, Doc),
+    Group(GroupKind, Doc),
     /// Indentation delta marker (nest, offset). Emitted in begin/end pairs by
     /// [`Doc::nested`]/[`Doc::offset`] and folded into `Text` during `fixup`, so
     /// the renderer never sees it.
@@ -79,49 +101,49 @@ pub enum DocE {
 
 /// A document under construction.
 ///
-/// Wraps a `Vec<DocE>` and exposes builder methods (`text`, `group`, `nested`,
+/// Wraps a `Vec<Elem>` and exposes builder methods (`text`, `group`, `nested`,
 /// …) defined in [`builder`]. The inner `Vec` is `pub(crate)` so the renderer
 /// and fixup pass can perform in-place `Vec` surgery without going through the
 /// builder API; everything outside `predoc` should treat `Doc` as opaque and
 /// use the methods.
 #[derive(Debug, Default, Clone, PartialEq, Eq)]
-pub struct Doc(pub(crate) Vec<DocE>);
+pub struct Doc(pub(crate) Vec<Elem>);
 
 impl Doc {
     pub const fn new() -> Self {
         Self(Vec::new())
     }
-    /// Escape hatch for pushing a pre-built [`DocE`]. Prefer the typed
+    /// Escape hatch for pushing a pre-built [`Elem`]. Prefer the typed
     /// builder methods (`text`, `hardline`, …) where one exists.
-    pub fn push_raw(&mut self, e: DocE) -> &mut Self {
+    pub fn push_raw(&mut self, e: Elem) -> &mut Self {
         self.0.push(e);
         self
     }
 }
 
 impl std::ops::Deref for Doc {
-    type Target = [DocE];
-    fn deref(&self) -> &[DocE] {
+    type Target = [Elem];
+    fn deref(&self) -> &[Elem] {
         &self.0
     }
 }
 
 impl IntoIterator for Doc {
-    type Item = DocE;
-    type IntoIter = std::vec::IntoIter<DocE>;
+    type Item = Elem;
+    type IntoIter = std::vec::IntoIter<Elem>;
     fn into_iter(self) -> Self::IntoIter {
         self.0.into_iter()
     }
 }
 
-impl Extend<DocE> for Doc {
-    fn extend<I: IntoIterator<Item = DocE>>(&mut self, iter: I) {
+impl Extend<Elem> for Doc {
+    fn extend<I: IntoIterator<Item = Elem>>(&mut self, iter: I) {
         self.0.extend(iter);
     }
 }
 
-impl From<Vec<DocE>> for Doc {
-    fn from(v: Vec<DocE>) -> Self {
+impl From<Vec<Elem>> for Doc {
+    fn from(v: Vec<Elem>) -> Self {
         Self(v)
     }
 }
@@ -156,42 +178,43 @@ pub fn text_width(s: &str) -> usize {
     s.chars().count()
 }
 
-/// Manually force a doc to its compact layout, replacing all soft whitespace.
-/// Recurses into inner groups (flattening them). Returns `None` if the doc
-/// contains hard line breaks or exceeds the optional width limit.
-/// Mirrors Haskell `unexpandSpacing'` (Predoc.hs).
-pub fn unexpand_spacing_prime(mut limit: Option<i32>, doc: &[DocE]) -> Option<Doc> {
-    let mut result = Vec::new();
-    let mut stack: Vec<std::slice::Iter<'_, DocE>> = vec![doc.iter()];
-    while let Some(iter) = stack.last_mut() {
-        let Some(elem) = iter.next() else {
-            stack.pop();
-            continue;
-        };
-        match elem {
-            DocE::Text(_, _, _, t) => {
-                if let Some(n) = limit.as_mut() {
-                    #[allow(clippy::cast_possible_truncation, clippy::cast_possible_wrap)]
-                    {
-                        *n -= text_width(t) as i32;
+impl Doc {
+    /// Force this doc to its compact (single-line) layout: soft spacings become
+    /// hard spaces, breaks vanish, groups flatten. Returns `None` if the doc
+    /// contains hard line breaks or would exceed `limit` columns.
+    pub fn try_compact(&self, mut limit: Option<i32>) -> Option<Self> {
+        let mut result = Vec::new();
+        let mut stack: Vec<std::slice::Iter<'_, Elem>> = vec![self.iter()];
+        while let Some(iter) = stack.last_mut() {
+            let Some(elem) = iter.next() else {
+                stack.pop();
+                continue;
+            };
+            match elem {
+                Elem::Text(_, _, _, t) => {
+                    if let Some(n) = limit.as_mut() {
+                        #[allow(clippy::cast_possible_truncation, clippy::cast_possible_wrap)]
+                        {
+                            *n -= text_width(t) as i32;
+                        }
                     }
+                    result.push(elem.clone());
                 }
-                result.push(elem.clone());
-            }
-            DocE::Spacing(Spacing::Hardspace | Spacing::Space | Spacing::Softspace) => {
-                if let Some(n) = limit.as_mut() {
-                    *n -= 1;
+                Elem::Spacing(Spacing::Hardspace | Spacing::Space | Spacing::Softspace) => {
+                    if let Some(n) = limit.as_mut() {
+                        *n -= 1;
+                    }
+                    result.push(Elem::Spacing(Spacing::Hardspace));
                 }
-                result.push(DocE::Spacing(Spacing::Hardspace));
+                Elem::Spacing(Spacing::Break | Spacing::Softbreak) => {}
+                Elem::Spacing(_) => return None,
+                Elem::Nest(..) => result.push(elem.clone()),
+                Elem::Group(_, inner) => stack.push(inner.iter()),
             }
-            DocE::Spacing(Spacing::Break | Spacing::Softbreak) => {}
-            DocE::Spacing(_) => return None,
-            DocE::Nest(..) => result.push(elem.clone()),
-            DocE::Group(_, inner) => stack.push(inner.iter()),
+            if matches!(limit, Some(n) if n < 0) {
+                return None;
+            }
         }
-        if matches!(limit, Some(n) if n < 0) {
-            return None;
-        }
+        Some(Self(result))
     }
-    Some(Doc(result))
 }

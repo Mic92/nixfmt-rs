@@ -4,13 +4,13 @@ use super::{
     NUMBER_COLOR, PrettySimple, STRING_CONTENT_COLOR, STRING_QUOTE_COLOR, Writer, escape_string,
     format_bracket_list, sub_expr, with_brackets,
 };
+use crate::ast::{
+    Annotated, Binder, Expression, Item, ParamAttr, ParamDefault, Parameter, Selector, SetDefault,
+    SimpleSelector, Span, StringPart, Term, Token, Trailed, TrailingComment, Trivia, Trivium,
+};
 use crate::format_constructor;
 use crate::format_enum;
 use crate::format_record;
-use crate::types::{
-    Ann, Binder, Expression, Item, ParamAttr, ParamDefault, Parameter, Selector, SetDefault,
-    SimpleSelector, Span, StringPart, Term, Token, TrailingComment, Trivia, Trivium, Whole,
-};
 
 /// Generate a `PrettySimple` impl for a primitive/atomic type:
 /// `is_simple` and `is_atomic` are always `true`; only `format` varies.
@@ -51,7 +51,7 @@ simple_atom!(bool, |b, w| w.write_plain(if *b {
     "False"
 }));
 
-impl PrettySimple for Whole<Expression> {
+impl PrettySimple for Trailed<Expression> {
     fn format<W: Writer>(&self, w: &mut W) {
         self.value.format(w);
         w.newline(); // Final newline at end of output
@@ -396,7 +396,7 @@ struct SpanWrapper(Span);
 
 impl PrettySimple for SpanWrapper {
     fn format<W: Writer>(&self, w: &mut W) {
-        use crate::error::context::ErrorContext;
+        use crate::error::ErrorContext;
 
         w.write_plain("Pos ");
         let ctx = ErrorContext::new(w.source(), None);
@@ -426,8 +426,9 @@ impl PrettySimple for TrailingComment {
     }
 }
 
-impl<T: PrettySimple> PrettySimple for Ann<T> {
+impl<T: PrettySimple> PrettySimple for Annotated<T> {
     fn format<W: Writer>(&self, w: &mut W) {
+        // Reference `nixfmt --ast` emits the Haskell constructor name.
         w.write_plain("Ann");
 
         format_record!(

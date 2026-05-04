@@ -5,8 +5,8 @@
 //! - Lists: `[ ]`
 //! - Parenthesized expressions: `( )`
 
+use crate::ast::{Items, Term, Token};
 use crate::error::{ParseError, Result};
-use crate::types::{Items, Term, Token};
 
 use super::Parser;
 

@@ -1,11 +1,10 @@
-use crate::predoc::{Doc, DocE, Pretty, hardline, line};
-use crate::types::{
-    Ann, Expression, Leaf, ParamAttr, Parameter, Selector, SimpleSelector, Term, Token,
+use crate::ast::{
+    Annotated, Expression, Leaf, ParamAttr, Parameter, Selector, SimpleSelector, Term, Token,
     TrailingComment, Trivia,
 };
+use crate::predoc::{Doc, Elem, Pretty, hardline, line};
 
-use super::absorb::push_absorb_rhs;
-use super::util::push_empty_brackets;
+use super::term::empty_brackets;
 
 impl Pretty for ParamAttr {
     fn pretty(&self, doc: &mut Doc) {
@@ -23,7 +22,7 @@ impl Pretty for ParamAttr {
                         d.hardspace();
                         d.nested(|inner| {
                             def.question.pretty(inner);
-                            push_absorb_rhs(inner, &def.value);
+                            def.value.absorb_rhs(inner);
                         });
                     }
 
@@ -151,7 +150,7 @@ fn move_params_comments(attrs: &[ParamAttr]) -> Vec<ParamAttr> {
                 comma: comma @ None,
                 ..
             } if is_last => {
-                *comma = Some(Ann {
+                *comma = Some(Annotated {
                     pre_trivia: Trivia::new(),
                     value: Token::TComma,
                     span: name.span,
@@ -165,18 +164,20 @@ fn move_params_comments(attrs: &[ParamAttr]) -> Vec<ParamAttr> {
     out
 }
 
-fn parameter_separator(open: &Leaf, attrs: &[ParamAttr], close: &Leaf) -> DocE {
+fn parameter_separator(open: &Leaf, attrs: &[ParamAttr], close: &Leaf) -> Elem {
     if open.span.start_line() != close.span.start_line() {
         return hardline();
     }
-
-    match attrs {
-        [attr] if attr.is_ellipsis() => line(),
-        [attr] if attr.has_no_default() => line(),
-        [a, b] if a.has_no_default() && b.is_ellipsis() => line(),
-        [a, b] if a.has_no_default() && b.has_no_default() => line(),
-        [a, b, c] if a.has_no_default() && b.has_no_default() && c.is_ellipsis() => line(),
-        _ => hardline(),
+    // Allow a compact `{ a, b, ... }` only for at most two plain attrs
+    // optionally followed by `...`.
+    let plain = match attrs.split_last() {
+        Some((last, init)) if last.is_ellipsis() => init,
+        _ => attrs,
+    };
+    if plain.len() <= 2 && plain.iter().all(ParamAttr::has_no_default) {
+        line()
+    } else {
+        hardline()
     }
 }
 
@@ -225,7 +226,7 @@ impl Pretty for Parameter {
             Self::Set { open, attrs, close } => {
                 let open = open.move_trailing_comment_up();
                 if attrs.is_empty() {
-                    doc.group(|doc| push_empty_brackets(doc, &open, close));
+                    doc.group(|doc| empty_brackets(doc, &open, close));
                     return;
                 }
 
@@ -240,7 +241,7 @@ impl Pretty for Parameter {
                     });
                     doc.push_raw(sep);
                     doc.nested(|inner| close.pre_trivia.pretty(inner));
-                    close.without_pre().pretty(doc);
+                    close.pretty_tail(doc);
                 });
             }
             Self::Context {

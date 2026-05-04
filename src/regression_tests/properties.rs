@@ -9,8 +9,8 @@
 //! parser cannot parse yet are skipped (those are tracked by the parser
 //! regression tests, not here).
 
+use crate::ast::File;
 use crate::tests_common::diff;
-use crate::types::File;
 use std::path::{Path as FsPath, PathBuf};
 
 // ---------------------------------------------------------------------------

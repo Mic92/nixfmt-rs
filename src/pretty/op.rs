@@ -1,8 +1,7 @@
+use crate::ast::{Expression, Leaf, Token};
 use crate::predoc::{Doc, Pretty, line};
-use crate::types::{Expression, Leaf, Token};
 
-use super::app::push_pretty_app;
-use super::term::push_pretty_term_wide;
+use super::app::pretty_app;
 
 fn flatten_operation_chain<'a>(
     target: &'a Leaf,
@@ -23,7 +22,7 @@ fn flatten_operation_chain<'a>(
     }
 }
 
-fn push_absorb_operation(doc: &mut Doc, expr: &Expression) {
+fn absorb_operation(doc: &mut Doc, expr: &Expression) {
     match expr {
         Expression::Term(term) if term.is_absorbable() => {
             doc.hardspace();
@@ -36,7 +35,7 @@ fn push_absorb_operation(doc: &mut Doc, expr: &Expression) {
             });
         }
         Expression::Application { .. } => {
-            doc.group(|g| push_pretty_app(g, false, &[line()], false, expr));
+            doc.group(|g| pretty_app(g, false, &[line()], false, expr));
         }
         _ => {
             doc.hardspace();
@@ -88,10 +87,10 @@ pub(super) fn pretty_operation(
         return;
     }
 
-    push_pretty_operation(doc, false, whole, op);
+    pretty_operation_chain(doc, false, whole, op);
 }
 
-pub(super) fn push_pretty_operation(
+pub(super) fn pretty_operation_chain(
     doc: &mut Doc,
     force_first_term_wide: bool,
     operation: &Expression,
@@ -105,7 +104,7 @@ pub(super) fn push_pretty_operation(
             match maybe_op {
                 None => match expr {
                     Expression::Term(term) if force_first_term_wide && term.is_absorbable() => {
-                        push_pretty_term_wide(group_doc, term);
+                        term.pretty_wide(group_doc);
                     }
                     _ => expr.pretty(group_doc),
                 },
@@ -113,7 +112,7 @@ pub(super) fn push_pretty_operation(
                     group_doc.line();
                     op_leaf.pretty(group_doc);
                     group_doc.nested(|nested| {
-                        push_absorb_operation(nested, expr);
+                        absorb_operation(nested, expr);
                     });
                 }
             }

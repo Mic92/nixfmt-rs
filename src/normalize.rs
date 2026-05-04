@@ -8,9 +8,9 @@
 //! Used by the fuzzing harness to check that `parse → format → parse`
 //! is a semantic round-trip.
 
-use crate::types::{
-    Ann, Binder, Expression, File, Item, Items, Leaf, NixString, ParamAttr, Parameter, Selector,
-    SimpleSelector, Span, StringPart, Term, Trivia, Whole,
+use crate::ast::{
+    Annotated, Binder, Expression, File, Item, Items, Leaf, NixString, ParamAttr, Parameter,
+    Selector, SimpleSelector, Span, StringPart, Term, Trailed, Trivia,
 };
 
 const ZERO_SPAN: Span = Span::with_lines(0, 0, 1, 1);
@@ -19,12 +19,12 @@ pub fn normalize_file(file: &mut File) {
     normalize_whole_expr(file);
 }
 
-fn normalize_whole_expr(w: &mut Whole<Expression>) {
+fn normalize_whole_expr(w: &mut Trailed<Expression>) {
     w.trailing_trivia = Trivia::new();
     normalize_expr(&mut w.value);
 }
 
-fn normalize_ann<T>(a: &mut Ann<T>, f: impl FnOnce(&mut T)) {
+fn normalize_ann<T>(a: &mut Annotated<T>, f: impl FnOnce(&mut T)) {
     a.pre_trivia = Trivia::new();
     a.span = ZERO_SPAN;
     a.trail_comment = None;

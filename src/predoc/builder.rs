@@ -7,46 +7,54 @@
 //! idiomatic Rust shape is a builder struct with chainable inherent methods,
 //! which is what this module now provides.
 
-use super::{Doc, DocE, GroupAnn, Pretty, Spacing, TextAnn};
+use super::{Doc, Elem, GroupKind, Pretty, Spacing, TextKind};
 
 impl Doc {
     /// Push a text element with the given annotation, dropping empty strings.
-    fn text_ann(&mut self, ann: TextAnn, s: impl Into<String>) -> &mut Self {
+    fn text_with(&mut self, ann: TextKind, s: impl Into<String>) -> &mut Self {
         let s = s.into();
         if !s.is_empty() {
-            self.0.push(DocE::Text(0, 0, ann, s));
+            self.0.push(Elem::Text(0, 0, ann, s));
         }
         self
     }
 
     pub fn text(&mut self, s: impl Into<String>) -> &mut Self {
-        self.text_ann(TextAnn::RegularT, s)
+        self.text_with(TextKind::Regular, s)
     }
 
     pub fn comment(&mut self, s: impl Into<String>) -> &mut Self {
-        self.text_ann(TextAnn::Comment, s)
+        self.text_with(TextKind::Comment, s)
     }
 
     pub fn trailing_comment(&mut self, s: impl Into<String>) -> &mut Self {
-        self.text_ann(TextAnn::TrailingComment, s)
+        self.text_with(TextKind::TrailingComment, s)
     }
 
     /// Only rendered in expanded groups.
     pub fn trailing(&mut self, s: impl Into<String>) -> &mut Self {
-        self.text_ann(TextAnn::Trailing, s)
+        self.text_with(TextKind::Trailing, s)
     }
 
     pub fn group(&mut self, f: impl FnOnce(&mut Self)) -> &mut Self {
-        self.group_ann(GroupAnn::RegularG, f)
+        self.group_with(GroupKind::Regular, f)
     }
 
-    pub fn group_ann(&mut self, ann: GroupAnn, f: impl FnOnce(&mut Self)) -> &mut Self {
+    pub fn priority_group(&mut self, f: impl FnOnce(&mut Self)) -> &mut Self {
+        self.group_with(GroupKind::Priority, f)
+    }
+
+    pub fn transparent_group(&mut self, f: impl FnOnce(&mut Self)) -> &mut Self {
+        self.group_with(GroupKind::Transparent, f)
+    }
+
+    pub fn group_with(&mut self, kind: GroupKind, f: impl FnOnce(&mut Self)) -> &mut Self {
         // Write into the parent's tail and split_off, so the body grows an
         // amortised buffer instead of a fresh zero-cap Vec per group.
         let start = self.0.len();
         f(self);
         let inner = Self(self.0.split_off(start));
-        self.0.push(DocE::Group(ann, inner));
+        self.0.push(Elem::Group(kind, inner));
         self
     }
 
@@ -54,9 +62,9 @@ impl Doc {
     /// pair. `fixup` later bakes the accumulated deltas into each `Text` so the
     /// renderer's indent stack logic is unchanged.
     fn nest_pair(&mut self, dn: isize, doff: isize, f: impl FnOnce(&mut Self)) -> &mut Self {
-        self.0.push(DocE::Nest(dn, doff));
+        self.0.push(Elem::Nest(dn, doff));
         f(self);
-        self.0.push(DocE::Nest(-dn, -doff));
+        self.0.push(Elem::Nest(-dn, -doff));
         self
     }
 
@@ -72,7 +80,7 @@ impl Doc {
 
     pub fn sep_by<P: Pretty>(
         &mut self,
-        separator: &[DocE],
+        separator: &[Elem],
         items: impl IntoIterator<Item = P>,
     ) -> &mut Self {
         let mut first = true;
@@ -93,7 +101,7 @@ impl Doc {
         self
     }
 
-    pub fn surrounded(&mut self, outside: &[DocE], f: impl FnOnce(&mut Self)) -> &mut Self {
+    pub fn surrounded(&mut self, outside: &[Elem], f: impl FnOnce(&mut Self)) -> &mut Self {
         self.0.extend_from_slice(outside);
         f(self);
         self.0.extend_from_slice(outside);
@@ -104,20 +112,20 @@ impl Doc {
     //
     // Thin wrappers over the free spacing constructors below. Having both lets
     // call sites write `doc.hardline()` for the common "emit a spacing" case
-    // while still being able to pass `hardline()` as a `DocE` value (e.g. as a
+    // while still being able to pass `hardline()` as a `Elem` value (e.g. as a
     // separator argument).
 
     /// Line break or nothing (soft)
-    pub fn softline_prime(&mut self) -> &mut Self {
-        self.push_raw(DocE::Spacing(Spacing::Softbreak))
+    pub fn softbreak(&mut self) -> &mut Self {
+        self.push_raw(Elem::Spacing(Spacing::Softbreak))
     }
     /// Line break or nothing
-    pub fn line_prime(&mut self) -> &mut Self {
-        self.push_raw(line_prime())
+    pub fn linebreak(&mut self) -> &mut Self {
+        self.push_raw(linebreak())
     }
     /// Line break or space (soft)
     pub fn softline(&mut self) -> &mut Self {
-        self.push_raw(DocE::Spacing(Spacing::Softspace))
+        self.push_raw(Elem::Spacing(Spacing::Softspace))
     }
     /// Line break or space
     pub fn line(&mut self) -> &mut Self {
@@ -133,37 +141,37 @@ impl Doc {
     }
     /// Two line breaks (blank line)
     pub fn emptyline(&mut self) -> &mut Self {
-        self.push_raw(DocE::Spacing(Spacing::Emptyline))
+        self.push_raw(Elem::Spacing(Spacing::Emptyline))
     }
 }
 
 // -- Free spacing constructors ---------------------------------------------
 //
-// Kept as free functions because spacings are also used as first-class `DocE`
+// Kept as free functions because spacings are also used as first-class `Elem`
 // values (separator arguments, `push_raw`, pattern matches), not just emitted
 // into a `Doc`.
 
 /// Line break or nothing
-pub const fn line_prime() -> DocE {
-    DocE::Spacing(Spacing::Break)
+pub const fn linebreak() -> Elem {
+    Elem::Spacing(Spacing::Break)
 }
 
 /// Line break or space
-pub const fn line() -> DocE {
-    DocE::Spacing(Spacing::Space)
+pub const fn line() -> Elem {
+    Elem::Spacing(Spacing::Space)
 }
 
 /// Always space
-pub const fn hardspace() -> DocE {
-    DocE::Spacing(Spacing::Hardspace)
+pub const fn hardspace() -> Elem {
+    Elem::Spacing(Spacing::Hardspace)
 }
 
 /// Always line break
-pub const fn hardline() -> DocE {
-    DocE::Spacing(Spacing::Hardline)
+pub const fn hardline() -> Elem {
+    Elem::Spacing(Spacing::Hardline)
 }
 
 /// n line breaks
-pub const fn newline() -> DocE {
-    DocE::Spacing(Spacing::Newlines(1))
+pub const fn newline() -> Elem {
+    Elem::Spacing(Spacing::Newlines(1))
 }

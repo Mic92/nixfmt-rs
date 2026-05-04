@@ -31,22 +31,22 @@ mod colored_writer;
 mod pretty_simple;
 
 // Internal modules - not exposed as public API
+mod ast;
 mod lexer;
 mod normalize;
 mod parser;
 mod pretty;
-mod types;
 
 pub use error::ParseError;
 
 /// Version of the `nixfmt_rs` crate (and thus the formatting rules).
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");
 
-use predoc::{Pretty, RenderConfig, render_with_config};
+use predoc::{Pretty, RenderConfig};
 
 // Internal-only Result type and AST types
+pub(crate) use ast::File;
 pub(crate) use error::Result;
-pub(crate) use types::File;
 
 /// Layout options for [`format_with`].
 ///
@@ -113,7 +113,7 @@ pub fn format_with(source: &str, opts: &Options) -> Result<String> {
         width: opts.width,
         indent_width: opts.indent,
     };
-    let output = render_with_config(doc, &config);
+    let output = doc.render(&config);
     Ok(output)
 }
 
@@ -121,7 +121,7 @@ pub fn format_with(source: &str, opts: &Options) -> Result<String> {
 pub(crate) fn ast_to_ir(ast: &File) -> predoc::IR {
     let mut doc = predoc::Doc::new();
     ast.pretty(&mut doc);
-    predoc::IR(predoc::fixup(doc))
+    predoc::IR(doc.fixup())
 }
 
 /// Format AST as colored debug output (for --ast mode).
@@ -167,8 +167,8 @@ pub fn format_ir(source: &str) -> Result<String> {
 /// ```
 #[must_use]
 pub fn format_error(source: &str, filename: Option<&str>, error: &ParseError) -> String {
-    let context = error::context::ErrorContext::new(source, filename);
-    format!("{}", error::format::render(&context, error))
+    let context = error::ErrorContext::new(source, filename);
+    format!("{}", error::render(&context, error))
 }
 
 // Include test modules
