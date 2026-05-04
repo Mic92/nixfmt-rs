@@ -9,7 +9,7 @@ Coverage-guided fuzzing for the parser and formatter via
 | ------------------ | ------------------------------------------------------------------------- |
 | `fuzz_parse`       | `parse()` never panics on arbitrary bytes; on `Err`, `format_error()` rendering also never panics. |
 | `fuzz_roundtrip`   | `parse → format → parse` succeeds and yields the same AST modulo trivia.  |
-| `fuzz_idempotent`  | `format` converges: `format²(x) == format³(x)` (and `format(x)` reparses).|
+| `fuzz_idempotent`  | `format` is idempotent: `format(format(x)) == format(x)` (and `format(x)` reparses). |
 | `fuzz_debug_dumps` | `format_ast()` / `format_ir()` (the `--ast`/`--ir` debug renderers) never panic on parseable input. |
 
 All targets are seeded from `tests/fixtures/nixfmt/` plus `fuzz/seeds/`. Run
@@ -65,12 +65,5 @@ cargo fuzz tmin -s none <target> fuzz/artifacts/<target>/crash-<hash>
 ```
 
 Minimised reproducers belong in `src/regression_tests/fuzz.rs`.
-
-## Known upstream divergences
-
-`fuzz_idempotent` checks `f² == f³` rather than `f¹ == f²` because upstream
-Haskell nixfmt (which this project mirrors) has inputs that only stabilise on
-the second pass, e.g. a trailing line comment immediately after a multi-line
-string literal. Oscillation or unbounded growth is still caught.
 
 Bugs found and fixed so far are listed in `src/regression_tests/fuzz.rs`.

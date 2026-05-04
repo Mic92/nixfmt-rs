@@ -106,7 +106,8 @@ pub fn format(source: &str) -> Result<String> {
 /// # Errors
 /// See [`parse`].
 pub fn format_with(source: &str, opts: &Options) -> Result<String> {
-    let ast = parse(source)?;
+    let mut ast = parse(source)?;
+    strip_leading_empty_lines(&mut ast);
     let mut doc = doc::Doc::new();
     ast.emit(&mut doc);
     let config = RenderConfig {
@@ -117,8 +118,34 @@ pub fn format_with(source: &str, opts: &Options) -> Result<String> {
     Ok(output)
 }
 
+/// Drop leading `EmptyLine` trivia on the file's very first token.
+///
+/// The renderer discards leading vertical whitespace anyway, so this never
+/// changes the output bytes. It does, however, change layout *decisions*:
+/// `Term::is_simple` treats any pre-trivia as "not simple", so a file starting
+/// with blank lines took the non-simple `prettyApp` branch on pass 1, then the
+/// simple branch on pass 2 once the blanks were gone, breaking idempotency.
+/// Upstream Haskell nixfmt 1.2.0 has the same bug; this is an intentional
+/// divergence so `format` is a fixed point.
+fn strip_leading_empty_lines(ast: &mut File) {
+    use ast::{FirstToken, TriviaPiece};
+    let slot = ast.value.first_token_mut();
+    let n = slot
+        .pre_trivia
+        .iter()
+        .take_while(|p| matches!(p, TriviaPiece::EmptyLine))
+        .count();
+    if n > 0 {
+        let mut v: Vec<TriviaPiece> = std::mem::take(slot.pre_trivia).into();
+        v.drain(..n);
+        *slot.pre_trivia = v.into();
+    }
+}
+
 #[cfg(any(test, feature = "debug-dump"))]
 pub(crate) fn ast_to_ir(ast: &File) -> doc::IR {
+    let mut ast = ast.clone();
+    strip_leading_empty_lines(&mut ast);
     let mut doc = doc::Doc::new();
     ast.emit(&mut doc);
     doc::IR(doc.fixup())

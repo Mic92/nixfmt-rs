@@ -72,3 +72,36 @@ fn fuzz_block_comment_with_cr_reparses() {
     roundtrip("/*a\rb*/3");
     roundtrip("2 /* x\r */\n");
 }
+
+/// A trailing `# c` on `[` is rendered on its own line, where it re-lexes as a
+/// *leading* comment on the first item. With a lone `/* lang */` annotation as
+/// the first item, pass 1 fused it with the term (`/* s */ x`) but pass 2 saw
+/// `[LineComment, LanguageAnnotation]` and split them. Also non-idempotent in
+/// upstream Haskell nixfmt 1.2.0.
+#[test]
+fn fuzz_list_open_trail_comment_before_lang_annotation() {
+    roundtrip("[#x\n/*s*/\"\"\n]");
+    roundtrip("[#x\n/*s*/''ls''\n]");
+    // Guard the fix against over-application: without a trailing comment on
+    // `[`, the annotation must still fuse.
+    assert_eq!(format("[\n/*s*/\"\"\n]").unwrap(), "[\n  /* s */ \"\"\n]\n");
+}
+
+/// Leading blank lines on the file's first token made `Term::is_simple` return
+/// `false`, so `prettyApp` took the non-simple branch on pass 1; pass 2 (with
+/// the blanks now stripped) took the simple branch. Also non-idempotent in
+/// upstream Haskell nixfmt 1.2.0.
+#[test]
+fn fuzz_leading_blank_lines_app_layout() {
+    roundtrip("\n\nc\n\"${f\n\n}\"");
+    roundtrip("\n\nc d \"${f\n\n}\"");
+    roundtrip("\r\rc\n''${f\n\n}''");
+    // Nested contexts preserve the blank line in output and were already
+    // idempotent; guard the fix against over-application there.
+    roundtrip("(\n\nc \"${f\n\n}\")");
+    // A real leading comment must still suppress the simple layout.
+    assert_eq!(
+        format("# foo\nc \"${f\n\n}\"").unwrap(),
+        "# foo\nc\n  \"${\n    f\n\n  }\"\n"
+    );
+}
