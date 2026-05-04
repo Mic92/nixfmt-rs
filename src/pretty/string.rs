@@ -5,6 +5,25 @@ use super::absorb::is_absorbable_term;
 use super::term::push_parenthesized_inner;
 use super::util::{is_simple_expression, is_spaces};
 
+/// Wrap content in `${ ... }` with a group: try to compact it onto one line
+/// (within `max_width` columns), otherwise break with `line'`.
+fn push_interpolation_braces(doc: &mut Doc, max_width: i32, body: Doc) {
+    doc.group(|g| {
+        g.text("${");
+        match unexpand_spacing_prime(Some(max_width), &body) {
+            Some(compact) => g.extend(compact),
+            None => {
+                g.nested(|n| {
+                    n.line_prime();
+                    n.extend(body);
+                    n.line_prime();
+                });
+            }
+        }
+        g.text("}");
+    });
+}
+
 impl Pretty for StringPart {
     fn pretty(&self, doc: &mut Doc) {
         match self {
@@ -27,8 +46,6 @@ impl Pretty for StringPart {
                     return;
                 }
 
-                // Simple interpolations (mostly identifiers/selections): force
-                // single line regardless of width.
                 if trailing_empty && is_simple_expression(value) {
                     doc.text("${");
                     let mut rendered = Doc::new();
@@ -45,20 +62,7 @@ impl Pretty for StringPart {
                 // ≤30 columns, force it onto this line even past the width limit.
                 let mut rendered = Doc::new();
                 whole.pretty(&mut rendered);
-                doc.group(|g| {
-                    g.text("${");
-                    match unexpand_spacing_prime(Some(30), &rendered) {
-                        Some(compact) => g.extend(compact),
-                        None => {
-                            g.nested(|n| {
-                                n.line_prime();
-                                n.extend(rendered);
-                                n.line_prime();
-                            });
-                        }
-                    }
-                    g.text("}");
-                });
+                push_interpolation_braces(doc, 30, rendered);
             }
         }
     }
@@ -85,7 +89,6 @@ impl Pretty for Vec<StringPart> {
             doc.offset(text_width(pre), |d| {
                 d.group(|g| {
                     g.text("${");
-                    // Upstream keeps this case split identical to `prettyTerm (Parenthesized …)`.
                     g.nested(|n| push_parenthesized_inner(n, expr));
                     g.text("}");
                 });
@@ -96,15 +99,9 @@ impl Pretty for Vec<StringPart> {
         match self.as_slice() {
             // Lone interpolation with trailing trivia: always surround with `line'`.
             [StringPart::Interpolation(whole)] => {
-                doc.group(|g| {
-                    g.text("${");
-                    g.nested(|n| {
-                        n.line_prime();
-                        whole.pretty(n);
-                        n.line_prime();
-                    });
-                    g.text("}");
-                });
+                let mut rendered = Doc::new();
+                whole.pretty(&mut rendered);
+                push_interpolation_braces(doc, 0, rendered);
             }
             // If a line is split across multiple code lines due to large
             // interpolations, indent the continuation by the line's leading
@@ -135,7 +132,7 @@ impl Pretty for Vec<StringPart> {
 pub(super) fn push_pretty_simple_string(doc: &mut Doc, parts: &[Vec<StringPart>]) {
     doc.group(|d| {
         d.text("\"");
-        // Use literal \n instead of newline() to avoid indentation
+        // Literal \n avoids the indentation that newline() would inject
         let newline_doc = [DocE::Text(0, 0, TextAnn::RegularT, "\n".to_string())];
         d.sep_by(&newline_doc, parts.iter().cloned());
         d.text("\"");
