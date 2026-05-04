@@ -396,7 +396,7 @@ struct SpanWrapper(Span);
 
 impl PrettySimple for SpanWrapper {
     fn format<W: Writer>(&self, w: &mut W) {
-        use crate::error::context::ErrorContext;
+        use crate::error::ErrorContext;
 
         w.write_plain("Pos ");
         let ctx = ErrorContext::new(w.source(), None);
