@@ -4,8 +4,8 @@
 
 use crate::predoc::{Doc, Pretty, hardline, line, linebreak};
 use crate::types::{
-    Ann, Binder, Expression, Item, Parameter, Selector, SimpleSelector, Term, Token,
-    TrailingComment, Trivia, Trivium, Whole,
+    Annotated, Binder, Expression, Item, Parameter, Selector, SimpleSelector, Term, Token, Trailed,
+    TrailingComment, Trivia, Trivium,
 };
 
 mod absorb;
@@ -88,7 +88,7 @@ impl Pretty for Trivia {
     }
 }
 
-impl<T: Pretty> Pretty for Ann<T> {
+impl<T: Pretty> Pretty for Annotated<T> {
     fn pretty(&self, doc: &mut Doc) {
         self.pre_trivia.pretty(doc);
         self.value.pretty(doc);
@@ -96,7 +96,7 @@ impl<T: Pretty> Pretty for Ann<T> {
     }
 }
 
-impl<T: Pretty> Ann<T> {
+impl<T: Pretty> Annotated<T> {
     /// Emit `pre_trivia` and value, leaving `trail_comment` for the caller to
     /// place elsewhere (typically inside a following nested group).
     pub(super) fn pretty_head(&self, doc: &mut Doc) {
@@ -112,9 +112,9 @@ impl<T: Pretty> Ann<T> {
     }
 }
 
-impl<T> Ann<T> {
+impl<T> Annotated<T> {
     /// Emit `pre_trivia`, then the value via `f`, then `trail_comment`.
-    /// Used for `Ann<T>` payloads that have no blanket `Pretty` impl.
+    /// Used for `Annotated<T>` payloads that have no blanket `Pretty` impl.
     pub(super) fn pretty_with(&self, doc: &mut Doc, f: impl FnOnce(&mut Doc, &T)) {
         self.pre_trivia.pretty(doc);
         f(doc, &self.value);
@@ -264,12 +264,12 @@ impl Pretty for Term {
                 doc.group(|g| pretty_list(g, open, items, close));
             }
             Self::Set {
-                rec: krec,
+                rec,
                 open,
                 items: binders,
                 close,
             } => {
-                pretty_set(doc, Width::Regular, krec.as_ref(), open, binders, close);
+                pretty_set(doc, Width::Regular, rec.as_ref(), open, binders, close);
             }
             Self::Selection {
                 base: term,
@@ -283,7 +283,7 @@ impl Pretty for Term {
                 match &**term {
                     // `1.a` would re-lex as float `1.` applied to `a`; keep a
                     // space. Diverges from Haskell nixfmt, which has this bug.
-                    Self::Token(Ann {
+                    Self::Token(Annotated {
                         value: Token::Integer(_),
                         ..
                     }) if !selectors.is_empty() => {
@@ -440,7 +440,7 @@ impl Pretty for Expression {
     }
 }
 
-impl<T: Pretty> Pretty for Whole<T> {
+impl<T: Pretty> Pretty for Trailed<T> {
     fn pretty(&self, doc: &mut Doc) {
         doc.group(|doc| {
             self.value.pretty(doc);

@@ -1,6 +1,6 @@
 use crate::predoc::{Doc, Elem, Pretty, hardline, line};
 use crate::types::{
-    Ann, Expression, Leaf, ParamAttr, Parameter, Selector, SimpleSelector, Term, Token,
+    Annotated, Expression, Leaf, ParamAttr, Parameter, Selector, SimpleSelector, Term, Token,
     TrailingComment, Trivia,
 };
 
@@ -150,7 +150,7 @@ fn move_params_comments(attrs: &[ParamAttr]) -> Vec<ParamAttr> {
                 comma: comma @ None,
                 ..
             } if is_last => {
-                *comma = Some(Ann {
+                *comma = Some(Annotated {
                     pre_trivia: Trivia::new(),
                     value: Token::TComma,
                     span: name.span,

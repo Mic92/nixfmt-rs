@@ -76,7 +76,7 @@ pub trait PrettySimple: Debug {
 
     /// Check if this represents a single atomic element in Haskell's parsed form
     /// True for: primitives (String/usize/bool), nullary constructors (`EmptyLine`)
-    /// False for: constructor applications (TextPart/LineComment), delimited types (Vec/Ann)
+    /// False for: constructor applications (TextPart/LineComment), delimited types (Vec/Annotated)
     ///
     /// This is used by `Vec::is_simple()` to determine if a single-element Vec is structurally simple.
     /// In Haskell, the show string `TextPart "hello"` parses to two atoms

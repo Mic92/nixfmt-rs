@@ -13,14 +13,14 @@ mod strings;
 use crate::error::{ParseError, Result};
 use crate::lexer::Lexer;
 use crate::types::{
-    Ann, Binder, Expression, File, Item, Items, Leaf, Parameter, Selector, Span, Term, Token,
-    Trivia, Whole,
+    Annotated, Binder, Expression, File, Item, Items, Leaf, Parameter, Selector, Span, Term, Token,
+    Trailed, Trivia,
 };
 
 pub struct Parser {
     lexer: Lexer,
     /// Current token
-    current: Ann<Token>,
+    current: Annotated<Token>,
 }
 
 /// Outcome of `finish_abstraction`: either a full lambda was parsed, or no
@@ -38,7 +38,7 @@ enum SetOrLambda {
 /// Saved parser state for checkpointing
 struct ParserState {
     lexer_state: crate::lexer::LexerState,
-    current: Ann<Token>,
+    current: Annotated<Token>,
 }
 
 /// Check if a token is a comparison operator
@@ -70,7 +70,7 @@ impl Parser {
         // EOF token's `pre_trivia`; that is the file's trailing trivia.
         let trailing_trivia = std::mem::take(&mut self.current.pre_trivia);
 
-        Ok(Whole {
+        Ok(Trailed {
             value: expr,
             trailing_trivia,
         })
@@ -714,14 +714,14 @@ impl Parser {
     }
 
     /// Wrap a raw-content scanner (strings, paths, URIs) in the common
-    /// `Ann` prologue/epilogue: capture span and leading trivia, run the
+    /// `Annotated` prologue/epilogue: capture span and leading trivia, run the
     /// scanner, then collect the trailing comment and advance.
-    fn with_raw_ann<T>(&mut self, f: impl FnOnce(&mut Self) -> Result<T>) -> Result<Ann<T>> {
+    fn with_raw_ann<T>(&mut self, f: impl FnOnce(&mut Self) -> Result<T>) -> Result<Annotated<T>> {
         let span = self.current.span;
         let pre_trivia = std::mem::take(&mut self.current.pre_trivia);
         let value = f(self)?;
         let trail_comment = self.parse_trailing_trivia_and_advance()?;
-        Ok(Ann {
+        Ok(Annotated {
             pre_trivia,
             span,
             value,
@@ -736,8 +736,8 @@ impl Parser {
     }
 
     /// Take current token (consumes it)
-    const fn take_current(&mut self) -> Ann<Token> {
-        let dummy = Ann {
+    const fn take_current(&mut self) -> Annotated<Token> {
+        let dummy = Annotated {
             pre_trivia: Trivia::new(),
             span: Span::point(0),
             value: Token::Sof,
@@ -750,7 +750,7 @@ impl Parser {
     /// Fused so `self.current` is overwritten once with the next lexeme
     /// instead of once with a dummy and again with the lexeme.
     #[inline]
-    fn take_and_advance(&mut self) -> Result<Ann<Token>> {
+    fn take_and_advance(&mut self) -> Result<Annotated<Token>> {
         let next = self.lexer.lexeme()?;
         Ok(std::mem::replace(&mut self.current, next))
     }
@@ -814,7 +814,7 @@ impl Parser {
         opening_span: Span,
         opening_char: char,
         closing_token: Token,
-    ) -> Result<Ann<Token>> {
+    ) -> Result<Annotated<Token>> {
         if self.current.value == closing_token {
             self.take_and_advance()
         } else if matches!(self.current.value, Token::Sof) {

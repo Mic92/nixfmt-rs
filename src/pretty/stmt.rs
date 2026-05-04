@@ -63,7 +63,6 @@ pub(super) fn pretty_let(
     in_kw_clean.pre_trivia = Trivia::new();
     in_kw_clean.trail_comment = None;
 
-    // convertTrailing
     let mut moved_trivia_vec: Vec<Trivium> = in_kw.pre_trivia.clone().into();
     if let Some(trailing) = &in_kw.trail_comment {
         moved_trivia_vec.push(trailing.into());

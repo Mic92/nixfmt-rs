@@ -110,8 +110,8 @@ pub enum Trivium {
 /// Wrapper around a list of trivia items (comments/whitespace).
 ///
 /// Stored as a boxed slice behind an `Option` so the overwhelmingly common
-/// empty case is two zero words and never allocates: every `Ann<T>` carries
-/// one of these, and the parser moves `Ann` values by value through every
+/// empty case is two zero words and never allocates: every `Annotated<T>` carries
+/// one of these, and the parser moves `Annotated` values by value through every
 /// production, so the 24→16 byte saving compounds across the whole AST.
 /// Trivia runs are built once at lexeme boundaries and then read-only, so a
 /// frozen slice (single allocation) fits better than a growable `Vec`.
@@ -230,14 +230,14 @@ pub struct TrailingComment(pub Box<str>);
 /// - value: The actual value
 /// - `trail_comment`: Optional trailing comment on same line
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct Ann<T> {
+pub struct Annotated<T> {
     pub pre_trivia: Trivia,
     pub span: Span,
     pub value: T,
     pub trail_comment: Option<TrailingComment>,
 }
 
-impl<T> Ann<T> {
+impl<T> Annotated<T> {
     /// Haskell `hasTrivia` (Types.hs): annotation carries leading or trailing trivia.
     pub fn has_trivia(&self) -> bool {
         !self.pre_trivia.is_empty() || self.trail_comment.is_some()
@@ -249,7 +249,7 @@ impl<T> Ann<T> {
     }
 }
 
-impl<T: Clone> Ann<T> {
+impl<T: Clone> Annotated<T> {
     /// Move a trailing comment on a token into its leading trivia.
     /// Mirrors Haskell `moveTrailingCommentUp` (Pretty.hs).
     pub fn move_trailing_comment_up(&self) -> Self {
@@ -261,48 +261,48 @@ impl<T: Clone> Ann<T> {
     }
 }
 
-/// Type-erased shared view of an `Ann<_>`'s trivia fields.
+/// Type-erased shared view of an `Annotated<_>`'s trivia fields.
 ///
 /// Lets `FirstToken` return a uniform borrow regardless of the underlying
-/// `Ann<T>` payload type (`Token`, `NixString`, `Path`, ...).
-pub struct AnnSlot<'a> {
+/// `Annotated<T>` payload type (`Token`, `NixString`, `Path`, ...).
+pub struct TriviaSlot<'a> {
     pub pre_trivia: &'a Trivia,
     pub trail_comment: &'a Option<TrailingComment>,
 }
 
-/// Mutable counterpart of [`AnnSlot`].
-pub struct AnnSlotMut<'a> {
+/// Mutable counterpart of [`TriviaSlot`].
+pub struct TriviaSlotMut<'a> {
     pub pre_trivia: &'a mut Trivia,
     pub trail_comment: &'a mut Option<TrailingComment>,
 }
 
-impl<'a, T> From<&'a Ann<T>> for AnnSlot<'a> {
-    fn from(a: &'a Ann<T>) -> Self {
-        AnnSlot {
+impl<'a, T> From<&'a Annotated<T>> for TriviaSlot<'a> {
+    fn from(a: &'a Annotated<T>) -> Self {
+        TriviaSlot {
             pre_trivia: &a.pre_trivia,
             trail_comment: &a.trail_comment,
         }
     }
 }
 
-impl<'a, T> From<&'a mut Ann<T>> for AnnSlotMut<'a> {
-    fn from(a: &'a mut Ann<T>) -> Self {
-        AnnSlotMut {
+impl<'a, T> From<&'a mut Annotated<T>> for TriviaSlotMut<'a> {
+    fn from(a: &'a mut Annotated<T>) -> Self {
+        TriviaSlotMut {
             pre_trivia: &mut a.pre_trivia,
             trail_comment: &mut a.trail_comment,
         }
     }
 }
 
-/// Walk to the leftmost leaf `Ann<_>` of an AST node.
+/// Walk to the leftmost leaf `Annotated<_>` of an AST node.
 ///
 /// Haskell analogue: `mapFirstToken'` / `matchFirstToken` (Types.hs).
 pub trait FirstToken {
-    fn first_token(&self) -> AnnSlot<'_>;
-    fn first_token_mut(&mut self) -> AnnSlotMut<'_>;
+    fn first_token(&self) -> TriviaSlot<'_>;
+    fn first_token_mut(&mut self) -> TriviaSlotMut<'_>;
 }
 
-/// Expand one match arm for `first_token_impl!`: `leaf` arms hit an `Ann<_>`
+/// Expand one match arm for `first_token_impl!`: `leaf` arms hit an `Annotated<_>`
 /// directly via `.into()`, `recurse` arms call `$rec` (`first_token` or
 /// `first_token_mut`) on a child node.
 macro_rules! first_token_arm {
@@ -319,10 +319,10 @@ macro_rules! first_token_arm {
 macro_rules! first_token_impl {
     ($ty:ty; $($pat:pat => $kind:ident $e:expr),+ $(,)?) => {
         impl FirstToken for $ty {
-            fn first_token(&self) -> AnnSlot<'_> {
+            fn first_token(&self) -> TriviaSlot<'_> {
                 match self { $($pat => first_token_arm!($kind, first_token, $e),)+ }
             }
-            fn first_token_mut(&mut self) -> AnnSlotMut<'_> {
+            fn first_token_mut(&mut self) -> TriviaSlotMut<'_> {
                 match self { $($pat => first_token_arm!($kind, first_token_mut, $e),)+ }
             }
         }
@@ -388,26 +388,26 @@ impl<T> Items<T> {
 }
 
 /// A token annotated with trivia and span (Haskell: `Leaf`).
-pub type Leaf = Ann<Token>;
+pub type Leaf = Annotated<Token>;
 
 /// String parts - either text or interpolation
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum StringPart {
     TextPart(Box<str>),
-    Interpolation(Box<Whole<Expression>>),
+    Interpolation(Box<Trailed<Expression>>),
 }
 
 /// A path literal: a single line of text / interpolation parts (Haskell: `Path`).
-pub type Path = Ann<Vec<StringPart>>;
+pub type Path = Annotated<Vec<StringPart>>;
 
 /// A string consists of lines, each of which consists of text elements and interpolations
-pub type NixString = Ann<Vec<Vec<StringPart>>>;
+pub type NixString = Annotated<Vec<Vec<StringPart>>>;
 
 /// Simple selector (no dot prefix)
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum SimpleSelector {
     ID(Leaf),
-    Interpol(Ann<StringPart>),
+    Interpol(Annotated<StringPart>),
     String(NixString),
 }
 
@@ -654,15 +654,16 @@ pub enum Expression {
     },
 }
 
-/// Whole - an expression including final trivia
+/// A value followed by trailing trivia (comments/whitespace) up to the next
+/// closing delimiter or EOF. Used for whole files and interpolation bodies.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct Whole<T> {
+pub struct Trailed<T> {
     pub value: T,
     pub trailing_trivia: Trivia,
 }
 
 /// A complete source file: top-level expression plus trailing trivia (Haskell: `File`).
-pub type File = Whole<Expression>;
+pub type File = Trailed<Expression>;
 
 /// Tokens
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -801,7 +802,7 @@ mod tests {
     #[test]
     fn trivia_is_two_words() {
         // Guard against accidentally regressing to a fatter representation;
-        // every Ann<T> in the AST embeds one of these.
+        // every Annotated<T> in the AST embeds one of these.
         assert_eq!(std::mem::size_of::<Trivia>(), 16);
     }
 }

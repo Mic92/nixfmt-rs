@@ -1,5 +1,5 @@
 use crate::predoc::{Doc, Elem, Pretty, hardline, hardspace, line};
-use crate::types::{Ann, Binder, Expression, Item, Items, Leaf, Term, Token, Trivium};
+use crate::types::{Annotated, Binder, Expression, Item, Items, Leaf, Term, Token, Trivium};
 
 use super::Width;
 use super::app::pretty_app;
@@ -40,11 +40,11 @@ impl Term {
     pub(in crate::pretty) fn pretty_wide(&self, doc: &mut Doc) {
         match self {
             Self::Set {
-                rec: krec,
+                rec,
                 open,
                 items,
                 close,
-            } => pretty_set(doc, Width::Wide, krec.as_ref(), open, items, close),
+            } => pretty_set(doc, Width::Wide, rec.as_ref(), open, items, close),
             Self::List { open, items, close } => pretty_list(doc, open, items, close),
             _ => self.pretty(doc),
         }
@@ -55,9 +55,9 @@ impl Term {
 pub(super) fn render_list(
     doc: &mut Doc,
     item_sep: &Elem,
-    open: &Ann<Token>,
+    open: &Annotated<Token>,
     items: &Items<Term>,
-    close: &Ann<Token>,
+    close: &Annotated<Token>,
 ) {
     open.pretty_head(doc);
 
@@ -86,13 +86,13 @@ pub(super) fn render_list(
 pub(super) fn pretty_set(
     doc: &mut Doc,
     wide: Width,
-    krec: Option<&Ann<Token>>,
-    open: &Ann<Token>,
+    rec: Option<&Annotated<Token>>,
+    open: &Annotated<Token>,
     items: &Items<Binder>,
-    close: &Ann<Token>,
+    close: &Annotated<Token>,
 ) {
     if items.0.is_empty() && open.is_lone() && close.pre_trivia.is_empty() {
-        if let Some(rec) = krec {
+        if let Some(rec) = rec {
             rec.pretty(doc);
             doc.hardspace();
         }
@@ -100,7 +100,7 @@ pub(super) fn pretty_set(
         return;
     }
 
-    if let Some(rec) = krec {
+    if let Some(rec) = rec {
         rec.pretty(doc);
         doc.hardspace();
     }
@@ -204,9 +204,9 @@ impl Expression {
 /// Pretty print a parenthesized expression (Haskell `prettyTerm (Parenthesized ...)`).
 pub(super) fn pretty_paren(
     doc: &mut Doc,
-    open: &Ann<Token>,
+    open: &Annotated<Token>,
     expr: &Expression,
-    close: &Ann<Token>,
+    close: &Annotated<Token>,
 ) {
     doc.group(|g| {
         // A trailing comment on `(` becomes leading trivia so it renders

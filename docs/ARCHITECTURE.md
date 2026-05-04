@@ -7,7 +7,7 @@ implementations can be diffed at every seam.
 
 ```
             src/lexer/        src/parser/       src/pretty/      src/predoc.rs
-Nix text ───► tokens+trivia ───► AST (Ann<T>) ───► Doc IR ───► fixup ───► layout ───► text
+Nix text ───► tokens+trivia ───► AST (Annotated<T>) ───► Doc IR ───► fixup ───► layout ───► text
             Nixfmt/Lexer.hs   Nixfmt/Parser.hs  Nixfmt/Pretty.hs   Nixfmt/Predoc.hs
                               Nixfmt/Types.hs
 ```
@@ -16,7 +16,7 @@ Nix text ───► tokens+trivia ───► AST (Ann<T>) ───► Doc I
 
 ## Lexer — `src/lexer/`
 
-Hand-written scanner that emits `Ann<Token>`: every token carries the
+Hand-written scanner that emits `Annotated<Token>`: every token carries the
 *leading* trivia (blank lines, line/block comments, language
 annotations) plus an optional same-line trailing comment. Mirrors
 `Nixfmt/Lexer.hs`'s `lexeme`/`takeTrivia` split; sub-expressions inside
@@ -25,7 +25,7 @@ annotations) plus an optional same-line trailing comment. Mirrors
 ## Parser — `src/parser/`, `src/types.rs`
 
 Recursive descent producing the AST in `src/types.rs`, which is a
-field-for-field transcription of `Nixfmt/Types.hs` (`Ann`, `Trivium`,
+field-for-field transcription of `Nixfmt/Types.hs` (`Annotated`, `Trivium`,
 `Item`, `Expression`, `Term`, …). Because the types line up, the
 `--ast` dump (rendered by `src/pretty_simple/`) is byte-identical to
 Haskell `show` filtered through *pretty-simple*, which is what the

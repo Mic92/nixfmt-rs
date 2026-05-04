@@ -132,7 +132,7 @@ impl Lexer {
 
     /// Parse a lexeme (token with trivia annotations)
     /// This is the main entry point for the parser
-    pub(crate) fn lexeme(&mut self) -> crate::error::Result<crate::types::Ann<Token>> {
+    pub(crate) fn lexeme(&mut self) -> crate::error::Result<crate::types::Annotated<Token>> {
         let mut leading_trivia = std::mem::take(&mut self.trivia_buffer);
 
         let _ = self.skip_hspace();
@@ -180,7 +180,7 @@ impl Lexer {
             self.trivia_buffer = next;
         }
 
-        Ok(crate::types::Ann {
+        Ok(crate::types::Annotated {
             pre_trivia: leading_trivia,
             span: token_span,
             value: token,

@@ -12,8 +12,8 @@ oracle_tests! {
     /// Regression test: simple parameter pattern should have outer Group wrapper
     ///
     /// Issue: nixfmt-rs was missing the outer `Group Regular` wrapper that the
-    /// reference implementation adds when pretty-printing a Whole Expression (File).
-    /// This has been fixed by wrapping `Whole<T>::pretty` in `Doc::group()`.
+    /// reference implementation adds when pretty-printing a Trailed Expression (File).
+    /// This has been fixed by wrapping `Trailed<T>::pretty` in `Doc::group()`.
     test_simple_parameter_pattern => ["{ a, b }: x"],
 
     // Member selection with default exercises selector spacing and "or" clause layout

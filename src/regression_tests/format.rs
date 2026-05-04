@@ -265,7 +265,7 @@ fn format_assignment_non_simple_selector_breaks_rhs() {
 }
 
 /// Comments after the top-level expression must be preserved.
-/// Haskell: `Nixfmt.Parser.file` attaches trailing trivia to `Whole`.
+/// Haskell: `Nixfmt.Parser.file` attaches trailing trivia to `Trailed`.
 #[test]
 fn format_trailing_file_trivia_preserved() {
     test_format("{ a = 1; }\n# trailing\n");
@@ -274,7 +274,7 @@ fn format_trailing_file_trivia_preserved() {
 }
 
 /// A comment between the interpolation body and `}` must be preserved as the
-/// `Whole`'s trailing trivia and force the `${ … }` onto multiple lines.
+/// `Trailed`'s trailing trivia and force the `${ … }` onto multiple lines.
 /// Haskell: `Nixfmt.Parser.interpolation` (`whole expression`).
 #[test]
 fn format_interp_trailing_trivia_preserved() {
@@ -316,7 +316,7 @@ fn format_empty_set_with_pretrivia_keeps_linebreak() {
 }
 
 /// `Vec<StringPart>::pretty` second `[Interpolation(_)]` arm: an `''…''` line
-/// that is exactly one `${…}` whose `Whole` carries trailing trivia (the `# c`
+/// that is exactly one `${…}` whose `Trailed` carries trailing trivia (the `# c`
 /// before `}`). The first arm only matches when that trivia is empty.
 #[test]
 fn format_indented_string_lone_interpolation_with_trailing_trivia() {

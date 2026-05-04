@@ -5,13 +5,15 @@
 //! merging adjacent text parts, stripping common indentation).
 
 use crate::error::{ErrorKind, ParseError, Result};
-use crate::types::{Ann, StringPart, Term, Token, Trivium, Whole};
+use crate::types::{Annotated, StringPart, Term, Token, Trailed, Trivium};
 
 use super::Parser;
 
 impl Parser {
     /// Parse simple string literal and return annotated string structure
-    pub(super) fn parse_simple_string_literal(&mut self) -> Result<Ann<Vec<Vec<StringPart>>>> {
+    pub(super) fn parse_simple_string_literal(
+        &mut self,
+    ) -> Result<Annotated<Vec<Vec<StringPart>>>> {
         self.with_raw_ann(|p| {
             let open_quote_pos = p.current.span;
 
@@ -171,7 +173,7 @@ impl Parser {
         // immediately after `}` so the string scanner resumes on raw content.
         let trailing_trivia = std::mem::take(&mut self.current.pre_trivia);
         self.lexer.rewind_trivia();
-        Ok(StringPart::Interpolation(Box::new(Whole {
+        Ok(StringPart::Interpolation(Box::new(Trailed {
             value: expr,
             trailing_trivia,
         })))
@@ -296,7 +298,7 @@ impl Parser {
     }
 
     /// Parse selector interpolation: ${expr} within attribute paths
-    pub(super) fn parse_selector_interpolation(&mut self) -> Result<Ann<StringPart>> {
+    pub(super) fn parse_selector_interpolation(&mut self) -> Result<Annotated<StringPart>> {
         let mut open = self.take_current();
         debug_assert!(matches!(open.value, Token::TInterOpen));
         // Haskell parses `${` with `rawSymbol`, so a comment immediately after
@@ -314,10 +316,10 @@ impl Parser {
         let expr = self.parse_expression()?;
         let close = self.expect_token(Token::TBraceClose, "'}'")?;
 
-        Ok(Ann {
+        Ok(Annotated {
             pre_trivia: open.pre_trivia,
             span: open.span,
-            value: StringPart::Interpolation(Box::new(Whole {
+            value: StringPart::Interpolation(Box::new(Trailed {
                 value: expr,
                 trailing_trivia: close.pre_trivia,
             })),
@@ -345,7 +347,7 @@ fn process_simple(parts: Vec<StringPart>) -> Vec<Vec<StringPart>> {
 
 /// Reclassify a parsed indented string as a `SimpleString` when its content is
 /// representable in `"..."` syntax. Mirrors `classifyString` in nixfmt's Parser.hs.
-fn classify_indented_string(ann: Ann<Vec<Vec<StringPart>>>) -> Term {
+fn classify_indented_string(ann: Annotated<Vec<Vec<StringPart>>>) -> Term {
     fn has_quote_or_backslash(part: &StringPart) -> bool {
         match part {
             StringPart::TextPart(t) => t.contains('"') || t.contains('\\'),
@@ -397,7 +399,7 @@ fn classify_indented_string(ann: Ann<Vec<Vec<StringPart>>>) -> Term {
         })
         .collect();
 
-    Term::SimpleString(Ann { value, ..ann })
+    Term::SimpleString(Annotated { value, ..ann })
 }
 
 /// Process an indented string by normalizing whitespace and stripping common indentation

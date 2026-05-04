@@ -8,8 +8,8 @@ use crate::format_constructor;
 use crate::format_enum;
 use crate::format_record;
 use crate::types::{
-    Ann, Binder, Expression, Item, ParamAttr, ParamDefault, Parameter, Selector, SetDefault,
-    SimpleSelector, Span, StringPart, Term, Token, TrailingComment, Trivia, Trivium, Whole,
+    Annotated, Binder, Expression, Item, ParamAttr, ParamDefault, Parameter, Selector, SetDefault,
+    SimpleSelector, Span, StringPart, Term, Token, Trailed, TrailingComment, Trivia, Trivium,
 };
 
 /// Generate a `PrettySimple` impl for a primitive/atomic type:
@@ -51,7 +51,7 @@ simple_atom!(bool, |b, w| w.write_plain(if *b {
     "False"
 }));
 
-impl PrettySimple for Whole<Expression> {
+impl PrettySimple for Trailed<Expression> {
     fn format<W: Writer>(&self, w: &mut W) {
         self.value.format(w);
         w.newline(); // Final newline at end of output
@@ -426,8 +426,9 @@ impl PrettySimple for TrailingComment {
     }
 }
 
-impl<T: PrettySimple> PrettySimple for Ann<T> {
+impl<T: PrettySimple> PrettySimple for Annotated<T> {
     fn format<W: Writer>(&self, w: &mut W) {
+        // Reference `nixfmt --ast` emits the Haskell constructor name.
         w.write_plain("Ann");
 
         format_record!(

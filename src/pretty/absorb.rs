@@ -1,6 +1,6 @@
 use crate::predoc::{Doc, Elem, Pretty, hardspace, line};
 use crate::types::{
-    Ann, Binder, Expression, FirstToken, Item, Items, Parameter, Term, Token, Trivia,
+    Annotated, Binder, Expression, FirstToken, Item, Items, Parameter, Term, Token, Trivia,
 };
 
 use super::Width;
@@ -28,7 +28,11 @@ impl Term {
 /// Shared absorbability rule for `[ ... ]` and `{ ... }`: absorb when the
 /// braces enclose anything at all: items/comments (NixOS/nixfmt#362),
 /// trivia on the opener, or a user-inserted line break (NixOS/nixfmt#253).
-fn is_absorbable_braces<T>(open: &Ann<Token>, items: &Items<T>, close: &Ann<Token>) -> bool {
+fn is_absorbable_braces<T>(
+    open: &Annotated<Token>,
+    items: &Items<T>,
+    close: &Annotated<Token>,
+) -> bool {
     !items.0.is_empty() || open.has_trivia() || open.span.start_line() != close.span.start_line()
 }
 
@@ -223,9 +227,9 @@ impl Expression {
 /// Render parenthesized expression in a Priority group (Haskell `absorbParen`).
 pub(super) fn absorb_paren(
     doc: &mut Doc,
-    open: &Ann<Token>,
+    open: &Annotated<Token>,
     expr: &Expression,
-    close: &Ann<Token>,
+    close: &Annotated<Token>,
 ) {
     doc.priority_group(|g| {
         g.nested(|outer| {
