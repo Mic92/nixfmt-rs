@@ -110,32 +110,49 @@ pub(super) fn pretty_with(
 
 /// Recursive renderer for `if`/`else if` chains.
 /// Mirrors Haskell `prettyIf` (Pretty.hs, inside the `If` clause).
-pub(super) fn pretty_if(doc: &mut Doc, sep: DocE, expr: &Expression) {
-    match expr {
+#[allow(clippy::too_many_arguments)]
+pub(super) fn pretty_if(
+    doc: &mut Doc,
+    sep: DocE,
+    if_kw: &Leaf,
+    cond: &Expression,
+    then_kw: &Leaf,
+    then_branch: &Expression,
+    else_kw: &Leaf,
+    else_branch: &Expression,
+) {
+    doc.group(|g| {
+        if_kw.pretty(g);
+        g.line();
+        g.nested(|n| cond.pretty(n));
+        g.line();
+        then_kw.pretty(g);
+    });
+    doc.surrounded(&[sep], |d| {
+        d.nested(|n| {
+            n.group(|g| then_branch.pretty(g));
+        });
+    });
+    else_kw.move_trailing_comment_up().pretty(doc);
+    doc.hardspace();
+    match else_branch {
         Expression::If {
-            kw_if: if_kw,
+            kw_if,
             cond,
-            kw_then: then_kw,
-            then_branch: expr0,
-            kw_else: else_kw,
-            else_branch: expr1,
-        } => {
-            doc.group(|g| {
-                if_kw.pretty(g);
-                g.line();
-                g.nested(|n| cond.pretty(n));
-                g.line();
-                then_kw.pretty(g);
-            });
-            doc.surrounded(&[sep], |d| {
-                d.nested(|n| {
-                    n.group(|g| expr0.pretty(g));
-                });
-            });
-            else_kw.move_trailing_comment_up().pretty(doc);
-            doc.hardspace();
-            pretty_if(doc, hardline(), expr1);
-        }
+            kw_then,
+            then_branch,
+            kw_else,
+            else_branch,
+        } => pretty_if(
+            doc,
+            hardline(),
+            kw_if,
+            cond,
+            kw_then,
+            then_branch,
+            kw_else,
+            else_branch,
+        ),
         x => {
             doc.line();
             doc.nested(|n| {

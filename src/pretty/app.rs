@@ -20,10 +20,8 @@ fn push_absorb_inner(doc: &mut Doc, arg: &Expression) {
     arg.pretty(doc);
 }
 
-/// Return the pre-trivia of the first token of `expr` after applying
-/// `move_trailing_comment_up` to it, without cloning the expression.
-/// This is the projection half of Haskell's
-/// `mapFirstToken' ((\a -> (a{preTrivia=[]}, preTrivia)) . moveTrailingCommentUp)`.
+/// Collect the leading trivia that would precede `expr`'s first token if its
+/// trailing comment were hoisted into `pre_trivia`, without mutating `expr`.
 fn first_token_comment(expr: &Expression) -> Trivia {
     let slot = expr.first_token();
     let mut t = slot.pre_trivia.clone();
@@ -33,9 +31,8 @@ fn first_token_comment(expr: &Expression) -> Trivia {
     t
 }
 
-/// Rebuild `expr` with the first token's `pre_trivia` and `trail_comment`
-/// cleared. Only invoked on the leftmost (non-`Application`) head of a call
-/// chain, which is almost always a small `Term`, so the deep clone is cheap.
+/// Rebuild `expr` with the first token's trivia cleared. Only invoked on the
+/// leftmost head of a call chain (a small `Term`), so the deep clone is cheap.
 fn strip_first_comment(expr: &Expression) -> Expression {
     let mut e = expr.clone();
     let slot = e.first_token_mut();

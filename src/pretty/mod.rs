@@ -25,7 +25,7 @@ use string::{push_pretty_indented_string, push_pretty_simple_string};
 use term::{
     push_pretty_parenthesized, push_pretty_set, push_pretty_term_list, push_pretty_term_wide,
 };
-use util::{Width, pretty_ann_with};
+use util::Width;
 
 impl Pretty for TrailingComment {
     fn pretty(&self, doc: &mut Doc) {
@@ -90,6 +90,32 @@ impl<T: Pretty> Pretty for Ann<T> {
     fn pretty(&self, doc: &mut Doc) {
         self.pre_trivia.pretty(doc);
         self.value.pretty(doc);
+        self.trail_comment.pretty(doc);
+    }
+}
+
+impl<T: Pretty> Ann<T> {
+    /// Emit `pre_trivia` and value, leaving `trail_comment` for the caller to
+    /// place elsewhere (typically inside a following nested group).
+    pub(super) fn pretty_head(&self, doc: &mut Doc) {
+        self.pre_trivia.pretty(doc);
+        self.value.pretty(doc);
+    }
+
+    /// Emit value and `trail_comment`, leaving `pre_trivia` for the caller to
+    /// place elsewhere (typically inside a preceding nested group).
+    pub(super) fn pretty_tail(&self, doc: &mut Doc) {
+        self.value.pretty(doc);
+        self.trail_comment.pretty(doc);
+    }
+}
+
+impl<T> Ann<T> {
+    /// Emit `pre_trivia`, then the value via `f`, then `trail_comment`.
+    /// Used for `Ann<T>` payloads that have no blanket `Pretty` impl.
+    pub(super) fn pretty_with(&self, doc: &mut Doc, f: impl FnOnce(&mut Doc, &T)) {
+        self.pre_trivia.pretty(doc);
+        f(doc, &self.value);
         self.trail_comment.pretty(doc);
     }
 }
@@ -198,7 +224,7 @@ impl Pretty for SimpleSelector {
         match self {
             Self::ID(id) => id.pretty(doc),
             Self::String(ann) => {
-                pretty_ann_with(doc, ann, |d, v| push_pretty_simple_string(d, v));
+                ann.pretty_with(doc, |d, v| push_pretty_simple_string(d, v));
             }
             Self::Interpol(interp) => interp.pretty(doc),
         }
@@ -219,12 +245,12 @@ impl Pretty for Term {
         match self {
             Self::Token(t) => t.pretty(doc),
             Self::SimpleString(s) => {
-                pretty_ann_with(doc, s, |d, v| push_pretty_simple_string(d, v));
+                s.pretty_with(doc, |d, v| push_pretty_simple_string(d, v));
             }
             Self::IndentedString(s) => {
-                pretty_ann_with(doc, s, |d, v| push_pretty_indented_string(d, v));
+                s.pretty_with(doc, |d, v| push_pretty_indented_string(d, v));
             }
-            Self::Path(p) => pretty_ann_with(doc, p, |d, v| {
+            Self::Path(p) => p.pretty_with(doc, |d, v| {
                 for part in v {
                     part.pretty(d);
                 }
@@ -338,19 +364,19 @@ impl Pretty for Expression {
                 kw_else,
                 else_branch,
             } => {
-                // group' RegularG $ prettyIf line $ mapFirstToken moveTrailingCommentUp expr
-                // The first token of an `If` is always the `if` keyword itself.
-                let if_kw_moved = kw_if.move_trailing_comment_up();
-                let expr_moved = Self::If {
-                    kw_if: if_kw_moved,
-                    cond: cond.clone(),
-                    kw_then: kw_then.clone(),
-                    then_branch: then_branch.clone(),
-                    kw_else: kw_else.clone(),
-                    else_branch: else_branch.clone(),
-                };
                 doc.group_ann(GroupAnn::RegularG, |g| {
-                    pretty_if(g, line(), &expr_moved);
+                    // Only the outermost `if` keyword has its trailing comment
+                    // hoisted; nested `else if` keywords keep theirs in place.
+                    pretty_if(
+                        g,
+                        line(),
+                        &kw_if.move_trailing_comment_up(),
+                        cond,
+                        kw_then,
+                        then_branch,
+                        kw_else,
+                        else_branch,
+                    );
                 });
             }
             Self::Assert {

@@ -259,20 +259,6 @@ impl<T: Clone> Ann<T> {
         }
         out
     }
-
-    pub fn without_trail(&self) -> Self {
-        Self {
-            trail_comment: None,
-            ..self.clone()
-        }
-    }
-
-    pub fn without_pre(&self) -> Self {
-        Self {
-            pre_trivia: Trivia::new(),
-            ..self.clone()
-        }
-    }
 }
 
 /// Type-erased shared view of an `Ann<_>`'s trivia fields.

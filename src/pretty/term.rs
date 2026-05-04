@@ -3,7 +3,7 @@ use crate::types::{Ann, Binder, Expression, Item, Items, Leaf, Term, Token, Triv
 
 use super::absorb::push_absorb_expr;
 use super::app::push_pretty_app;
-use super::util::{Width, push_empty_brackets, split_paren_trivia};
+use super::util::{Width, push_empty_brackets};
 
 /// Mirrors `prettyTerm (List ..)` in Nixfmt/Pretty.hs (no surrounding group).
 pub(super) fn push_pretty_term_list(doc: &mut Doc, open: &Leaf, items: &Items<Term>, close: &Leaf) {
@@ -49,7 +49,7 @@ pub(super) fn push_render_list(
     items: &Items<Term>,
     close: &Ann<Token>,
 ) {
-    open.without_trail().pretty(doc);
+    open.pretty_head(doc);
 
     let sur = if open.span.start_line() != close.span.start_line()
         || items.has_only_comments()
@@ -95,16 +95,16 @@ pub(super) fn push_pretty_set(
         doc.hardspace();
     }
 
-    open.without_trail().pretty(doc);
+    open.pretty_head(doc);
 
     let starts_with_emptyline = match items.0.first() {
         Some(Item::Comments(trivia)) => trivia.iter().any(|t| matches!(t, Trivium::EmptyLine())),
         _ => false,
     };
 
-    // Pretty.hs:226-231. The different-line check is independent of `items`
-    // so an empty set that missed the LoneAnn fast path (pre-trivia on `{`)
-    // still preserves the user's line break.
+    // The different-line check is independent of `items` so an empty set that
+    // missed the `is_lone` fast path (pre-trivia on `{`) still preserves the
+    // user's line break.
     let sep = if (!items.0.is_empty() && (wide == Width::Wide || starts_with_emptyline))
         || open.span.start_line() != close.span.start_line()
     {
@@ -202,16 +202,14 @@ pub(super) fn push_pretty_parenthesized(
     expr: &Expression,
     close: &Ann<Token>,
 ) {
-    let (mut open, trail, close_pre, close) = split_paren_trivia(open, close);
-    // moveTrailingCommentUp: a trailing comment on `(` becomes its own pre-trivia.
-    open.pre_trivia.extend(trail);
-
     doc.group(|g| {
-        open.pretty(g);
+        // A trailing comment on `(` becomes leading trivia so it renders
+        // before the body, not after it on the same line.
+        open.move_trailing_comment_up().pretty(g);
         g.nested(|nested| {
             push_parenthesized_inner(nested, expr);
-            close_pre.pretty(nested);
+            close.pre_trivia.pretty(nested);
         });
-        close.pretty(g);
+        close.pretty_tail(g);
     });
 }

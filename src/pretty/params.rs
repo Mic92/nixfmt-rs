@@ -242,7 +242,7 @@ impl Pretty for Parameter {
                     });
                     doc.push_raw(sep);
                     doc.nested(|inner| close.pre_trivia.pretty(inner));
-                    close.without_pre().pretty(doc);
+                    close.pretty_tail(doc);
                 });
             }
             Self::Context {

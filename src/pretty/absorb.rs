@@ -1,22 +1,23 @@
 use crate::predoc::{Doc, DocE, GroupAnn, Pretty, hardspace, line};
-use crate::types::{Ann, Binder, Expression, FirstToken, Item, Items, Parameter, Term, Token};
+use crate::types::{
+    Ann, Binder, Expression, FirstToken, Item, Items, Parameter, Term, Token, Trivia,
+};
 
 use super::app::push_pretty_app;
 use super::op::push_pretty_operation;
 use super::term::{push_pretty_term, push_pretty_term_wide};
-use super::util::{Width, split_paren_trivia};
+use super::util::Width;
 
 impl Term {
     /// Haskell `isAbsorbable` / `isAbsorbableTerm` (Pretty.hs).
     pub(super) fn is_absorbable(&self) -> bool {
         match self {
-            // Multi-line indented string
+            // `len() >= 2` means the indented string spans multiple lines.
             Self::IndentedString(s) => s.value.len() >= 2,
             Self::Set {
                 open, items, close, ..
             } => is_absorbable_braces(open, items, close),
             Self::List { open, items, close } => is_absorbable_braces(open, items, close),
-            // Parenthesized absorbable term, only when the open paren has no trivia
             Self::Parenthesized { open, expr, .. } => {
                 open.is_lone() && matches!(&**expr, Expression::Term(t) if t.is_absorbable())
             }
@@ -231,22 +232,24 @@ pub(super) fn push_absorb_paren(
     expr: &Expression,
     close: &Ann<Token>,
 ) {
-    let (open, trail, close_pre, close) = split_paren_trivia(open, close);
     doc.group_ann(GroupAnn::Priority, |g| {
         g.nested(|outer| {
-            open.pretty(outer);
+            open.pretty_head(outer);
             outer.linebreak();
             outer.group(|inner| {
                 inner.nested(|body| {
-                    // Any trailing comment on `(` is moved down into the body,
-                    // mirroring `mapFirstToken (\a -> a{preTrivia = post' <> preTrivia})`.
-                    trail.pretty(body);
+                    // Any trailing comment on `(` is moved down into the body
+                    // as a leading line comment so it indents with the
+                    // expression rather than hugging the paren.
+                    if let Some(tc) = &open.trail_comment {
+                        Trivia::one(tc.into()).pretty(body);
+                    }
                     expr.pretty(body);
-                    close_pre.pretty(body);
+                    close.pre_trivia.pretty(body);
                 });
             });
             outer.linebreak();
-            close.pretty(outer);
+            close.pretty_tail(outer);
         });
     });
 }
