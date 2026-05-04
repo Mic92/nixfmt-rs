@@ -243,12 +243,12 @@ fn normalize_expr(e: &mut Expression) {
             normalize_leaf(kw_else);
             normalize_expr(else_branch);
         }
-        Expression::Abstraction { param, colon, body } => {
+        Expression::Lambda { param, colon, body } => {
             normalize_parameter(param);
             normalize_leaf(colon);
             normalize_expr(body);
         }
-        Expression::Application { func, arg } => {
+        Expression::Apply { func, arg } => {
             normalize_expr(func);
             normalize_expr(arg);
         }

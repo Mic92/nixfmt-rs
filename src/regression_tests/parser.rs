@@ -182,7 +182,7 @@ oracle_tests! {
         "\"\u{00AD}~~~\"",
     ],
 
-    // Application(mkDefault, /tmp), not Path("mkDefault/tmp").
+    // Apply(mkDefault, /tmp), not Path("mkDefault/tmp").
     // From nixpkgs/nixos/modules/services/monitoring/prometheus/exporters.nix line 353
     regression_identifier_slash_path => ["mkDefault /tmp"],
 

@@ -4,9 +4,9 @@ use crate::doc::{Doc, Elem, Emit, hardline, line};
 use super::Width;
 
 impl Expression {
-    pub(in crate::format) fn absorb_abs(&self, doc: &mut Doc, depth: usize) {
+    pub(in crate::format) fn absorb_lambda(&self, doc: &mut Doc, depth: usize) {
         match self {
-            Self::Abstraction {
+            Self::Lambda {
                 param: Parameter::Id(param),
                 colon,
                 body,
@@ -14,7 +14,7 @@ impl Expression {
                 doc.hardspace();
                 param.emit(doc);
                 colon.emit(doc);
-                body.absorb_abs(doc, depth + 1);
+                body.absorb_lambda(doc, depth + 1);
             }
             _ if self.is_absorbable() => {
                 doc.hardspace();

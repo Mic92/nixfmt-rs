@@ -45,13 +45,13 @@ impl Expression {
                 matches!(&**body, Self::Term(t) if t.is_absorbable())
             }
             // Absorb function declarations but only those with simple parameter(s)
-            Self::Abstraction {
+            Self::Lambda {
                 param: Parameter::Id(_),
                 body,
                 ..
             } => match &**body {
                 Self::Term(t) => t.is_absorbable(),
-                Self::Abstraction { .. } => body.is_absorbable(),
+                Self::Lambda { .. } => body.is_absorbable(),
                 _ => false,
             },
             _ => false,
@@ -156,7 +156,7 @@ impl Expression {
 
             // Function call: absorb if all arguments except the last fit on the line,
             // start on a new line otherwise.
-            Self::Application { .. } => {
+            Self::Apply { .. } => {
                 doc.nested(|d| emit_app(d, false, &[line()], false, self));
             }
 

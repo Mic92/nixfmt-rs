@@ -107,10 +107,11 @@ impl Dump for Expression {
                     ]
                 );
             }
-            Self::Abstraction { param, colon, body } => {
+            Self::Lambda { param, colon, body } => {
+                // Haskell `nixfmt --ast` constructor name; keep for byte-compat.
                 format_constructor!(w, "Abstraction", [param, colon, &**body]);
             }
-            Self::Application { func, arg } => {
+            Self::Apply { func, arg } => {
                 format_constructor!(w, "Application", [&**func, &**arg]);
             }
             Self::Operation { lhs, op, rhs } => {

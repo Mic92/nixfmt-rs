@@ -113,7 +113,7 @@ impl Emit for Expression {
     fn emit(&self, doc: &mut Doc) {
         match self {
             Self::Term(t) => t.emit(doc),
-            Self::Application { .. } => {
+            Self::Apply { .. } => {
                 emit_app(doc, false, &[], false, self);
             }
             Self::Operation {
@@ -186,7 +186,7 @@ impl Emit for Expression {
                 doc.group(|g| {
                     let assert_term = Self::Term(Term::Token(assert_kw.clone()));
                     match &**cond {
-                        Self::Application { func, arg } => {
+                        Self::Apply { func, arg } => {
                             emit_app_parts(g, false, &[], false, func, arg, Some(&assert_term));
                         }
                         a => emit_app_parts(g, false, &[], false, &assert_term, a, None),
@@ -204,7 +204,7 @@ impl Emit for Expression {
             } => {
                 emit_with(doc, with_kw, env, semicolon, expr);
             }
-            Self::Abstraction {
+            Self::Lambda {
                 param: Parameter::Id(param),
                 colon,
                 body,
@@ -213,10 +213,10 @@ impl Emit for Expression {
                     group_doc.linebreak();
                     param.emit(group_doc);
                     colon.emit(group_doc);
-                    body.absorb_abs(group_doc, 1);
+                    body.absorb_lambda(group_doc, 1);
                 });
             }
-            Self::Abstraction { param, colon, body } => {
+            Self::Lambda { param, colon, body } => {
                 param.emit(doc);
                 colon.emit(doc);
                 doc.line();

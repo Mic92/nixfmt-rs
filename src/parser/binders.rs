@@ -97,11 +97,11 @@ impl Parser {
         let eq = self.expect_token(Token::TAssign, "'='")?;
         let expr = self.parse_expression()?;
 
-        // Special case: if the expression is an Application, the user likely forgot
+        // Special case: if the expression is an Apply, the user likely forgot
         // a semicolon and the parser treated the next line as a function argument.
         // Point to the end of the LEFT side (the function) instead of the RIGHT side.
         let expr_end_span = match &expr {
-            Expression::Application { func, .. } => func.end_span(),
+            Expression::Apply { func, .. } => func.end_span(),
             _ => expr.end_span(),
         };
 
