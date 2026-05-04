@@ -4,7 +4,6 @@ use crate::types::{
     TrailingComment, Trivia,
 };
 
-use super::absorb::absorb_rhs;
 use super::term::empty_brackets;
 
 impl Pretty for ParamAttr {
@@ -23,7 +22,7 @@ impl Pretty for ParamAttr {
                         d.hardspace();
                         d.nested(|inner| {
                             def.question.pretty(inner);
-                            absorb_rhs(inner, &def.value);
+                            def.value.absorb_rhs(inner);
                         });
                     }
 

@@ -1,8 +1,6 @@
 use crate::predoc::{Doc, Elem, Pretty, TextKind, newline, text_width};
 use crate::types::{Expression, StringPart};
 
-use super::term::pretty_paren_body;
-
 fn is_spaces(s: &str) -> bool {
     s.chars().all(char::is_whitespace)
 }
@@ -91,7 +89,7 @@ impl Pretty for Vec<StringPart> {
             doc.offset(text_width(pre), |d| {
                 d.group(|g| {
                     g.text("${");
-                    g.nested(|n| pretty_paren_body(n, expr));
+                    g.nested(|n| expr.pretty_paren_body(n));
                     g.text("}");
                 });
             });

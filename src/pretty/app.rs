@@ -2,7 +2,7 @@ use crate::predoc::{Doc, Elem, GroupKind, Pretty, line};
 use crate::types::{Expression, FirstToken, Item, Parameter, Term, Token, Trivia};
 
 use super::absorb::absorb_paren;
-use super::term::{pretty_term, pretty_term_wide, render_list};
+use super::term::render_list;
 
 /// `absorbInner` from Pretty.hs: short lists of simple terms get a soft `line`
 /// separator so they may stay on one line; everything else falls back to `pretty`.
@@ -113,10 +113,7 @@ fn absorb_last(doc: &mut Doc, arg: &Expression) {
     if let Expression::Term(t) = arg
         && t.is_absorbable()
     {
-        // Haskell: `group' Priority $ nest $ prettyTerm t`. `prettyTerm`
-        // (unlike `instance Pretty Term`) does *not* wrap a `List` in an
-        // extra group.
-        return priority_nest(doc, |n| pretty_term(n, t));
+        return priority_nest(doc, |n| t.pretty_bare(n));
     }
 
     if let Expression::Term(Term::Parenthesized {
@@ -142,7 +139,7 @@ fn absorb_last(doc: &mut Doc, arg: &Expression) {
                 name.pretty(n);
                 colon.pretty(n);
                 n.hardspace();
-                pretty_term_wide(n, body_term);
+                body_term.pretty_wide(n);
                 close.pretty(n);
             });
         }
@@ -160,7 +157,7 @@ fn absorb_last(doc: &mut Doc, arg: &Expression) {
                 open.pretty(n);
                 ident.pretty(n);
                 n.hardspace();
-                pretty_term_wide(n, body_term);
+                body_term.pretty_wide(n);
                 close.pretty(n);
             });
         }

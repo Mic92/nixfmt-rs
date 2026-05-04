@@ -1,33 +1,30 @@
 use crate::predoc::{Doc, Elem, Pretty, hardline, line};
 use crate::types::{Binder, Expression, Items, Leaf, Parameter, Trivia, Trivium};
 
-use super::term::pretty_items;
-
 use super::Width;
-use super::absorb::absorb_expr;
 
-pub(super) fn absorb_abs(doc: &mut Doc, depth: usize, expr: &Expression) {
-    match expr {
-        Expression::Abstraction {
-            param: Parameter::Id(param),
-            colon,
-            body,
-        } => {
-            doc.hardspace();
-            param.pretty(doc);
-            colon.pretty(doc);
-            absorb_abs(doc, depth + 1, body);
-        }
-        _ if expr.is_absorbable() => {
-            doc.hardspace();
-            doc.priority_group(|priority_group| {
-                absorb_expr(priority_group, Width::Regular, expr);
-            });
-        }
-        _ => {
-            let separator = if depth <= 2 { line() } else { hardline() };
-            doc.push_raw(separator);
-            expr.pretty(doc);
+impl Expression {
+    pub(in crate::pretty) fn absorb_abs(&self, doc: &mut Doc, depth: usize) {
+        match self {
+            Self::Abstraction {
+                param: Parameter::Id(param),
+                colon,
+                body,
+            } => {
+                doc.hardspace();
+                param.pretty(doc);
+                colon.pretty(doc);
+                body.absorb_abs(doc, depth + 1);
+            }
+            _ if self.is_absorbable() => {
+                doc.hardspace();
+                doc.priority_group(|pg| self.absorb(pg, Width::Regular));
+            }
+            _ => {
+                let separator = if depth <= 2 { line() } else { hardline() };
+                doc.push_raw(separator);
+                self.pretty(doc);
+            }
         }
     }
 }
@@ -77,7 +74,7 @@ pub(super) fn pretty_let(
     doc.group(|g| {
         let_kw.pretty(g);
         g.hardline();
-        g.nested(|n| pretty_items(n, binders));
+        g.nested(|n| binders.pretty(n));
     });
     doc.hardline();
     // inPart = group $ pretty in_ <> hardline <> trivia <> pretty expr

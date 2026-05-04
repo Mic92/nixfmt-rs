@@ -2,7 +2,6 @@ use crate::predoc::{Doc, Elem, Pretty, hardline, hardspace, line};
 use crate::types::{Ann, Binder, Expression, Item, Items, Leaf, Term, Token, Trivium};
 
 use super::Width;
-use super::absorb::absorb_expr;
 use super::app::pretty_app;
 
 /// Render an empty bracketed container (`[]`, `{}`), preserving a user-inserted
@@ -26,30 +25,29 @@ pub(super) fn pretty_list(doc: &mut Doc, open: &Leaf, items: &Items<Term>, close
     }
 }
 
-/// Mirrors Haskell `prettyTerm`: like `impl Pretty for Term` but *without* the
-/// extra outer group around `List`.
-pub(super) fn pretty_term(doc: &mut Doc, term: &Term) {
-    match term {
-        Term::List { open, items, close } => pretty_list(doc, open, items, close),
-        _ => term.pretty(doc),
-    }
-}
-
-/// Mirrors `prettyTermWide` in Nixfmt/Pretty.hs.
-pub(super) fn pretty_term_wide(doc: &mut Doc, term: &Term) {
-    match term {
-        Term::Set {
-            rec: krec,
-            open,
-            items,
-            close,
-        } => {
-            pretty_set(doc, Width::Wide, krec.as_ref(), open, items, close);
+impl Term {
+    /// Like [`Pretty::pretty`] but without the extra outer group around lists.
+    /// Used where the caller already provides a surrounding group.
+    pub(in crate::pretty) fn pretty_bare(&self, doc: &mut Doc) {
+        match self {
+            Self::List { open, items, close } => pretty_list(doc, open, items, close),
+            _ => self.pretty(doc),
         }
-        // `prettyTermWide` delegates to `prettyTerm`, which unlike `instance
-        // Pretty Term` does *not* wrap lists in an extra group.
-        Term::List { open, items, close } => pretty_list(doc, open, items, close),
-        _ => term.pretty(doc),
+    }
+
+    /// Like [`Self::pretty_bare`] but renders sets in their wide (multi-line)
+    /// layout. Used when the term is being absorbed onto a preceding line.
+    pub(in crate::pretty) fn pretty_wide(&self, doc: &mut Doc) {
+        match self {
+            Self::Set {
+                rec: krec,
+                open,
+                items,
+                close,
+            } => pretty_set(doc, Width::Wide, krec.as_ref(), open, items, close),
+            Self::List { open, items, close } => pretty_list(doc, open, items, close),
+            _ => self.pretty(doc),
+        }
     }
 }
 
@@ -77,7 +75,7 @@ pub(super) fn render_list(
     doc.surrounded(&[sur], |d| {
         d.nested(|inner| {
             open.trail_comment.pretty(inner);
-            pretty_items_sep(inner, items, item_sep);
+            items.pretty_sep(inner, item_sep);
         });
     });
     close.pretty(doc);
@@ -128,81 +126,77 @@ pub(super) fn pretty_set(
     doc.surrounded(&[sep], |d| {
         d.nested(|inner| {
             open.trail_comment.pretty(inner);
-            pretty_items(inner, items);
+            items.pretty(inner);
         });
     });
     close.pretty(doc);
 }
 
-/// Haskell `prettyItems` (Pretty.hs:108-120).
-pub(super) fn pretty_items<T: Pretty>(doc: &mut Doc, items: &Items<T>) {
-    pretty_items_sep(doc, items, &hardline());
+impl<T: Pretty> Pretty for Items<T> {
+    fn pretty(&self, doc: &mut Doc) {
+        self.pretty_sep(doc, &hardline());
+    }
 }
 
-fn pretty_items_sep<T: Pretty>(doc: &mut Doc, items: &Items<T>, sep: &Elem) {
-    let items = &items.0;
-    match items.as_slice() {
-        [] => {}
-        [item] => item.pretty(doc),
-        items => {
-            let mut i = 0;
-            while i < items.len() {
-                if i > 0 {
-                    doc.push_raw(sep.clone());
-                }
+impl<T: Pretty> Items<T> {
+    pub(super) fn pretty_sep(&self, doc: &mut Doc, sep: &Elem) {
+        let items = &self.0;
+        match items.as_slice() {
+            [] => {}
+            [item] => item.pretty(doc),
+            items => {
+                let mut i = 0;
+                while i < items.len() {
+                    if i > 0 {
+                        doc.push_raw(sep.clone());
+                    }
 
-                // Special case: language annotation comment followed by string item
-                if i + 1 < items.len()
-                    && let Item::Comments(trivia) = &items[i]
-                    && trivia.len() == 1
-                    && let Trivium::LanguageAnnotation(lang) = &trivia[0]
-                    && let Item::Item(string_item) = &items[i + 1]
-                {
-                    Trivium::LanguageAnnotation(lang.clone()).pretty(doc);
-                    doc.hardspace();
-                    doc.group(|d| string_item.pretty(d));
-                    i += 2;
-                    continue;
-                }
+                    // Special case: language annotation comment followed by string item
+                    if i + 1 < items.len()
+                        && let Item::Comments(trivia) = &items[i]
+                        && trivia.len() == 1
+                        && let Trivium::LanguageAnnotation(lang) = &trivia[0]
+                        && let Item::Item(string_item) = &items[i + 1]
+                    {
+                        Trivium::LanguageAnnotation(lang.clone()).pretty(doc);
+                        doc.hardspace();
+                        doc.group(|d| string_item.pretty(d));
+                        i += 2;
+                        continue;
+                    }
 
-                items[i].pretty(doc);
-                i += 1;
+                    items[i].pretty(doc);
+                    i += 1;
+                }
             }
         }
     }
 }
 
-/// Render the nested document that appears between parentheses.
-/// Mirrors `inner` in Haskell `prettyTerm (Parenthesized ...)`.
-pub(super) fn pretty_paren_body(doc: &mut Doc, expr: &Expression) {
-    match expr {
-        _ if expr.is_absorbable() => {
-            doc.group(|inner| {
-                absorb_expr(inner, Width::Regular, expr);
-            });
-        }
-        Expression::Application { .. } => {
-            pretty_app(doc, true, &[], true, expr);
-        }
-        Expression::Term(Term::Selection { base: term, .. }) if term.is_absorbable() => {
-            doc.linebreak();
-            doc.group(|inner| {
-                expr.pretty(inner);
-            });
-            doc.linebreak();
-        }
-        Expression::Term(Term::Selection { .. }) => {
-            doc.group(|inner| {
-                expr.pretty(inner);
-            });
-            doc.linebreak();
-        }
-        _ => {
-            doc.linebreak();
-            doc.group(|inner| {
-                expr.pretty(inner);
-            });
-            doc.linebreak();
+impl Expression {
+    /// Render the nested document that appears between parentheses.
+    pub(in crate::pretty) fn pretty_paren_body(&self, doc: &mut Doc) {
+        match self {
+            _ if self.is_absorbable() => {
+                doc.group(|inner| self.absorb(inner, Width::Regular));
+            }
+            Self::Application { .. } => {
+                pretty_app(doc, true, &[], true, self);
+            }
+            Self::Term(Term::Selection { base: term, .. }) if term.is_absorbable() => {
+                doc.linebreak();
+                doc.group(|inner| self.pretty(inner));
+                doc.linebreak();
+            }
+            Self::Term(Term::Selection { .. }) => {
+                doc.group(|inner| self.pretty(inner));
+                doc.linebreak();
+            }
+            _ => {
+                doc.linebreak();
+                doc.group(|inner| self.pretty(inner));
+                doc.linebreak();
+            }
         }
     }
 }
@@ -219,7 +213,7 @@ pub(super) fn pretty_paren(
         // before the body, not after it on the same line.
         open.move_trailing_comment_up().pretty(g);
         g.nested(|nested| {
-            pretty_paren_body(nested, expr);
+            expr.pretty_paren_body(nested);
             close.pre_trivia.pretty(nested);
         });
         close.pretty_tail(g);

@@ -16,12 +16,11 @@ mod stmt;
 mod string;
 mod term;
 
-use absorb::absorb_rhs;
 use app::pretty_app;
 use op::pretty_operation;
-use stmt::{absorb_abs, insert_into_app, pretty_if, pretty_let, pretty_with};
+use stmt::{insert_into_app, pretty_if, pretty_let, pretty_with};
 use string::{pretty_indented_string, pretty_simple_string};
-use term::{pretty_list, pretty_paren, pretty_set, pretty_term_wide};
+use term::{pretty_list, pretty_paren, pretty_set};
 
 /// Whether a set/absorbed term should prefer its expanded (multi-line) layout.
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -197,11 +196,11 @@ impl Pretty for Binder {
                         inner.hardspace();
                         assign.pretty(inner);
                         if simple_lhs {
-                            absorb_rhs(inner, expr);
+                            expr.absorb_rhs(inner);
                         } else {
                             inner.linebreak();
                             inner.priority_group(|g| {
-                                absorb_rhs(g, expr);
+                                expr.absorb_rhs(g);
                             });
                         }
                     });
@@ -420,7 +419,7 @@ impl Pretty for Expression {
                     group_doc.linebreak();
                     param.pretty(group_doc);
                     colon.pretty(group_doc);
-                    absorb_abs(group_doc, 1, body);
+                    body.absorb_abs(group_doc, 1);
                 });
             }
             Self::Abstraction { param, colon, body } => {
@@ -432,7 +431,7 @@ impl Pretty for Expression {
                 if let Self::Term(t) = &**body
                     && t.is_absorbable()
                 {
-                    doc.group(|g| pretty_term_wide(g, t));
+                    doc.group(|g| t.pretty_wide(g));
                     return;
                 }
                 body.pretty(doc);

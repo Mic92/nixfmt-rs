@@ -6,7 +6,6 @@ use crate::types::{
 use super::Width;
 use super::app::pretty_app;
 use super::op::pretty_operation_chain;
-use super::term::{pretty_term, pretty_term_wide};
 
 impl Term {
     /// Haskell `isAbsorbable` / `isAbsorbableTerm` (Pretty.hs).
@@ -56,40 +55,40 @@ impl Expression {
     }
 }
 
-/// Exact port of Haskell `absorbExpr` (Pretty.hs).
-///
-/// Unlike absorbable terms which can be force-absorbed, some expressions may
-/// turn out not to be absorbable; in that case they fall through to `pretty`.
-pub(super) fn absorb_expr(doc: &mut Doc, width: Width, expr: &Expression) {
-    match expr {
-        Expression::Term(t) if t.is_absorbable() => match width {
-            Width::Wide => pretty_term_wide(doc, t),
-            Width::Regular => pretty_term(doc, t),
-        },
-        // With expression with absorbable body: treat as absorbable term via
-        // `prettyWith True`.
-        Expression::With {
-            kw_with: with_kw,
-            scope: env,
-            semi: semicolon,
-            body,
-        } if matches!(&**body, Expression::Term(t) if t.is_absorbable()) => {
-            let Expression::Term(t) = &**body else {
-                unreachable!()
-            };
-            doc.group(|g| {
-                g.linebreak();
-                with_kw.pretty(g);
-                g.hardspace();
-                g.nested(|n| {
-                    n.group(|gg| env.pretty(gg));
+impl Expression {
+    /// Render this expression "absorbed" onto the preceding line: an
+    /// absorbable term is emitted bare/wide, a `with ... ; <absorbable>` body
+    /// gets the compact single-group treatment, and anything else falls back
+    /// to the regular [`Pretty`] impl.
+    pub(in crate::pretty) fn absorb(&self, doc: &mut Doc, width: Width) {
+        match self {
+            Self::Term(t) if t.is_absorbable() => match width {
+                Width::Wide => t.pretty_wide(doc),
+                Width::Regular => t.pretty_bare(doc),
+            },
+            Self::With {
+                kw_with,
+                scope,
+                semi,
+                body,
+            } if matches!(&**body, Self::Term(t) if t.is_absorbable()) => {
+                let Self::Term(t) = &**body else {
+                    unreachable!()
+                };
+                doc.group(|g| {
+                    g.linebreak();
+                    kw_with.pretty(g);
+                    g.hardspace();
+                    g.nested(|n| {
+                        n.group(|gg| scope.pretty(gg));
+                    });
+                    semi.pretty(g);
+                    g.hardspace();
+                    g.priority_group(|pg| t.pretty_wide(pg));
                 });
-                semicolon.pretty(g);
-                g.hardspace();
-                g.priority_group(|pg| pretty_term_wide(pg, t));
-            });
+            }
+            _ => self.pretty(doc),
         }
-        _ => expr.pretty(doc),
     }
 }
 
@@ -101,126 +100,122 @@ fn nested_rhs(doc: &mut Doc, lead: Elem, f: impl FnOnce(&mut Doc)) {
     });
 }
 
-/// Format the right-hand side of an assignment or function-parameter default value.
-///
-/// This mirrors Haskell `absorbRHS` (Pretty.hs ~ line 657) one-to-one: each match
-/// arm corresponds to exactly one Haskell `case` arm, in the same order, so that
-/// behavioural differences against the reference implementation are easy to locate.
-pub(super) fn absorb_rhs(doc: &mut Doc, expr: &Expression) {
-    match expr {
-        // Exception to the absorbable-expr case below: do not force-expand attrsets
-        // that only contain a single `inherit` statement.
-        Expression::Term(Term::Set { items: binders, .. })
-            if matches!(binders.0.as_slice(), [Item::Item(Binder::Inherit { .. })]) =>
-        {
-            nested_rhs(doc, hardspace(), |inner| {
-                absorb_expr(inner, Width::Regular, expr);
-            });
-        }
+impl Expression {
+    /// Format this expression as the right-hand side of an assignment or
+    /// function-parameter default value.
+    ///
+    /// Match arms mirror Haskell `absorbRHS` one-to-one and in order so
+    /// behavioural differences against the reference are easy to locate.
+    pub(in crate::pretty) fn absorb_rhs(&self, doc: &mut Doc) {
+        match self {
+            // Exception to the absorbable-expr case below: do not force-expand attrsets
+            // that only contain a single `inherit` statement.
+            Self::Term(Term::Set { items: binders, .. })
+                if matches!(binders.0.as_slice(), [Item::Item(Binder::Inherit { .. })]) =>
+            {
+                nested_rhs(doc, hardspace(), |inner| self.absorb(inner, Width::Regular));
+            }
 
-        // Absorbable expression. Always start on the same line, force-expand attrsets.
-        _ if expr.is_absorbable() => {
-            nested_rhs(doc, hardspace(), |inner| {
-                absorb_expr(inner, Width::Wide, expr);
-            });
-        }
+            // Absorbable expression. Always start on the same line, force-expand attrsets.
+            _ if self.is_absorbable() => {
+                nested_rhs(doc, hardspace(), |inner| self.absorb(inner, Width::Wide));
+            }
 
-        // Parenthesized expression: same special case as for the last argument of
-        // a function call.
-        Expression::Term(Term::Parenthesized {
-            open,
-            expr: inner,
-            close,
-        }) => {
-            doc.nested(|d| {
-                d.hardspace();
-                absorb_paren(d, open, inner, close);
-            });
-        }
-
-        // Not all strings are absorbable, but there is nothing to gain from
-        // starting them on a new line; same for paths.
-        Expression::Term(Term::SimpleString(_) | Term::IndentedString(_) | Term::Path(_)) => {
-            nested_rhs(doc, hardspace(), |inner| expr.pretty(inner));
-        }
-
-        // Non-absorbable term: if multi-line, force it onto a new indented line.
-        Expression::Term(_) => {
-            doc.nested(|d| {
-                d.group(|inner| {
-                    inner.line();
-                    expr.pretty(inner);
+            // Parenthesized expression: same special case as for the last argument of
+            // a function call.
+            Self::Term(Term::Parenthesized {
+                open,
+                expr: inner,
+                close,
+            }) => {
+                doc.nested(|d| {
+                    d.hardspace();
+                    absorb_paren(d, open, inner, close);
                 });
-            });
-        }
+            }
 
-        // Function call: absorb if all arguments except the last fit on the line,
-        // start on a new line otherwise.
-        Expression::Application { .. } => {
-            doc.nested(|d| pretty_app(d, false, &[line()], false, expr));
-        }
+            // Not all strings are absorbable, but there is nothing to gain from
+            // starting them on a new line; same for paths.
+            Self::Term(Term::SimpleString(_) | Term::IndentedString(_) | Term::Path(_)) => {
+                nested_rhs(doc, hardspace(), |inner| self.pretty(inner));
+            }
 
-        // `with ...;` keeps the leading `line` inside the group so it can collapse
-        // together with the body.
-        Expression::With { .. } => {
-            doc.nested(|d| {
-                d.group(|inner| {
-                    inner.line();
-                    expr.pretty(inner);
+            // Non-absorbable term: if multi-line, force it onto a new indented line.
+            Self::Term(_) => {
+                doc.nested(|d| {
+                    d.group(|inner| {
+                        inner.line();
+                        self.pretty(inner);
+                    });
                 });
-            });
-        }
+            }
 
-        // Special-case `//`, `++` and `+` to be more compact in some situations.
-        // Case 1: LHS is an absorbable term without leading trivia → unindent the
-        // concatenation chain (https://github.com/NixOS/nixfmt/issues/228).
-        Expression::Operation { lhs: left, op, .. }
-            if op.value.is_update_concat_plus()
-                && matches!(
-                    &**left,
-                    Expression::Term(t)
-                        if t.is_absorbable() && t.first_token().pre_trivia.is_empty()
-                ) =>
-        {
-            doc.hardspace();
-            pretty_operation_chain(doc, true, expr, op);
-        }
+            // Function call: absorb if all arguments except the last fit on the line,
+            // start on a new line otherwise.
+            Self::Application { .. } => {
+                doc.nested(|d| pretty_app(d, false, &[line()], false, self));
+            }
 
-        // Case 2: operator has no trivia and RHS is an absorbable term → keep
-        // `<lhs> // {` on one line and let only the RHS expand.
-        Expression::Operation {
-            lhs: left,
-            op,
-            rhs: right,
-        } if op.is_lone()
-            && op.value.is_update_concat_plus()
-            && matches!(&**right, Expression::Term(t) if t.is_absorbable()) =>
-        {
-            let Expression::Term(t) = &**right else {
-                unreachable!()
-            };
-            doc.nested(|d| {
-                d.group(|g| {
-                    g.line();
-                    left.pretty(g);
-                    g.line();
-                    g.transparent_group(|tg| {
-                        op.pretty(tg);
-                        tg.hardspace();
-                        tg.priority_group(|pg| {
-                            pretty_term_wide(pg, t);
+            // `with ...;` keeps the leading `line` inside the group so it can collapse
+            // together with the body.
+            Self::With { .. } => {
+                doc.nested(|d| {
+                    d.group(|inner| {
+                        inner.line();
+                        self.pretty(inner);
+                    });
+                });
+            }
+
+            // Special-case `//`, `++` and `+` to be more compact in some situations.
+            // Case 1: LHS is an absorbable term without leading trivia → unindent the
+            // concatenation chain (https://github.com/NixOS/nixfmt/issues/228).
+            Self::Operation { lhs: left, op, .. }
+                if op.value.is_update_concat_plus()
+                    && matches!(
+                        &**left,
+                        Self::Term(t)
+                            if t.is_absorbable() && t.first_token().pre_trivia.is_empty()
+                    ) =>
+            {
+                doc.hardspace();
+                pretty_operation_chain(doc, true, self, op);
+            }
+
+            // Case 2: operator has no trivia and RHS is an absorbable term → keep
+            // `<lhs> // {` on one line and let only the RHS expand.
+            Self::Operation {
+                lhs: left,
+                op,
+                rhs: right,
+            } if op.is_lone()
+                && op.value.is_update_concat_plus()
+                && matches!(&**right, Self::Term(t) if t.is_absorbable()) =>
+            {
+                let Self::Term(t) = &**right else {
+                    unreachable!()
+                };
+                doc.nested(|d| {
+                    d.group(|g| {
+                        g.line();
+                        left.pretty(g);
+                        g.line();
+                        g.transparent_group(|tg| {
+                            op.pretty(tg);
+                            tg.hardspace();
+                            tg.priority_group(|pg| t.pretty_wide(pg));
                         });
                     });
                 });
-            });
-        }
+            }
 
-        // Everything else:
-        // - fits on one line → keep it there
-        // - fits with a newline after `=` → do that
-        // - otherwise start on a new line and expand fully
-        _ => {
-            nested_rhs(doc, line(), |inner| expr.pretty(inner));
+            // Everything else:
+            // - fits on one line → keep it there
+            // - fits with a newline after `=` → do that
+            // - otherwise start on a new line and expand fully
+            _ => {
+                nested_rhs(doc, line(), |inner| self.pretty(inner));
+            }
         }
     }
 }

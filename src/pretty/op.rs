@@ -2,7 +2,6 @@ use crate::predoc::{Doc, Pretty, line};
 use crate::types::{Expression, Leaf, Token};
 
 use super::app::pretty_app;
-use super::term::pretty_term_wide;
 
 fn flatten_operation_chain<'a>(
     target: &'a Leaf,
@@ -105,7 +104,7 @@ pub(super) fn pretty_operation_chain(
             match maybe_op {
                 None => match expr {
                     Expression::Term(term) if force_first_term_wide && term.is_absorbable() => {
-                        pretty_term_wide(group_doc, term);
+                        term.pretty_wide(group_doc);
                     }
                     _ => expr.pretty(group_doc),
                 },
