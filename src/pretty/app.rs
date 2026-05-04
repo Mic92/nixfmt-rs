@@ -1,4 +1,4 @@
-use crate::predoc::{Doc, DocE, GroupAnn, Pretty, line, unexpand_spacing_prime};
+use crate::predoc::{Doc, DocE, GroupAnn, Pretty, line, try_compact};
 use crate::types::{Expression, FirstToken, Item, Parameter, Term, Token, Trivia};
 
 use super::absorb::push_absorb_paren;
@@ -61,7 +61,7 @@ fn push_absorb_app(doc: &mut Doc, expr: &Expression, indent_function: bool, comm
         } else if indent_function {
             doc.nested(|n| {
                 n.group(|g| {
-                    g.line_prime();
+                    g.linebreak();
                     expr.pretty(g);
                 });
             });
@@ -217,7 +217,7 @@ pub(super) fn push_pretty_app(
                 n.group(|gr| push_absorb_inner(gr, a));
             });
             if has_post {
-                g.line_prime();
+                g.linebreak();
             }
         });
         post_hardline(doc);
@@ -231,7 +231,7 @@ pub(super) fn push_pretty_app(
 
     // renderSimple
     if expr.is_simple()
-        && let Some(unexpanded) = unexpand_spacing_prime(None, &rendered_f)
+        && let Some(unexpanded) = try_compact(None, &rendered_f)
     {
         doc.group(|g| {
             g.extend(unexpanded);
@@ -247,7 +247,7 @@ pub(super) fn push_pretty_app(
         g.line();
         push_absorb_last(g, a);
         if has_post {
-            g.line_prime();
+            g.linebreak();
         }
     });
     post_hardline(doc);

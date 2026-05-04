@@ -6,7 +6,7 @@
 mod builder;
 mod render;
 
-pub use builder::{hardline, hardspace, line, line_prime, newline};
+pub use builder::{hardline, hardspace, line, linebreak, newline};
 #[cfg(any(test, feature = "debug-dump"))]
 pub use render::fixup;
 pub use render::{RenderConfig, render_with_config};
@@ -159,8 +159,8 @@ pub fn text_width(s: &str) -> usize {
 /// Manually force a doc to its compact layout, replacing all soft whitespace.
 /// Recurses into inner groups (flattening them). Returns `None` if the doc
 /// contains hard line breaks or exceeds the optional width limit.
-/// Mirrors Haskell `unexpandSpacing'` (Predoc.hs).
-pub fn unexpand_spacing_prime(mut limit: Option<i32>, doc: &[DocE]) -> Option<Doc> {
+/// Mirrors Haskell `try_compact` (Predoc.hs).
+pub fn try_compact(mut limit: Option<i32>, doc: &[DocE]) -> Option<Doc> {
     let mut result = Vec::new();
     let mut stack: Vec<std::slice::Iter<'_, DocE>> = vec![doc.iter()];
     while let Some(iter) = stack.last_mut() {

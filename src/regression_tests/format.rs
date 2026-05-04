@@ -188,7 +188,7 @@ fn format_app_set_absorb_in_binding() {
 
 /// A lone interpolation on an indented-string line whose body is a function
 /// application must keep `${` on the string line and absorb the call body
-/// (no `line'` between `${` and the application).
+/// (no `linebreak` between `${` and the application).
 /// Haskell: `Nixfmt.Pretty.instance Pretty [StringPart]` Application arm.
 #[test]
 fn format_interp_lone_application_absorbed() {
@@ -248,7 +248,7 @@ fn format_comparison_op_softline() {
 }
 
 /// A binding whose LHS is long or uses a non-ID selector (string /
-/// interpolation key) gets a `line'` before the RHS so the value can move to
+/// interpolation key) gets a `linebreak` before the RHS so the value can move to
 /// its own indented line when the whole binding overflows.
 /// Haskell: `Nixfmt.Pretty.instance Pretty Binder` `Assignment` `rhs` guard.
 #[test]

@@ -2,7 +2,7 @@
 //!
 //! Implements formatting rules from nixfmt's Pretty.hs
 
-use crate::predoc::{Doc, GroupAnn, Pretty, hardline, line, line_prime};
+use crate::predoc::{Doc, GroupAnn, Pretty, hardline, line, linebreak};
 use crate::types::{
     Ann, Binder, Expression, Item, Parameter, Selector, SimpleSelector, Term, Token,
     TrailingComment, Trivia, Trivium, Whole,
@@ -118,7 +118,7 @@ impl Pretty for Binder {
                 let same_line = inherit.span.start_line() == semicolon.span.start_line();
                 let few_ids = ids.len() < 4;
                 let (sep, nosep) = if same_line && few_ids {
-                    (line(), line_prime())
+                    (line(), linebreak())
                 } else {
                     (hardline(), hardline())
                 };
@@ -170,7 +170,7 @@ impl Pretty for Binder {
                         if simple_lhs {
                             push_absorb_rhs(inner, expr);
                         } else {
-                            inner.line_prime();
+                            inner.linebreak();
                             inner.group_ann(GroupAnn::Priority, |g| {
                                 push_absorb_rhs(g, expr);
                             });
@@ -263,10 +263,10 @@ impl Pretty for Term {
                     }
                     Self::Token(_) => {}
                     Self::Parenthesized { .. } => {
-                        doc.softline_prime();
+                        doc.softbreak();
                     }
                     _ => {
-                        doc.line_prime();
+                        doc.linebreak();
                     }
                 }
 
@@ -388,7 +388,7 @@ impl Pretty for Expression {
                 body,
             } => {
                 doc.group(|group_doc| {
-                    group_doc.line_prime();
+                    group_doc.linebreak();
                     param.pretty(group_doc);
                     colon.pretty(group_doc);
                     push_absorb_abs(group_doc, 1, body);

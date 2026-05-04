@@ -85,7 +85,7 @@ pub(super) fn push_absorb_expr(doc: &mut Doc, width: Width, expr: &Expression) {
                 unreachable!()
             };
             doc.group_ann(GroupAnn::RegularG, |g| {
-                g.line_prime();
+                g.linebreak();
                 with_kw.pretty(g);
                 g.hardspace();
                 g.nested(|n| {
@@ -243,7 +243,7 @@ pub(super) fn push_absorb_paren(
     doc.group_ann(GroupAnn::Priority, |g| {
         g.nested(|outer| {
             open.pretty(outer);
-            outer.line_prime();
+            outer.linebreak();
             outer.group(|inner| {
                 inner.nested(|body| {
                     // Any trailing comment on `(` is moved down into the body,
@@ -253,7 +253,7 @@ pub(super) fn push_absorb_paren(
                     close_pre.pretty(body);
                 });
             });
-            outer.line_prime();
+            outer.linebreak();
             close.pretty(outer);
         });
     });

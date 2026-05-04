@@ -39,10 +39,10 @@ oracle_tests! {
     // Inherit with explicit source exercises nested grouping and spacing branch
     test_inherit_with_source_structure => ["let inherit (inputs) foo bar; in foo"],
 
-    // Selection starting from a parenthesized term forces softline_prime separator
+    // Selection starting from a parenthesized term forces softbreak separator
     test_selection_from_parenthesized_term_structure => ["({ inherit foo; }).foo or true"],
 
-    // Selection from a record term forces line_prime separator before selectors
+    // Selection from a record term forces linebreak separator before selectors
     test_selection_from_record_term_structure => ["rec { nested = { }; }.nested or { }"],
 
     // Comments generate Comment and TrailingComment annotations
@@ -53,7 +53,7 @@ oracle_tests! {
 
     test_multiline_string_structure => ["''\n  line1\n  line2\n''"],
 
-    // String interpolation exercises nested grouping with line_prime
+    // String interpolation exercises nested grouping with linebreak
     test_string_interpolation_structure => ["\"prefix ${expr} suffix\""],
 
     test_nested_groups_structure => ["[ { a = 1; } { b = 2; } ]"],
@@ -62,7 +62,7 @@ oracle_tests! {
 
     test_boolean_not_structure => ["!true"],
 
-    // Parenthesized complex expressions with line_prime separators
+    // Parenthesized complex expressions with linebreak separators
     test_parenthesized_complex_structure => ["(let x = 1; in x)"],
 
     test_list_with_comments_structure => ["[\n  # comment\n  1\n  2\n]"],

@@ -108,12 +108,12 @@ impl Doc {
     // separator argument).
 
     /// Line break or nothing (soft)
-    pub fn softline_prime(&mut self) -> &mut Self {
+    pub fn softbreak(&mut self) -> &mut Self {
         self.push_raw(DocE::Spacing(Spacing::Softbreak))
     }
     /// Line break or nothing
-    pub fn line_prime(&mut self) -> &mut Self {
-        self.push_raw(line_prime())
+    pub fn linebreak(&mut self) -> &mut Self {
+        self.push_raw(linebreak())
     }
     /// Line break or space (soft)
     pub fn softline(&mut self) -> &mut Self {
@@ -144,7 +144,7 @@ impl Doc {
 // into a `Doc`.
 
 /// Line break or nothing
-pub const fn line_prime() -> DocE {
+pub const fn linebreak() -> DocE {
     DocE::Spacing(Spacing::Break)
 }
 

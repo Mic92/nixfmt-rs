@@ -1,21 +1,21 @@
-use crate::predoc::{Doc, DocE, Pretty, TextAnn, newline, text_width, unexpand_spacing_prime};
+use crate::predoc::{Doc, DocE, Pretty, TextAnn, newline, text_width, try_compact};
 use crate::types::{Expression, StringPart};
 
 use super::term::push_parenthesized_inner;
 use super::util::is_spaces;
 
 /// Wrap content in `${ ... }` with a group: try to compact it onto one line
-/// (within `max_width` columns), otherwise break with `line'`.
+/// (within `max_width` columns), otherwise break with `linebreak`.
 fn push_interpolation_braces(doc: &mut Doc, max_width: i32, body: Doc) {
     doc.group(|g| {
         g.text("${");
-        match unexpand_spacing_prime(Some(max_width), &body) {
+        match try_compact(Some(max_width), &body) {
             Some(compact) => g.extend(compact),
             None => {
                 g.nested(|n| {
-                    n.line_prime();
+                    n.linebreak();
                     n.extend(body);
-                    n.line_prime();
+                    n.linebreak();
                 });
             }
         }
@@ -49,7 +49,7 @@ impl Pretty for StringPart {
                     doc.text("${");
                     let mut rendered = Doc::new();
                     value.pretty(&mut rendered);
-                    match unexpand_spacing_prime(None, &rendered) {
+                    match try_compact(None, &rendered) {
                         Some(compact) => doc.extend(compact),
                         None => doc.extend(rendered),
                     }
@@ -71,7 +71,7 @@ impl Pretty for Vec<StringPart> {
     fn pretty(&self, doc: &mut Doc) {
         // When the interpolation is the only thing on the string line (modulo
         // leading whitespace) and carries no trailing trivia, absorb its body
-        // instead of surrounding it with `line'`.
+        // instead of surrounding it with `linebreak`.
         let lone = match self.as_slice() {
             [StringPart::Interpolation(whole)] if whole.trailing_trivia.is_empty() => {
                 Some(("", &whole.value))
@@ -96,7 +96,7 @@ impl Pretty for Vec<StringPart> {
         }
 
         match self.as_slice() {
-            // Lone interpolation with trailing trivia: always surround with `line'`.
+            // Lone interpolation with trailing trivia: always surround with `linebreak`.
             [StringPart::Interpolation(whole)] => {
                 let mut rendered = Doc::new();
                 whole.pretty(&mut rendered);
@@ -144,7 +144,7 @@ pub(super) fn push_pretty_indented_string(doc: &mut Doc, parts: &[Vec<StringPart
         d.text("''");
         // For multi-line strings, add a potential line break after opening ''
         if parts.len() > 1 {
-            d.line_prime();
+            d.linebreak();
         }
         d.nested(|inner| {
             inner.sep_by(&[newline()], parts.iter().cloned());

@@ -173,24 +173,24 @@ pub(super) fn push_parenthesized_inner(doc: &mut Doc, expr: &Expression) {
             push_pretty_app(doc, true, &[], true, expr);
         }
         Expression::Term(Term::Selection { base: term, .. }) if term.is_absorbable() => {
-            doc.line_prime();
+            doc.linebreak();
             doc.group(|inner| {
                 expr.pretty(inner);
             });
-            doc.line_prime();
+            doc.linebreak();
         }
         Expression::Term(Term::Selection { .. }) => {
             doc.group(|inner| {
                 expr.pretty(inner);
             });
-            doc.line_prime();
+            doc.linebreak();
         }
         _ => {
-            doc.line_prime();
+            doc.linebreak();
             doc.group(|inner| {
                 expr.pretty(inner);
             });
-            doc.line_prime();
+            doc.linebreak();
         }
     }
 }
