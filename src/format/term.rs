@@ -87,7 +87,7 @@ impl Emit for Binder {
                 // for short plain-id keys the extra line buys almost nothing.
                 let simple_lhs = selectors.len() <= 4 && selectors.iter().all(Selector::is_simple);
                 doc.group(|d| {
-                    d.hcat(selectors);
+                    d.sep_by(&[], selectors);
                     d.nested(|inner| {
                         inner.hardspace();
                         assign.emit(inner);

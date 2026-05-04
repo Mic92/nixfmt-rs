@@ -94,13 +94,6 @@ impl Doc {
         self
     }
 
-    pub fn hcat<P: Emit>(&mut self, items: impl IntoIterator<Item = P>) -> &mut Self {
-        for item in items {
-            item.emit(self);
-        }
-        self
-    }
-
     pub fn surrounded(&mut self, outside: &[Elem], f: impl FnOnce(&mut Self)) -> &mut Self {
         self.0.extend_from_slice(outside);
         f(self);
