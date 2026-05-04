@@ -123,41 +123,44 @@ fn move_param_attr_comment(attr: ParamAttr) -> ParamAttr {
 /// Mirrors `moveParamsComments` in Nixfmt/Pretty.hs.
 fn move_params_comments(attrs: &[ParamAttr]) -> Vec<ParamAttr> {
     let mut out: Vec<ParamAttr> = attrs.to_vec();
-    let mut i = 0;
-    while i < out.len() {
-        let is_last = i + 1 == out.len();
-        let (head, tail) = out[i..].split_first_mut().unwrap();
-        match head {
-            ParamAttr::Attr {
-                comma: Some(comma), ..
-            } if comma.trail_comment.is_none() && !is_last => {
-                let mut trivia = std::mem::take(&mut comma.pre_trivia);
-                match &mut tail[0] {
-                    ParamAttr::Attr { name, .. } => {
-                        trivia.extend(std::mem::take(&mut name.pre_trivia));
-                        name.pre_trivia = trivia;
-                    }
-                    ParamAttr::Ellipsis(ell) => {
-                        trivia.extend(std::mem::take(&mut ell.pre_trivia));
-                        ell.pre_trivia = trivia;
-                    }
-                }
-            }
-            ParamAttr::Attr {
-                name,
-                comma: comma @ None,
-                ..
-            } if is_last => {
-                *comma = Some(Annotated {
-                    pre_trivia: Trivia::new(),
-                    value: Token::Comma,
-                    span: name.span,
-                    trail_comment: None,
-                });
-            }
-            _ => {}
+    let len = out.len();
+
+    // Shift each comma's pre-trivia onto the *following* attr's leading leaf,
+    // so it renders above that attr instead of dangling after the comma.
+    let mut carry = Trivia::new();
+    for (i, attr) in out.iter_mut().enumerate() {
+        let pre = match attr {
+            ParamAttr::Attr { name, .. } => &mut name.pre_trivia,
+            ParamAttr::Ellipsis(ell) => &mut ell.pre_trivia,
+        };
+        if !carry.is_empty() {
+            carry.extend(std::mem::take(pre));
+            *pre = std::mem::take(&mut carry);
         }
-        i += 1;
+        if i + 1 < len
+            && let ParamAttr::Attr {
+                comma: Some(comma), ..
+            } = attr
+            && comma.trail_comment.is_none()
+        {
+            carry = std::mem::take(&mut comma.pre_trivia);
+        }
+    }
+
+    // Synthesize a trailing comma on the last attr so render can decide
+    // whether to keep it (multiline) or drop it (single line).
+    if let Some(ParamAttr::Attr {
+        name,
+        comma: comma @ None,
+        ..
+    }) = out.last_mut()
+    {
+        *comma = Some(Annotated {
+            pre_trivia: Trivia::new(),
+            value: Token::Comma,
+            span: name.span,
+            trail_comment: None,
+        });
     }
     out
 }
