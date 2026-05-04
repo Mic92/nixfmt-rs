@@ -1,4 +1,4 @@
-use crate::ast::{Expression, FirstToken, Item, Parameter, Term, Token, Trivia};
+use crate::ast::{Expression, FirstToken, Item, Parameter, Term, Token, Trivia, TriviaPiece};
 use crate::doc::{Doc, Elem, Emit, GroupKind, Spacing, line};
 
 /// Per-call-site knobs for [`emit_app`]. Mirrors the positional flags of
@@ -258,7 +258,17 @@ pub(super) fn emit_app_parts(
     a: &Expression,
     head: Option<&Expression>,
 ) {
-    let comment = first_token_comment(head.unwrap_or(f));
+    let mut comment = first_token_comment(head.unwrap_or(f));
+
+    // A lone language-annotation comment renders inline (`/* sh */ "…"`) with
+    // no leading separator, so hoisting it here would place it directly after
+    // the caller's preceding token (e.g. `a //* sh */ …`, which re-lexes as
+    // the `//` operator). Leave it on the term so `ctx.pre` lands before it.
+    // Intentional divergence from upstream nixfmt 1.2.0, which has this bug;
+    // also adds the missing space after `+`/`=` etc. in the same position.
+    if let [TriviaPiece::LanguageAnnotation(_)] = &*comment {
+        comment = Trivia::new();
+    }
 
     let post_hardline = |doc: &mut Doc| {
         if ctx.has_post && !comment.is_empty() {

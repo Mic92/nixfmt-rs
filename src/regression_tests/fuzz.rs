@@ -105,3 +105,31 @@ fn fuzz_leading_blank_lines_app_layout() {
         "# foo\nc\n  \"${\n    f\n\n  }\"\n"
     );
 }
+
+/// `prettyApp` hoisted a lone `/* lang */` annotation off the call head and
+/// emitted it before `ctx.pre`, so the annotation landed directly after the
+/// preceding operator with no space. For `/` this produced `a //* sh */ …`,
+/// which re-lexes as the `//` update operator and fails to parse. Upstream
+/// Haskell nixfmt 1.2.0 has the same bug.
+#[test]
+fn fuzz_lang_annotation_on_app_head_after_div() {
+    roundtrip("H/\n/*h*/''''p");
+    assert_eq!(
+        format("a / /* sh */ \"\" p\n").unwrap(),
+        "a / /* sh */ \"\" p\n"
+    );
+    // Same hoist also dropped the space after other operators / `=`; not a
+    // parse error there but still wrong, and now fixed as a side effect.
+    assert_eq!(
+        format("a + /* sh */ \"\" p\n").unwrap(),
+        "a + /* sh */ \"\" p\n"
+    );
+    assert_eq!(
+        format("{a = /* sh */ \"\" p;}\n").unwrap(),
+        "{ a = /* sh */ \"\" p; }\n"
+    );
+    // Inside parens / at top level the annotation was already adjacent to a
+    // delimiter that needs no space; keep that.
+    roundtrip("(/* sh */ \"\" p)");
+    roundtrip("/* sh */ \"\" p");
+}
