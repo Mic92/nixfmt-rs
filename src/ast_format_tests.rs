@@ -1,7 +1,7 @@
 //! AST formatting smoke tests - compare our output with `nixfmt --ast`.
 //!
 //! One minimal test per top-level `Expression`/`Term` variant (plus the
-//! `Trivium` shapes and `Binder`/`Parameter` smoke) so a regression in any
+//! `TriviaPiece` shapes and `Binder`/`Parameter` smoke) so a regression in any
 //! variant fails fast with a small diff. Anything more complex lives in
 //! `regression_tests/`.
 
@@ -80,7 +80,7 @@ oracle_tests! {
     test_boolean_not => ["!true"],
 
     // -----------------------------------------------------------------------
-    // Trivium shapes
+    // TriviaPiece shapes
     // -----------------------------------------------------------------------
 
     test_line_comment => ["# comment\n42"],

@@ -4,7 +4,7 @@
 //! including interpolations, escape sequences, and string normalization (splitting on newlines,
 //! merging adjacent text parts, stripping common indentation).
 
-use crate::ast::{Annotated, StringPart, Term, Token, Trailed, Trivium};
+use crate::ast::{Annotated, StringPart, Term, Token, Trailed, TriviaPiece};
 use crate::error::{ErrorKind, ParseError, Result};
 
 use super::Parser;
@@ -308,7 +308,7 @@ impl Parser {
         if let Some(tc) = open.trail_comment.take() {
             self.lexer.trivia_buffer.insert(
                 0,
-                Trivium::LineComment(format!(" {}", tc.0).into_boxed_str()),
+                TriviaPiece::LineComment(format!(" {}", tc.0).into_boxed_str()),
             );
         }
         self.advance()?;

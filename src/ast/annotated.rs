@@ -2,7 +2,7 @@
 //! optional trailing comment. Every leaf in the AST is an `Annotated<_>`.
 
 use super::span::Span;
-use super::trivia::{TrailingComment, Trivia, Trivium};
+use super::trivia::{TrailingComment, Trivia, TriviaPiece};
 
 /// Annotated wrapper - every AST node has:
 /// - `pre_trivia`: Comments/whitespace before the token
@@ -35,7 +35,7 @@ impl<T: Clone> Annotated<T> {
     pub fn move_trailing_comment_up(&self) -> Self {
         let mut out = self.clone();
         if let Some(tc) = out.trail_comment.take() {
-            out.pre_trivia.push(Trivium::from(&tc));
+            out.pre_trivia.push(TriviaPiece::from(&tc));
         }
         out
     }

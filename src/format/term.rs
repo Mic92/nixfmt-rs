@@ -1,6 +1,6 @@
 use crate::ast::{
     Annotated, Binder, Expression, Item, Items, Leaf, Selector, SimpleSelector, Term, Token,
-    Trivium,
+    TriviaPiece,
 };
 use crate::doc::{Doc, Elem, Pretty, hardline, hardspace, line, linebreak};
 
@@ -211,7 +211,9 @@ pub(super) fn pretty_set(
     open.pretty_head(doc);
 
     let starts_with_emptyline = match items.0.first() {
-        Some(Item::Comments(trivia)) => trivia.iter().any(|t| matches!(t, Trivium::EmptyLine())),
+        Some(Item::Comments(trivia)) => {
+            trivia.iter().any(|t| matches!(t, TriviaPiece::EmptyLine()))
+        }
         _ => false,
     };
 
@@ -258,10 +260,10 @@ impl<T: Pretty> Items<T> {
                     if i + 1 < items.len()
                         && let Item::Comments(trivia) = &items[i]
                         && trivia.len() == 1
-                        && let Trivium::LanguageAnnotation(lang) = &trivia[0]
+                        && let TriviaPiece::LanguageAnnotation(lang) = &trivia[0]
                         && let Item::Item(string_item) = &items[i + 1]
                     {
-                        Trivium::LanguageAnnotation(lang.clone()).pretty(doc);
+                        TriviaPiece::LanguageAnnotation(lang.clone()).pretty(doc);
                         doc.hardspace();
                         doc.group(|d| string_item.pretty(d));
                         i += 2;
