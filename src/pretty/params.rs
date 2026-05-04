@@ -1,4 +1,4 @@
-use crate::predoc::{Doc, DocE, Pretty, hardline, line};
+use crate::predoc::{Doc, Elem, Pretty, hardline, line};
 use crate::types::{
     Ann, Expression, Leaf, ParamAttr, Parameter, Selector, SimpleSelector, Term, Token,
     TrailingComment, Trivia,
@@ -165,7 +165,7 @@ fn move_params_comments(attrs: &[ParamAttr]) -> Vec<ParamAttr> {
     out
 }
 
-fn parameter_separator(open: &Leaf, attrs: &[ParamAttr], close: &Leaf) -> DocE {
+fn parameter_separator(open: &Leaf, attrs: &[ParamAttr], close: &Leaf) -> Elem {
     if open.span.start_line() != close.span.start_line() {
         return hardline();
     }

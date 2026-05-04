@@ -1,4 +1,4 @@
-use crate::predoc::{Doc, DocE, GroupAnn, Pretty, line};
+use crate::predoc::{Doc, Elem, GroupKind, Pretty, line};
 use crate::types::{Expression, FirstToken, Item, Parameter, Term, Token, Trivia};
 
 use super::absorb::push_absorb_paren;
@@ -44,7 +44,7 @@ fn strip_first_comment(expr: &Expression) -> Expression {
 /// Walk the function-call chain. Mirrors Haskell `absorbApp` (Pretty.hs).
 fn push_absorb_app(doc: &mut Doc, expr: &Expression, indent_function: bool, comment: &Trivia) {
     let recurse_head = |doc: &mut Doc, head: &Expression| {
-        doc.group_ann(GroupAnn::Transparent, |g| {
+        doc.transparent_group(|g| {
             push_absorb_app(g, head, indent_function, comment);
         });
     };
@@ -73,7 +73,7 @@ fn push_absorb_app(doc: &mut Doc, expr: &Expression, indent_function: bool, comm
         && let Expression::Application { func: f2, arg: l1 } = &**f
         && matches!(**l1, Expression::Term(Term::List { .. }))
     {
-        doc.group_ann(GroupAnn::Transparent, |outer| {
+        doc.transparent_group(|outer| {
             recurse_head(outer, f2);
             outer.nested(|n| {
                 n.group(|g| {
@@ -92,18 +92,18 @@ fn push_absorb_app(doc: &mut Doc, expr: &Expression, indent_function: bool, comm
     // Selections must not priority-expand: only the `.`-suffix would move,
     // which looks odd.
     let arg_ann = if matches!(**a, Expression::Term(Term::Selection { .. })) {
-        GroupAnn::Regular
+        GroupKind::Regular
     } else {
-        GroupAnn::Priority
+        GroupKind::Priority
     };
     doc.nested(|n| {
-        n.group_ann(arg_ann, |g| push_absorb_inner(g, a));
+        n.group_with(arg_ann, |g| push_absorb_inner(g, a));
     });
 }
 
 /// `group' Priority $ nest …`
 fn push_priority_nest(doc: &mut Doc, f: impl FnOnce(&mut Doc)) {
-    doc.group_ann(GroupAnn::Priority, |g| {
+    doc.priority_group(|g| {
         g.nested(f);
     });
 }
@@ -176,7 +176,7 @@ fn push_absorb_last(doc: &mut Doc, arg: &Expression) {
 pub(super) fn push_pretty_app(
     doc: &mut Doc,
     indent_function: bool,
-    pre: &[DocE],
+    pre: &[Elem],
     has_post: bool,
     expr: &Expression,
 ) {
@@ -202,7 +202,7 @@ pub(super) fn push_pretty_app(
     {
         doc.group(|g| {
             g.0.extend_from_slice(pre);
-            g.group_ann(GroupAnn::Transparent, |inner| {
+            g.transparent_group(|inner| {
                 push_absorb_app(inner, f2, indent_function, &comment);
             });
             g.line();
@@ -222,7 +222,7 @@ pub(super) fn push_pretty_app(
     }
 
     let mut rendered_f = Doc::from(pre.to_vec());
-    rendered_f.group_ann(GroupAnn::Transparent, |g| {
+    rendered_f.transparent_group(|g| {
         push_absorb_app(g, f, indent_function, &comment);
     });
 

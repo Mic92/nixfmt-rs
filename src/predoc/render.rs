@@ -4,21 +4,21 @@
 //! `fixup` normalisation pass, the width-probing `fits`/`firstLine*` helpers,
 //! and the greedy `Renderer` that drives them.
 
-use super::{Doc, DocE, GroupAnn, Spacing, TextAnn, text_width};
+use super::{Doc, Elem, GroupKind, Spacing, TextKind, text_width};
 
 /// Borrowed lookahead: a chain of slices scanned in order. Lets the layout
 /// engine pass "rest of current level ++ outer lookahead" without cloning.
-type Look<'a> = &'a [&'a [DocE]];
+type Look<'a> = &'a [&'a [Elem]];
 
 /// Flat iterator over a `Look` chain. Callers may `push_front` a group body to
 /// get the `xs ++ ys` traversal Haskell gets for free from lazy lists.
 struct LookIter<'a> {
-    stack: Vec<(&'a [DocE], usize)>,
+    stack: Vec<(&'a [Elem], usize)>,
 }
 
 impl<'a> LookIter<'a> {
     fn new(chain: Look<'a>) -> Self {
-        let mut stack: Vec<(&'a [DocE], usize)> = Vec::with_capacity(chain.len());
+        let mut stack: Vec<(&'a [Elem], usize)> = Vec::with_capacity(chain.len());
         for s in chain.iter().rev() {
             if !s.is_empty() {
                 stack.push((s, 0));
@@ -27,7 +27,7 @@ impl<'a> LookIter<'a> {
         LookIter { stack }
     }
 
-    fn push_front(&mut self, s: &'a [DocE]) {
+    fn push_front(&mut self, s: &'a [Elem]) {
         if !s.is_empty() {
             self.stack.push((s, 0));
         }
@@ -35,8 +35,8 @@ impl<'a> LookIter<'a> {
 }
 
 impl<'a> Iterator for LookIter<'a> {
-    type Item = &'a DocE;
-    fn next(&mut self) -> Option<&'a DocE> {
+    type Item = &'a Elem;
+    fn next(&mut self) -> Option<&'a Elem> {
         while let Some((s, i)) = self.stack.last_mut() {
             if *i < s.len() {
                 let e = &s[*i];
@@ -70,10 +70,10 @@ impl Doc {
 }
 
 /// `simplifyGroup` (Predoc.hs): unwrap `Group ann [Group ann xs]` to `xs`.
-fn simplify_group(ann: GroupAnn, mut body: Doc) -> Doc {
+fn simplify_group(ann: GroupKind, mut body: Doc) -> Doc {
     if body.len() == 1
-        && matches!(&body[0], DocE::Group(a2, _) if ann == *a2)
-        && let Some(DocE::Group(_, inner)) = body.0.pop()
+        && matches!(&body[0], Elem::Group(a2, _) if ann == *a2)
+        && let Some(Elem::Group(_, inner)) = body.0.pop()
     {
         return inner;
     }
@@ -82,7 +82,7 @@ fn simplify_group(ann: GroupAnn, mut body: Doc) -> Doc {
 
 /// Span of leading liftable elements (hard spacings + comments) and start of
 /// trailing liftable elements (hard spacings) in a fixed-up group body.
-fn lift_bounds(body: &[DocE]) -> (usize, usize) {
+fn lift_bounds(body: &[Elem]) -> (usize, usize) {
     let pre_end = body
         .iter()
         .position(|e| !e.is_hard_spacing() && !e.is_comment())
@@ -95,7 +95,7 @@ fn lift_bounds(body: &[DocE]) -> (usize, usize) {
     (pre_end, post_start)
 }
 
-impl DocE {
+impl Elem {
     /// Check if element is hard spacing (always rendered as-is)
     const fn is_hard_spacing(&self) -> bool {
         matches!(
@@ -108,7 +108,7 @@ impl DocE {
 
     fn is_comment(&self) -> bool {
         match self {
-            Self::Text(_, _, TextAnn::Comment | TextAnn::TrailingComment, _) => true,
+            Self::Text(_, _, TextKind::Comment | TextKind::TrailingComment, _) => true,
             Self::Group(_, inner) => inner.iter().all(|x| x.is_comment() || x.is_hard_spacing()),
             _ => false,
         }
@@ -140,15 +140,15 @@ impl Spacing {
 }
 
 /// Manually force a group to compact layout (does not recurse into inner groups)
-fn unexpand_spacing(chain: &[&[DocE]]) -> Doc {
+fn unexpand_spacing(chain: &[&[Elem]]) -> Doc {
     let mut result = Vec::new();
     for s in chain {
         for elem in *s {
             match elem {
-                DocE::Spacing(Spacing::Space | Spacing::Softspace) => {
-                    result.push(DocE::Spacing(Spacing::Hardspace));
+                Elem::Spacing(Spacing::Space | Spacing::Softspace) => {
+                    result.push(Elem::Spacing(Spacing::Hardspace));
                 }
-                DocE::Spacing(Spacing::Break | Spacing::Softbreak) | DocE::Nest(..) => {}
+                Elem::Spacing(Spacing::Break | Spacing::Softbreak) | Elem::Nest(..) => {}
                 _ => result.push(elem.clone()),
             }
         }
@@ -158,16 +158,16 @@ fn unexpand_spacing(chain: &[&[DocE]]) -> Doc {
 
 /// Cheap pre-check so `render_group` can skip the clone-heavy `priority_groups`
 /// machinery for groups that contain no Priority children.
-fn has_priority_groups(doc: &[DocE]) -> bool {
+fn has_priority_groups(doc: &[Elem]) -> bool {
     doc.iter().any(|e| match e {
-        DocE::Group(GroupAnn::Priority, _) => true,
-        DocE::Group(GroupAnn::Transparent, body) => has_priority_groups(body),
+        Elem::Group(GroupKind::Priority, _) => true,
+        Elem::Group(GroupKind::Transparent, body) => has_priority_groups(body),
         _ => false,
     })
 }
 
 /// Cheap placeholder used to vacate a slot during the read/write compaction.
-const HOLE: DocE = DocE::Spacing(Spacing::Softbreak);
+const HOLE: Elem = Elem::Spacing(Spacing::Softbreak);
 
 /// Outcome of lifting hard spacings/comments out of a fixed-up group body.
 enum GroupFixup {
@@ -181,7 +181,7 @@ enum GroupFixup {
 
 /// Classify a recursively fixed-up group body. Pure in `body`; the caller
 /// handles splicing the result back into the parent's read/write window.
-fn split_liftable(ann: GroupAnn, mut body: Doc) -> GroupFixup {
+fn split_liftable(ann: GroupKind, mut body: Doc) -> GroupFixup {
     let (pre_end, post_start) = lift_bounds(&body);
     if pre_end == 0 && post_start == body.len() && !body.is_empty() {
         return GroupFixup::Keep(simplify_group(ann, body));
@@ -204,41 +204,41 @@ fn split_liftable(ann: GroupAnn, mut body: Doc) -> GroupFixup {
 /// (`write_idx <= read_idx`), recursing into group bodies via `&mut` so the
 /// existing `Vec` allocations are reused. Mirrors Haskell `fixup`
 /// clause-by-clause; see the per-arm comments for the corresponding rule.
-fn fixup_mut(doc: &mut Vec<DocE>, mut nest_acc: isize, mut offset_acc: isize) {
+fn fixup_mut(doc: &mut Vec<Elem>, mut nest_acc: isize, mut offset_acc: isize) {
     let mut read_idx = 0usize;
     let mut write_idx = 0usize;
     while read_idx < doc.len() {
         let elem = std::mem::replace(&mut doc[read_idx], HOLE);
         read_idx += 1;
         match elem {
-            DocE::Nest(dn, doff) => {
+            Elem::Nest(dn, doff) => {
                 nest_acc += dn;
                 offset_acc += doff;
             }
 
             // `Spacing a : Spacing b : ys` — fold into the next slot, or into
             // the previous written slot when a `Nest` marker sat in between.
-            DocE::Spacing(a) => {
-                if let Some(DocE::Spacing(b)) = doc.get(read_idx) {
-                    doc[read_idx] = DocE::Spacing(a.merge(*b));
+            Elem::Spacing(a) => {
+                if let Some(Elem::Spacing(b)) = doc.get(read_idx) {
+                    doc[read_idx] = Elem::Spacing(a.merge(*b));
                 } else if matches!(
                     write_idx.checked_sub(1).map(|i| &doc[i]),
-                    Some(DocE::Spacing(_))
+                    Some(Elem::Spacing(_))
                 ) {
-                    if let DocE::Spacing(b) = &mut doc[write_idx - 1] {
+                    if let Elem::Spacing(b) = &mut doc[write_idx - 1] {
                         *b = b.merge(a);
                     }
                 } else {
-                    doc[write_idx] = DocE::Spacing(a);
+                    doc[write_idx] = Elem::Spacing(a);
                     write_idx += 1;
                 }
             }
 
             // `Text ann a : Text ann b : ys` — concatenate into the previous
             // written slot, keeping the first text's (already baked) indent.
-            DocE::Text(nest, offset, ann, txt) => {
+            Elem::Text(nest, offset, ann, txt) => {
                 if write_idx > 0
-                    && let DocE::Text(_, _, prev_ann, prev_txt) = &mut doc[write_idx - 1]
+                    && let Elem::Text(_, _, prev_ann, prev_txt) = &mut doc[write_idx - 1]
                     && ann == *prev_ann
                 {
                     prev_txt.push_str(&txt);
@@ -247,25 +247,25 @@ fn fixup_mut(doc: &mut Vec<DocE>, mut nest_acc: isize, mut offset_acc: isize) {
                 let nest = nest.cast_signed() + nest_acc;
                 let offset = offset.cast_signed() + offset_acc;
                 debug_assert!(nest >= 0 && offset >= 0, "unbalanced Nest deltas");
-                doc[write_idx] = DocE::Text(nest.cast_unsigned(), offset.cast_unsigned(), ann, txt);
+                doc[write_idx] = Elem::Text(nest.cast_unsigned(), offset.cast_unsigned(), ann, txt);
                 write_idx += 1;
             }
 
-            DocE::Group(ann, mut body) => {
+            Elem::Group(ann, mut body) => {
                 // `Spacing Hardspace : Group ann xs : ys` — pull a just-written
                 // hardspace into the group so it can merge with a leading soft
                 // spacing during the recursive fixup.
-                if write_idx > 0 && matches!(doc[write_idx - 1], DocE::Spacing(Spacing::Hardspace))
+                if write_idx > 0 && matches!(doc[write_idx - 1], Elem::Spacing(Spacing::Hardspace))
                 {
                     write_idx -= 1;
                     doc[write_idx] = HOLE;
-                    body.0.insert(0, DocE::Spacing(Spacing::Hardspace));
+                    body.0.insert(0, Elem::Spacing(Spacing::Hardspace));
                 }
                 fixup_mut(&mut body.0, nest_acc, offset_acc);
 
                 match split_liftable(ann, body) {
                     GroupFixup::Keep(body) => {
-                        doc[write_idx] = DocE::Group(ann, body);
+                        doc[write_idx] = Elem::Group(ann, body);
                         write_idx += 1;
                     }
                     GroupFixup::Dissolve { pre, post } => {
@@ -275,10 +275,10 @@ fn fixup_mut(doc: &mut Vec<DocE>, mut nest_acc: isize, mut offset_acc: isize) {
                         // `Nest` that cancels the running accumulator for the
                         // reprocess.
                         let mut lifted = Vec::with_capacity(pre.len() + post.len() + 2);
-                        lifted.push(DocE::Nest(-nest_acc, -offset_acc));
+                        lifted.push(Elem::Nest(-nest_acc, -offset_acc));
                         lifted.extend(pre);
                         lifted.extend(post);
-                        lifted.push(DocE::Nest(nest_acc, offset_acc));
+                        lifted.push(Elem::Nest(nest_acc, offset_acc));
                         doc.splice(write_idx..read_idx, lifted);
                         read_idx = write_idx;
                     }
@@ -291,11 +291,11 @@ fn fixup_mut(doc: &mut Vec<DocE>, mut nest_acc: isize, mut offset_acc: isize) {
                         // the only remaining rewrite is a possible spacing
                         // merge across the boundary with `doc[write_idx-1]`.
                         if write_idx > 0
-                            && let (DocE::Spacing(prev), Some(DocE::Spacing(first))) =
+                            && let (Elem::Spacing(prev), Some(Elem::Spacing(first))) =
                                 (&doc[write_idx - 1], pre.first())
                         {
                             let merged = prev.merge(*first);
-                            doc[write_idx - 1] = DocE::Spacing(merged);
+                            doc[write_idx - 1] = Elem::Spacing(merged);
                             pre.0.remove(0);
                         }
                         let pre_len = pre.len();
@@ -305,7 +305,7 @@ fn fixup_mut(doc: &mut Vec<DocE>, mut nest_acc: isize, mut offset_acc: isize) {
                         doc.splice(
                             write_idx..read_idx,
                             pre.into_iter()
-                                .chain(std::iter::once(DocE::Group(ann, core)))
+                                .chain(std::iter::once(Elem::Group(ann, core)))
                                 .chain(post),
                         );
                         write_idx += pre_len + 1;
@@ -333,7 +333,7 @@ fn fixup_mut(doc: &mut Vec<DocE>, mut nest_acc: isize, mut offset_acc: isize) {
 fn fits_impl<const WRITE: bool>(
     mut next_indent_delta: isize,
     mut budget: isize,
-    chain: &[&[DocE]],
+    chain: &[&[Elem]],
     out: &mut String,
 ) -> Option<usize> {
     let mark = out.len();
@@ -342,7 +342,7 @@ fn fits_impl<const WRITE: bool>(
         return None;
     }
 
-    let mut stack: Vec<std::slice::Iter<'_, DocE>> = Vec::with_capacity(chain.len() + 4);
+    let mut stack: Vec<std::slice::Iter<'_, Elem>> = Vec::with_capacity(chain.len() + 4);
     for slice in chain.iter().rev() {
         if !slice.is_empty() {
             stack.push(slice.iter());
@@ -365,7 +365,7 @@ fn fits_impl<const WRITE: bool>(
                 break None;
             };
             match iter.next() {
-                Some(DocE::Group(_, body)) => stack.push(body.iter()),
+                Some(Elem::Group(_, body)) => stack.push(body.iter()),
                 Some(e) => break Some(e),
                 None => {
                     stack.pop();
@@ -373,7 +373,7 @@ fn fits_impl<const WRITE: bool>(
             }
         };
 
-        if let Some(DocE::Spacing(s)) = elem {
+        if let Some(Elem::Spacing(s)) = elem {
             pending = Some(pending.map_or(*s, |p| p.merge(*s)));
             continue;
         }
@@ -398,7 +398,7 @@ fn fits_impl<const WRITE: bool>(
 
         match elem {
             None => return Some(width),
-            Some(DocE::Text(_, _, TextAnn::Regular, t)) => {
+            Some(Elem::Text(_, _, TextKind::Regular, t)) => {
                 let len = text_width(t);
                 if WRITE {
                     out.push_str(t);
@@ -410,13 +410,13 @@ fn fits_impl<const WRITE: bool>(
                     fail!();
                 }
             }
-            Some(DocE::Text(_, _, TextAnn::Comment, t)) => {
+            Some(Elem::Text(_, _, TextKind::Comment, t)) => {
                 if WRITE {
                     out.push_str(t);
                 }
                 width += text_width(t);
             }
-            Some(DocE::Text(_, _, TextAnn::TrailingComment, t)) => {
+            Some(Elem::Text(_, _, TextKind::TrailingComment, t)) => {
                 if next_indent_delta == 0 {
                     if WRITE {
                         out.push(' ');
@@ -428,8 +428,8 @@ fn fits_impl<const WRITE: bool>(
                 }
                 width += text_width(t);
             }
-            Some(DocE::Text(_, _, TextAnn::Trailing, _)) => {}
-            Some(DocE::Spacing(_) | DocE::Group(_, _) | DocE::Nest(..)) => unreachable!(),
+            Some(Elem::Text(_, _, TextKind::Trailing, _)) => {}
+            Some(Elem::Spacing(_) | Elem::Group(_, _) | Elem::Nest(..)) => unreachable!(),
         }
     }
 }
@@ -439,7 +439,7 @@ fn fits_impl<const WRITE: bool>(
 fn fits(
     next_indent_delta: isize,
     budget: isize,
-    chain: &[&[DocE]],
+    chain: &[&[Elem]],
     out: &mut String,
 ) -> Option<usize> {
     fits_impl::<true>(next_indent_delta, budget, chain, out)
@@ -447,7 +447,7 @@ fn fits(
 
 /// Width-only variant used by `first_line_fits`.
 #[inline]
-fn fits_width(budget: isize, doc: &[DocE]) -> Option<usize> {
+fn fits_width(budget: isize, doc: &[Elem]) -> Option<usize> {
     let mut sink = String::new();
     fits_impl::<false>(0, budget, &[doc], &mut sink)
 }
@@ -460,11 +460,11 @@ fn first_line_width(chain: Look<'_>) -> usize {
     loop {
         let elem = loop {
             match iter.next() {
-                Some(DocE::Group(_, body)) => iter.push_front(body),
+                Some(Elem::Group(_, body)) => iter.push_front(body),
                 e => break e,
             }
         };
-        if let Some(DocE::Spacing(s)) = elem {
+        if let Some(Elem::Spacing(s)) = elem {
             pending = Some(pending.map_or(*s, |p| p.merge(*s)));
             continue;
         }
@@ -477,9 +477,9 @@ fn first_line_width(chain: Look<'_>) -> usize {
         }
         match elem {
             None => return width,
-            Some(DocE::Text(_, _, TextAnn::Comment | TextAnn::TrailingComment, _)) => {}
-            Some(DocE::Text(_, _, _, t)) => width += text_width(t),
-            Some(DocE::Spacing(_) | DocE::Group(_, _) | DocE::Nest(..)) => unreachable!(),
+            Some(Elem::Text(_, _, TextKind::Comment | TextKind::TrailingComment, _)) => {}
+            Some(Elem::Text(_, _, _, t)) => width += text_width(t),
+            Some(Elem::Spacing(_) | Elem::Group(_, _) | Elem::Nest(..)) => unreachable!(),
         }
     }
 }
@@ -491,13 +491,13 @@ fn first_line_fits(target_width: usize, max_width: usize, chain: Look<'_>) -> bo
     let mut budget = max;
     let mut iter = LookIter::new(chain);
     let mut pending: Option<Spacing> = None;
-    let mut rest: Vec<&[DocE]> = Vec::new();
+    let mut rest: Vec<&[Elem]> = Vec::new();
     loop {
         if budget < 0 {
             return false;
         }
         let elem = iter.next();
-        if let Some(DocE::Spacing(s)) = elem {
+        if let Some(Elem::Spacing(s)) = elem {
             pending = Some(pending.map_or(*s, |p| p.merge(*s)));
             continue;
         }
@@ -513,9 +513,9 @@ fn first_line_fits(target_width: usize, max_width: usize, chain: Look<'_>) -> bo
         }
         match elem {
             None => return max - budget <= target,
-            Some(DocE::Text(_, _, TextAnn::Regular, t)) => budget -= text_width(t).cast_signed(),
-            Some(DocE::Text(..) | DocE::Nest(..)) => {}
-            Some(DocE::Group(_, body)) => {
+            Some(Elem::Text(_, _, TextKind::Regular, t)) => budget -= text_width(t).cast_signed(),
+            Some(Elem::Text(..) | Elem::Nest(..)) => {}
+            Some(Elem::Group(_, body)) => {
                 rest.clear();
                 rest.extend(iter.stack.iter().rev().map(|(s, i)| &s[*i..]));
                 let rest_width = first_line_width(&rest);
@@ -524,7 +524,7 @@ fn first_line_fits(target_width: usize, max_width: usize, chain: Look<'_>) -> bo
                     None => iter.push_front(body),
                 }
             }
-            Some(DocE::Spacing(_)) => unreachable!(),
+            Some(Elem::Spacing(_)) => unreachable!(),
         }
     }
 }
@@ -534,30 +534,30 @@ fn next_indent(chain: Look<'_>) -> (usize, usize) {
     for slice in chain {
         for elem in *slice {
             match elem {
-                DocE::Text(nest, offset, _, _) => return (*nest, *offset),
-                DocE::Group(_, body) => return next_indent(&[body]),
-                DocE::Spacing(_) | DocE::Nest(..) => {}
+                Elem::Text(nest, offset, _, _) => return (*nest, *offset),
+                Elem::Group(_, body) => return next_indent(&[body]),
+                Elem::Spacing(_) | Elem::Nest(..) => {}
             }
         }
     }
     (0, 0)
 }
 
-type Chain<'a> = Vec<&'a [DocE]>;
+type Chain<'a> = Vec<&'a [Elem]>;
 
 /// One `(pre, prio, post)` triple per `Priority` child (in document order),
 /// each as a chain of borrowed slices into `doc`. `Transparent` groups are
 /// flattened so their `Priority` children associate with this parent.
-fn priority_groups(doc: &[DocE]) -> Vec<(Chain<'_>, Chain<'_>, Chain<'_>)> {
-    fn segments<'a>(doc: &'a [DocE], out: &mut Vec<(bool, &'a [DocE])>) {
+fn priority_groups(doc: &[Elem]) -> Vec<(Chain<'_>, Chain<'_>, Chain<'_>)> {
+    fn segments<'a>(doc: &'a [Elem], out: &mut Vec<(bool, &'a [Elem])>) {
         let mut i = 0;
         while i < doc.len() {
             match &doc[i] {
-                DocE::Group(GroupAnn::Priority, body) => {
+                Elem::Group(GroupKind::Priority, body) => {
                     out.push((true, body));
                     i += 1;
                 }
-                DocE::Group(GroupAnn::Transparent, body) => {
+                Elem::Group(GroupKind::Transparent, body) => {
                     segments(body, out);
                     i += 1;
                 }
@@ -566,7 +566,7 @@ fn priority_groups(doc: &[DocE]) -> Vec<(Chain<'_>, Chain<'_>, Chain<'_>)> {
                     while i < doc.len()
                         && !matches!(
                             &doc[i],
-                            DocE::Group(GroupAnn::Priority | GroupAnn::Transparent, _)
+                            Elem::Group(GroupKind::Priority | GroupKind::Transparent, _)
                         )
                     {
                         i += 1;
@@ -625,7 +625,7 @@ struct Checkpoint {
 }
 
 fn layout_greedy(target_width: usize, indent_width: usize, doc: Doc) -> String {
-    let doc = vec![DocE::Group(GroupAnn::Regular, doc.fixup())];
+    let doc = vec![Elem::Group(GroupKind::Regular, doc.fixup())];
 
     let mut renderer = Renderer {
         out: String::new(),
@@ -667,15 +667,15 @@ impl Renderer {
         self.indents.last().map_or(0, |e| e.nest)
     }
 
-    fn render_doc(&mut self, doc: &[DocE], lookahead: Look<'_>) {
-        let mut chain: Vec<&[DocE]> = Vec::with_capacity(1 + lookahead.len());
+    fn render_doc(&mut self, doc: &[Elem], lookahead: Look<'_>) {
+        let mut chain: Vec<&[Elem]> = Vec::with_capacity(1 + lookahead.len());
         for (i, elem) in doc.iter().enumerate() {
             // Only Group and the soft spacings consult the lookahead; for the
             // common Text/hard-spacing case skip even the small chain rebuild.
             let needs_rest = match elem {
-                DocE::Group(_, _) => true,
-                DocE::Spacing(Spacing::Softbreak | Spacing::Softspace) => self.col != 0,
-                DocE::Text(_, _, TextAnn::TrailingComment, _) => self.col == 2,
+                Elem::Group(_, _) => true,
+                Elem::Spacing(Spacing::Softbreak | Spacing::Softspace) => self.col != 0,
+                Elem::Text(_, _, TextKind::TrailingComment, _) => self.col == 2,
                 _ => false,
             };
             if needs_rest {
@@ -689,14 +689,14 @@ impl Renderer {
         }
     }
 
-    fn render_elem(&mut self, elem: &DocE, lookahead: Look<'_>) {
+    fn render_elem(&mut self, elem: &Elem, lookahead: Look<'_>) {
         let at_line_start = self.col == 0;
 
         match elem {
             // `goOne` special case: shift a trailing comment by one column so
             // the re-parser associates it with the same opener token
             // (idempotency).
-            DocE::Text(_, _, TextAnn::TrailingComment, t)
+            Elem::Text(_, _, TextKind::TrailingComment, t)
                 if self.col == 2 && next_indent(lookahead).0 > self.line_nest() =>
             {
                 self.col += 1 + text_width(t);
@@ -704,12 +704,12 @@ impl Renderer {
                 self.out.push_str(t);
             }
 
-            DocE::Text(nest, offset, _ann, t) => self.render_text(*nest, *offset, t),
+            Elem::Text(nest, offset, _ann, t) => self.render_text(*nest, *offset, t),
 
             // At start of line drop any spacing; the next Text emits indentation.
-            DocE::Spacing(_) if at_line_start => {}
+            Elem::Spacing(_) if at_line_start => {}
 
-            DocE::Spacing(spacing) => match spacing {
+            Elem::Spacing(spacing) => match spacing {
                 Spacing::Break | Spacing::Space | Spacing::Hardline => {
                     self.col = 0;
                     self.out.push('\n');
@@ -747,9 +747,9 @@ impl Renderer {
                 }
             },
 
-            DocE::Group(ann, body) => self.render_group(*ann, body, lookahead),
+            Elem::Group(ann, body) => self.render_group(*ann, body, lookahead),
 
-            DocE::Nest(..) => unreachable!("Nest consumed by fixup"),
+            Elem::Nest(..) => unreachable!("Nest consumed by fixup"),
         }
     }
 
@@ -823,8 +823,8 @@ impl Renderer {
 
     /// Render a chain of slices as one document, threading lookahead so each
     /// slice sees the remaining slices plus the outer lookahead.
-    fn render_chain(&mut self, chain: &[&[DocE]], lookahead: Look<'_>) {
-        let mut lookahead_buf: Vec<&[DocE]> = Vec::with_capacity(chain.len() + lookahead.len());
+    fn render_chain(&mut self, chain: &[&[Elem]], lookahead: Look<'_>) {
+        let mut lookahead_buf: Vec<&[Elem]> = Vec::with_capacity(chain.len() + lookahead.len());
         for i in 0..chain.len() {
             lookahead_buf.clear();
             lookahead_buf.extend_from_slice(&chain[i + 1..]);
@@ -836,7 +836,7 @@ impl Renderer {
     /// Try to render a group compactly. On success, appends to `out` and
     /// updates state in place; on failure leaves both untouched.
     /// Mirrors `goGroup` in Nixfmt/Predoc.hs.
-    fn try_render_group(&mut self, grp: &[&[DocE]], lookahead: Look<'_>) -> bool {
+    fn try_render_group(&mut self, grp: &[&[Elem]], lookahead: Look<'_>) -> bool {
         if grp.iter().all(|s| s.is_empty()) {
             return true;
         }
@@ -845,15 +845,15 @@ impl Renderer {
             // At start of line a leading spacing is meaningless (the next
             // Text emits indentation), so drop one leading Spacing — looking
             // through a leading nested group — before measuring.
-            let mut grp: Vec<&[DocE]> = grp.iter().copied().filter(|s| !s.is_empty()).collect();
+            let mut grp: Vec<&[Elem]> = grp.iter().copied().filter(|s| !s.is_empty()).collect();
             match grp[0].first() {
-                Some(DocE::Spacing(_)) => grp[0] = &grp[0][1..],
-                Some(DocE::Group(ann, inner))
-                    if matches!(inner.first(), Some(DocE::Spacing(_))) =>
+                Some(Elem::Spacing(_)) => grp[0] = &grp[0][1..],
+                Some(Elem::Group(ann, inner))
+                    if matches!(inner.first(), Some(Elem::Spacing(_))) =>
                 {
                     // Rebuilding the subgroup yields an owned element that
                     // `grp` must borrow, so recurse with it spliced in front.
-                    let owned = [DocE::Group(*ann, Doc(inner[1..].to_vec()))];
+                    let owned = [Elem::Group(*ann, Doc(inner[1..].to_vec()))];
                     grp[0] = &grp[0][1..];
                     grp.insert(0, &owned);
                     return self.try_render_group(&grp, lookahead);
@@ -923,22 +923,22 @@ impl Renderer {
     }
 
     /// Render a group (try compact first, then expand).
-    fn render_group(&mut self, ann: GroupAnn, body: &[DocE], lookahead: Look<'_>) {
+    fn render_group(&mut self, ann: GroupKind, body: &[Elem], lookahead: Look<'_>) {
         if self.try_render_group(&[body], lookahead) {
             return;
         }
 
-        if ann != GroupAnn::Transparent && has_priority_groups(body) {
+        if ann != GroupKind::Transparent && has_priority_groups(body) {
             let checkpoint = self.checkpoint();
             for (pre, prio, post) in priority_groups(body).into_iter().rev() {
-                let mut pre_lookahead: Vec<&[DocE]> =
+                let mut pre_lookahead: Vec<&[Elem]> =
                     Vec::with_capacity(prio.len() + post.len() + lookahead.len());
                 pre_lookahead.extend_from_slice(&prio);
                 pre_lookahead.extend_from_slice(&post);
                 pre_lookahead.extend_from_slice(lookahead);
                 if self.try_render_group(&pre, &pre_lookahead) {
                     let unexpanded_post = unexpand_spacing(&post);
-                    let mut prio_lookahead: Vec<&[DocE]> = Vec::with_capacity(1 + lookahead.len());
+                    let mut prio_lookahead: Vec<&[Elem]> = Vec::with_capacity(1 + lookahead.len());
                     prio_lookahead.push(&unexpanded_post);
                     prio_lookahead.extend_from_slice(lookahead);
                     self.render_chain(&prio, &prio_lookahead);

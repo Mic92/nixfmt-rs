@@ -46,18 +46,18 @@ side by side.
 The Wadler/Leijen-style layout engine, ported from `Nixfmt/Predoc.hs`.
 
 ```rust
-pub type Doc = Vec<DocE>;
-enum DocE { Text(..), Spacing(Spacing), Group(GroupAnn, Doc) }
+pub type Doc = Vec<Elem>;
+enum Elem { Text(..), Spacing(Spacing), Group(GroupKind, Doc) }
 
 enum Spacing  { Softbreak, Break, Hardspace, Softspace, Space,
                 Hardline, Emptyline, Newlines(usize) }
-enum GroupAnn { Regular, Transparent, Priority }
+enum GroupKind { Regular, Transparent, Priority }
 ```
 
 - **`fixup`** normalises the tree: merges adjacent `Spacing` to their
   maximum, floats spacing out of group boundaries, propagates nesting.
 - **`layout`** is the greedy renderer: for each `Group`, try the
-  single-line form (`fits`, which drops `TextAnn::Trailing` commas); if
+  single-line form (`fits`, which drops `TextKind::Trailing` commas); if
   it overflows, try expanding only the contained `Priority` sub-groups
   (last first); otherwise expand the whole group.
 

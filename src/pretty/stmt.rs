@@ -1,4 +1,4 @@
-use crate::predoc::{Doc, DocE, GroupAnn, Pretty, hardline, line};
+use crate::predoc::{Doc, Elem, Pretty, hardline, line};
 use crate::types::{Binder, Expression, Items, Leaf, Parameter, Trivia, Trivium};
 
 use super::term::push_pretty_items;
@@ -20,7 +20,7 @@ pub(super) fn push_absorb_abs(doc: &mut Doc, depth: usize, expr: &Expression) {
         }
         _ if expr.is_absorbable() => {
             doc.hardspace();
-            doc.group_ann(GroupAnn::Priority, |priority_group| {
+            doc.priority_group(|priority_group| {
                 push_absorb_expr(priority_group, Width::Regular, expr);
             });
         }
@@ -113,7 +113,7 @@ pub(super) fn pretty_with(
 #[allow(clippy::too_many_arguments)]
 pub(super) fn pretty_if(
     doc: &mut Doc,
-    sep: DocE,
+    sep: Elem,
     if_kw: &Leaf,
     cond: &Expression,
     then_kw: &Leaf,

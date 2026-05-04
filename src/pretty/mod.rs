@@ -2,7 +2,7 @@
 //!
 //! Implements formatting rules from nixfmt's Pretty.hs
 
-use crate::predoc::{Doc, GroupAnn, Pretty, hardline, line, linebreak};
+use crate::predoc::{Doc, Pretty, hardline, line, linebreak};
 use crate::types::{
     Ann, Binder, Expression, Item, Parameter, Selector, SimpleSelector, Term, Token,
     TrailingComment, Trivia, Trivium, Whole,
@@ -202,7 +202,7 @@ impl Pretty for Binder {
                             push_absorb_rhs(inner, expr);
                         } else {
                             inner.linebreak();
-                            inner.group_ann(GroupAnn::Priority, |g| {
+                            inner.priority_group(|g| {
                                 push_absorb_rhs(g, expr);
                             });
                         }
@@ -369,7 +369,7 @@ impl Pretty for Expression {
                 kw_else,
                 else_branch,
             } => {
-                doc.group_ann(GroupAnn::Regular, |g| {
+                doc.group(|g| {
                     // Only the outermost `if` keyword has its trailing comment
                     // hoisted; nested `else if` keywords keep theirs in place.
                     pretty_if(

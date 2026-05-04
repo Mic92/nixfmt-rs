@@ -1,4 +1,4 @@
-use crate::predoc::{Doc, DocE, Pretty, TextAnn, newline, text_width};
+use crate::predoc::{Doc, Elem, Pretty, TextKind, newline, text_width};
 use crate::types::{Expression, StringPart};
 
 use super::term::push_parenthesized_inner;
@@ -135,7 +135,7 @@ pub(super) fn push_pretty_simple_string(doc: &mut Doc, parts: &[Vec<StringPart>]
     doc.group(|d| {
         d.text("\"");
         // Literal \n avoids the indentation that newline() would inject
-        let newline_doc = [DocE::Text(0, 0, TextAnn::Regular, "\n".to_string())];
+        let newline_doc = [Elem::Text(0, 0, TextKind::Regular, "\n".to_string())];
         d.sep_by(&newline_doc, parts.iter().cloned());
         d.text("\"");
     });

@@ -1,4 +1,4 @@
-use crate::predoc::{Doc, DocE, Pretty, hardline, hardspace, line};
+use crate::predoc::{Doc, Elem, Pretty, hardline, hardspace, line};
 use crate::types::{Ann, Binder, Expression, Item, Items, Leaf, Term, Token, Trivium};
 
 use super::Width;
@@ -56,7 +56,7 @@ pub(super) fn push_pretty_term_wide(doc: &mut Doc, term: &Term) {
 /// `renderList` from Pretty.hs.
 pub(super) fn push_render_list(
     doc: &mut Doc,
-    item_sep: &DocE,
+    item_sep: &Elem,
     open: &Ann<Token>,
     items: &Items<Term>,
     close: &Ann<Token>,
@@ -139,7 +139,7 @@ pub(super) fn push_pretty_items<T: Pretty>(doc: &mut Doc, items: &Items<T>) {
     push_pretty_items_sep(doc, items, &hardline());
 }
 
-fn push_pretty_items_sep<T: Pretty>(doc: &mut Doc, items: &Items<T>, sep: &DocE) {
+fn push_pretty_items_sep<T: Pretty>(doc: &mut Doc, items: &Items<T>, sep: &Elem) {
     let items = &items.0;
     match items.as_slice() {
         [] => {}

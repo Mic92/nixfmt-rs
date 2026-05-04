@@ -1,4 +1,4 @@
-use crate::predoc::{Doc, DocE, GroupAnn, Pretty, hardspace, line};
+use crate::predoc::{Doc, Elem, Pretty, hardspace, line};
 use crate::types::{
     Ann, Binder, Expression, FirstToken, Item, Items, Parameter, Term, Token, Trivia,
 };
@@ -77,7 +77,7 @@ pub(super) fn push_absorb_expr(doc: &mut Doc, width: Width, expr: &Expression) {
             let Expression::Term(t) = &**body else {
                 unreachable!()
             };
-            doc.group_ann(GroupAnn::Regular, |g| {
+            doc.group(|g| {
                 g.linebreak();
                 with_kw.pretty(g);
                 g.hardspace();
@@ -86,7 +86,7 @@ pub(super) fn push_absorb_expr(doc: &mut Doc, width: Width, expr: &Expression) {
                 });
                 semicolon.pretty(g);
                 g.hardspace();
-                g.group_ann(GroupAnn::Priority, |pg| push_pretty_term_wide(pg, t));
+                g.priority_group(|pg| push_pretty_term_wide(pg, t));
             });
         }
         _ => expr.pretty(doc),
@@ -94,7 +94,7 @@ pub(super) fn push_absorb_expr(doc: &mut Doc, width: Width, expr: &Expression) {
 }
 
 /// `nest $ lead <> group …`
-fn push_nested_rhs(doc: &mut Doc, lead: DocE, f: impl FnOnce(&mut Doc)) {
+fn push_nested_rhs(doc: &mut Doc, lead: Elem, f: impl FnOnce(&mut Doc)) {
     doc.nested(|d| {
         d.push_raw(lead);
         d.group(f);
@@ -204,10 +204,10 @@ pub(super) fn push_absorb_rhs(doc: &mut Doc, expr: &Expression) {
                     g.line();
                     left.pretty(g);
                     g.line();
-                    g.group_ann(GroupAnn::Transparent, |tg| {
+                    g.transparent_group(|tg| {
                         op.pretty(tg);
                         tg.hardspace();
-                        tg.group_ann(GroupAnn::Priority, |pg| {
+                        tg.priority_group(|pg| {
                             push_pretty_term_wide(pg, t);
                         });
                     });
@@ -232,7 +232,7 @@ pub(super) fn push_absorb_paren(
     expr: &Expression,
     close: &Ann<Token>,
 ) {
-    doc.group_ann(GroupAnn::Priority, |g| {
+    doc.priority_group(|g| {
         g.nested(|outer| {
             open.pretty_head(outer);
             outer.linebreak();

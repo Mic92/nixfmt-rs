@@ -37,7 +37,7 @@ pub enum Spacing {
 ///
 /// Controls how groups are expanded during layout
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum GroupAnn {
+pub enum GroupKind {
     /// Regular group - expand if doesn't fit
     Regular,
     /// Priority group - try to keep compressed longer
@@ -52,7 +52,7 @@ pub enum GroupAnn {
 ///
 /// Controls how text contributes to line length calculations
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum TextAnn {
+pub enum TextKind {
     /// Regular text
     Regular,
     /// Comment (doesn't count towards line length limits)
@@ -64,11 +64,11 @@ pub enum TextAnn {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub enum DocE {
+pub enum Elem {
     /// (`nesting_depth`, offset, annotation, text)
-    Text(usize, usize, TextAnn, String),
+    Text(usize, usize, TextKind, String),
     Spacing(Spacing),
-    Group(GroupAnn, Doc),
+    Group(GroupKind, Doc),
     /// Indentation delta marker (nest, offset). Emitted in begin/end pairs by
     /// [`Doc::nested`]/[`Doc::offset`] and folded into `Text` during `fixup`, so
     /// the renderer never sees it.
@@ -77,49 +77,49 @@ pub enum DocE {
 
 /// A document under construction.
 ///
-/// Wraps a `Vec<DocE>` and exposes builder methods (`text`, `group`, `nested`,
+/// Wraps a `Vec<Elem>` and exposes builder methods (`text`, `group`, `nested`,
 /// …) defined in [`builder`]. The inner `Vec` is `pub(crate)` so the renderer
 /// and fixup pass can perform in-place `Vec` surgery without going through the
 /// builder API; everything outside `predoc` should treat `Doc` as opaque and
 /// use the methods.
 #[derive(Debug, Default, Clone, PartialEq, Eq)]
-pub struct Doc(pub(crate) Vec<DocE>);
+pub struct Doc(pub(crate) Vec<Elem>);
 
 impl Doc {
     pub const fn new() -> Self {
         Self(Vec::new())
     }
-    /// Escape hatch for pushing a pre-built [`DocE`]. Prefer the typed
+    /// Escape hatch for pushing a pre-built [`Elem`]. Prefer the typed
     /// builder methods (`text`, `hardline`, …) where one exists.
-    pub fn push_raw(&mut self, e: DocE) -> &mut Self {
+    pub fn push_raw(&mut self, e: Elem) -> &mut Self {
         self.0.push(e);
         self
     }
 }
 
 impl std::ops::Deref for Doc {
-    type Target = [DocE];
-    fn deref(&self) -> &[DocE] {
+    type Target = [Elem];
+    fn deref(&self) -> &[Elem] {
         &self.0
     }
 }
 
 impl IntoIterator for Doc {
-    type Item = DocE;
-    type IntoIter = std::vec::IntoIter<DocE>;
+    type Item = Elem;
+    type IntoIter = std::vec::IntoIter<Elem>;
     fn into_iter(self) -> Self::IntoIter {
         self.0.into_iter()
     }
 }
 
-impl Extend<DocE> for Doc {
-    fn extend<I: IntoIterator<Item = DocE>>(&mut self, iter: I) {
+impl Extend<Elem> for Doc {
+    fn extend<I: IntoIterator<Item = Elem>>(&mut self, iter: I) {
         self.0.extend(iter);
     }
 }
 
-impl From<Vec<DocE>> for Doc {
-    fn from(v: Vec<DocE>) -> Self {
+impl From<Vec<Elem>> for Doc {
+    fn from(v: Vec<Elem>) -> Self {
         Self(v)
     }
 }
@@ -160,14 +160,14 @@ impl Doc {
     /// contains hard line breaks or would exceed `limit` columns.
     pub fn try_compact(&self, mut limit: Option<i32>) -> Option<Self> {
         let mut result = Vec::new();
-        let mut stack: Vec<std::slice::Iter<'_, DocE>> = vec![self.iter()];
+        let mut stack: Vec<std::slice::Iter<'_, Elem>> = vec![self.iter()];
         while let Some(iter) = stack.last_mut() {
             let Some(elem) = iter.next() else {
                 stack.pop();
                 continue;
             };
             match elem {
-                DocE::Text(_, _, _, t) => {
+                Elem::Text(_, _, _, t) => {
                     if let Some(n) = limit.as_mut() {
                         #[allow(clippy::cast_possible_truncation, clippy::cast_possible_wrap)]
                         {
@@ -176,16 +176,16 @@ impl Doc {
                     }
                     result.push(elem.clone());
                 }
-                DocE::Spacing(Spacing::Hardspace | Spacing::Space | Spacing::Softspace) => {
+                Elem::Spacing(Spacing::Hardspace | Spacing::Space | Spacing::Softspace) => {
                     if let Some(n) = limit.as_mut() {
                         *n -= 1;
                     }
-                    result.push(DocE::Spacing(Spacing::Hardspace));
+                    result.push(Elem::Spacing(Spacing::Hardspace));
                 }
-                DocE::Spacing(Spacing::Break | Spacing::Softbreak) => {}
-                DocE::Spacing(_) => return None,
-                DocE::Nest(..) => result.push(elem.clone()),
-                DocE::Group(_, inner) => stack.push(inner.iter()),
+                Elem::Spacing(Spacing::Break | Spacing::Softbreak) => {}
+                Elem::Spacing(_) => return None,
+                Elem::Nest(..) => result.push(elem.clone()),
+                Elem::Group(_, inner) => stack.push(inner.iter()),
             }
             if matches!(limit, Some(n) if n < 0) {
                 return None;
