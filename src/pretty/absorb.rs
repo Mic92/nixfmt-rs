@@ -77,7 +77,7 @@ pub(super) fn push_absorb_expr(doc: &mut Doc, width: Width, expr: &Expression) {
             let Expression::Term(t) = &**body else {
                 unreachable!()
             };
-            doc.group_ann(GroupAnn::RegularG, |g| {
+            doc.group_ann(GroupAnn::Regular, |g| {
                 g.linebreak();
                 with_kw.pretty(g);
                 g.hardspace();

@@ -1,4 +1,4 @@
-use crate::predoc::{Doc, DocE, Pretty, TextAnn, newline, text_width, try_compact};
+use crate::predoc::{Doc, DocE, Pretty, TextAnn, newline, text_width};
 use crate::types::{Expression, StringPart};
 
 use super::term::push_parenthesized_inner;
@@ -12,7 +12,7 @@ fn is_spaces(s: &str) -> bool {
 fn push_interpolation_braces(doc: &mut Doc, max_width: i32, body: Doc) {
     doc.group(|g| {
         g.text("${");
-        match try_compact(Some(max_width), &body) {
+        match body.try_compact(Some(max_width)) {
             Some(compact) => g.extend(compact),
             None => {
                 g.nested(|n| {
@@ -52,7 +52,7 @@ impl Pretty for StringPart {
                     doc.text("${");
                     let mut rendered = Doc::new();
                     value.pretty(&mut rendered);
-                    match try_compact(None, &rendered) {
+                    match rendered.try_compact(None) {
                         Some(compact) => doc.extend(compact),
                         None => doc.extend(rendered),
                     }
@@ -135,7 +135,7 @@ pub(super) fn push_pretty_simple_string(doc: &mut Doc, parts: &[Vec<StringPart>]
     doc.group(|d| {
         d.text("\"");
         // Literal \n avoids the indentation that newline() would inject
-        let newline_doc = [DocE::Text(0, 0, TextAnn::RegularT, "\n".to_string())];
+        let newline_doc = [DocE::Text(0, 0, TextAnn::Regular, "\n".to_string())];
         d.sep_by(&newline_doc, parts.iter().cloned());
         d.text("\"");
     });

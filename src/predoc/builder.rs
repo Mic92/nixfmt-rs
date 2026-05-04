@@ -20,7 +20,7 @@ impl Doc {
     }
 
     pub fn text(&mut self, s: impl Into<String>) -> &mut Self {
-        self.text_ann(TextAnn::RegularT, s)
+        self.text_ann(TextAnn::Regular, s)
     }
 
     pub fn comment(&mut self, s: impl Into<String>) -> &mut Self {
@@ -37,7 +37,7 @@ impl Doc {
     }
 
     pub fn group(&mut self, f: impl FnOnce(&mut Self)) -> &mut Self {
-        self.group_ann(GroupAnn::RegularG, f)
+        self.group_ann(GroupAnn::Regular, f)
     }
 
     pub fn group_ann(&mut self, ann: GroupAnn, f: impl FnOnce(&mut Self)) -> &mut Self {

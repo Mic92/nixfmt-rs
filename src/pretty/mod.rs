@@ -369,7 +369,7 @@ impl Pretty for Expression {
                 kw_else,
                 else_branch,
             } => {
-                doc.group_ann(GroupAnn::RegularG, |g| {
+                doc.group_ann(GroupAnn::Regular, |g| {
                     // Only the outermost `if` keyword has its trailing comment
                     // hoisted; nested `else if` keywords keep theirs in place.
                     pretty_if(

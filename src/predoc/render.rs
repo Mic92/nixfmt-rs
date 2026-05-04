@@ -56,8 +56,17 @@ pub struct RenderConfig {
     pub indent_width: usize,
 }
 
-pub fn render_with_config(doc: Doc, config: &RenderConfig) -> String {
-    layout_greedy(config.width, config.indent_width, doc)
+impl Doc {
+    pub fn render(self, config: &RenderConfig) -> String {
+        layout_greedy(config.width, config.indent_width, self)
+    }
+
+    /// Normalise a freshly built document for rendering: lift hard spacings
+    /// and comments out of groups, merge adjacent spacings, drop empty groups.
+    pub fn fixup(mut self) -> Self {
+        fixup_mut(&mut self.0, 0, 0);
+        self
+    }
 }
 
 /// `simplifyGroup` (Predoc.hs): unwrap `Group ann [Group ann xs]` to `xs`.
@@ -106,20 +115,27 @@ impl DocE {
     }
 }
 
-/// Merge two spacing elements (take maximum in ordering)
-fn merge_spacings(a: Spacing, b: Spacing) -> Spacing {
-    use Spacing::{Break, Emptyline, Hardspace, Newlines, Softbreak, Softspace, Space};
+impl Spacing {
+    /// Combine two adjacent spacings into one, taking the stronger (per the
+    /// `Ord` impl) and accumulating `Newlines` counts.
+    fn merge(self, other: Self) -> Self {
+        use Spacing::{Break, Emptyline, Hardspace, Newlines, Softbreak, Softspace, Space};
 
-    let (min_sp, max_sp) = if a <= b { (a, b) } else { (b, a) };
+        let (lo, hi) = if self <= other {
+            (self, other)
+        } else {
+            (other, self)
+        };
 
-    match (min_sp, max_sp) {
-        (Break, Softspace | Hardspace) => Space,
-        (Softbreak, Hardspace) => Softspace,
-        (Newlines(x), Newlines(y)) => Newlines(x + y),
-        (Emptyline, Newlines(x)) => Newlines(x + 2),
-        (Hardspace, Newlines(x)) => Newlines(x),
-        (_, Newlines(x)) => Newlines(x + 1),
-        _ => max_sp,
+        match (lo, hi) {
+            (Break, Softspace | Hardspace) => Space,
+            (Softbreak, Hardspace) => Softspace,
+            (Newlines(x), Newlines(y)) => Newlines(x + y),
+            (Emptyline, Newlines(x)) => Newlines(x + 2),
+            (Hardspace, Newlines(x)) => Newlines(x),
+            (_, Newlines(x)) => Newlines(x + 1),
+            _ => hi,
+        }
     }
 }
 
@@ -148,15 +164,6 @@ fn has_priority_groups(doc: &[DocE]) -> bool {
         DocE::Group(GroupAnn::Transparent, body) => has_priority_groups(body),
         _ => false,
     })
-}
-
-/// Fix up a Doc by:
-/// - Moving hard spacings and comments out of groups
-/// - Merging consecutive spacings
-/// - Removing empty groups
-pub fn fixup(mut doc: Doc) -> Doc {
-    fixup_mut(&mut doc.0, 0, 0);
-    doc
 }
 
 /// Cheap placeholder used to vacate a slot during the read/write compaction.
@@ -213,13 +220,13 @@ fn fixup_mut(doc: &mut Vec<DocE>, mut nest_acc: isize, mut offset_acc: isize) {
             // the previous written slot when a `Nest` marker sat in between.
             DocE::Spacing(a) => {
                 if let Some(DocE::Spacing(b)) = doc.get(read_idx) {
-                    doc[read_idx] = DocE::Spacing(merge_spacings(a, *b));
+                    doc[read_idx] = DocE::Spacing(a.merge(*b));
                 } else if matches!(
                     write_idx.checked_sub(1).map(|i| &doc[i]),
                     Some(DocE::Spacing(_))
                 ) {
                     if let DocE::Spacing(b) = &mut doc[write_idx - 1] {
-                        *b = merge_spacings(*b, a);
+                        *b = b.merge(a);
                     }
                 } else {
                     doc[write_idx] = DocE::Spacing(a);
@@ -287,7 +294,7 @@ fn fixup_mut(doc: &mut Vec<DocE>, mut nest_acc: isize, mut offset_acc: isize) {
                             && let (DocE::Spacing(prev), Some(DocE::Spacing(first))) =
                                 (&doc[write_idx - 1], pre.first())
                         {
-                            let merged = merge_spacings(*prev, *first);
+                            let merged = prev.merge(*first);
                             doc[write_idx - 1] = DocE::Spacing(merged);
                             pre.0.remove(0);
                         }
@@ -367,7 +374,7 @@ fn fits_impl<const WRITE: bool>(
         };
 
         if let Some(DocE::Spacing(s)) = elem {
-            pending = Some(pending.map_or(*s, |p| merge_spacings(p, *s)));
+            pending = Some(pending.map_or(*s, |p| p.merge(*s)));
             continue;
         }
 
@@ -391,7 +398,7 @@ fn fits_impl<const WRITE: bool>(
 
         match elem {
             None => return Some(width),
-            Some(DocE::Text(_, _, TextAnn::RegularT, t)) => {
+            Some(DocE::Text(_, _, TextAnn::Regular, t)) => {
                 let len = text_width(t);
                 if WRITE {
                     out.push_str(t);
@@ -458,7 +465,7 @@ fn first_line_width(chain: Look<'_>) -> usize {
             }
         };
         if let Some(DocE::Spacing(s)) = elem {
-            pending = Some(pending.map_or(*s, |p| merge_spacings(p, *s)));
+            pending = Some(pending.map_or(*s, |p| p.merge(*s)));
             continue;
         }
         if let Some(spacing) = pending.take() {
@@ -491,7 +498,7 @@ fn first_line_fits(target_width: usize, max_width: usize, chain: Look<'_>) -> bo
         }
         let elem = iter.next();
         if let Some(DocE::Spacing(s)) = elem {
-            pending = Some(pending.map_or(*s, |p| merge_spacings(p, *s)));
+            pending = Some(pending.map_or(*s, |p| p.merge(*s)));
             continue;
         }
         if let Some(spacing) = pending.take() {
@@ -506,7 +513,7 @@ fn first_line_fits(target_width: usize, max_width: usize, chain: Look<'_>) -> bo
         }
         match elem {
             None => return max - budget <= target,
-            Some(DocE::Text(_, _, TextAnn::RegularT, t)) => budget -= text_width(t).cast_signed(),
+            Some(DocE::Text(_, _, TextAnn::Regular, t)) => budget -= text_width(t).cast_signed(),
             Some(DocE::Text(..) | DocE::Nest(..)) => {}
             Some(DocE::Group(_, body)) => {
                 rest.clear();
@@ -618,7 +625,7 @@ struct Checkpoint {
 }
 
 fn layout_greedy(target_width: usize, indent_width: usize, doc: Doc) -> String {
-    let doc = vec![DocE::Group(GroupAnn::RegularG, fixup(doc))];
+    let doc = vec![DocE::Group(GroupAnn::Regular, doc.fixup())];
 
     let mut renderer = Renderer {
         out: String::new(),

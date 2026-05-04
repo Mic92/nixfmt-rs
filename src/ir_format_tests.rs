@@ -11,7 +11,7 @@ oracle_tests! {
 
     /// Regression test: simple parameter pattern should have outer Group wrapper
     ///
-    /// Issue: nixfmt-rs was missing the outer `Group RegularG` wrapper that the
+    /// Issue: nixfmt-rs was missing the outer `Group Regular` wrapper that the
     /// reference implementation adds when pretty-printing a Whole Expression (File).
     /// This has been fixed by wrapping `Whole<T>::pretty` in `Doc::group()`.
     test_simple_parameter_pattern => ["{ a, b }: x"],
@@ -21,10 +21,10 @@ oracle_tests! {
 
     test_update_absorbable_rhs_structure => ["attrs // { inherit value; }"],
 
-    // Selection as a non-final argument must use a RegularG (not Priority) group.
+    // Selection as a non-final argument must use a Regular (not Priority) group.
     test_app_selection_inner_arg => ["f a.b c"],
 
-    // Two consecutive list arguments share a RegularG so they wrap together.
+    // Two consecutive list arguments share a Regular so they wrap together.
     test_app_two_consecutive_list_args => ["f [ 1 ] [ 2 ] x"],
 
     // Two trailing list arguments take the dedicated prettyApp branch.

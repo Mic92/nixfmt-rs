@@ -7,9 +7,7 @@ mod builder;
 mod render;
 
 pub use builder::{hardline, hardspace, line, linebreak, newline};
-#[cfg(any(test, feature = "debug-dump"))]
-pub use render::fixup;
-pub use render::{RenderConfig, render_with_config};
+pub use render::RenderConfig;
 
 /// Spacing types for layout
 ///
@@ -41,7 +39,7 @@ pub enum Spacing {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum GroupAnn {
     /// Regular group - expand if doesn't fit
-    RegularG,
+    Regular,
     /// Priority group - try to keep compressed longer
     /// Used to compact things left and right of multiline elements
     Priority,
@@ -56,7 +54,7 @@ pub enum GroupAnn {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum TextAnn {
     /// Regular text
-    RegularT,
+    Regular,
     /// Comment (doesn't count towards line length limits)
     Comment,
     /// Trailing comment (single-line comment at end of line)
@@ -156,42 +154,43 @@ pub fn text_width(s: &str) -> usize {
     s.chars().count()
 }
 
-/// Manually force a doc to its compact layout, replacing all soft whitespace.
-/// Recurses into inner groups (flattening them). Returns `None` if the doc
-/// contains hard line breaks or exceeds the optional width limit.
-/// Mirrors Haskell `try_compact` (Predoc.hs).
-pub fn try_compact(mut limit: Option<i32>, doc: &[DocE]) -> Option<Doc> {
-    let mut result = Vec::new();
-    let mut stack: Vec<std::slice::Iter<'_, DocE>> = vec![doc.iter()];
-    while let Some(iter) = stack.last_mut() {
-        let Some(elem) = iter.next() else {
-            stack.pop();
-            continue;
-        };
-        match elem {
-            DocE::Text(_, _, _, t) => {
-                if let Some(n) = limit.as_mut() {
-                    #[allow(clippy::cast_possible_truncation, clippy::cast_possible_wrap)]
-                    {
-                        *n -= text_width(t) as i32;
+impl Doc {
+    /// Force this doc to its compact (single-line) layout: soft spacings become
+    /// hard spaces, breaks vanish, groups flatten. Returns `None` if the doc
+    /// contains hard line breaks or would exceed `limit` columns.
+    pub fn try_compact(&self, mut limit: Option<i32>) -> Option<Self> {
+        let mut result = Vec::new();
+        let mut stack: Vec<std::slice::Iter<'_, DocE>> = vec![self.iter()];
+        while let Some(iter) = stack.last_mut() {
+            let Some(elem) = iter.next() else {
+                stack.pop();
+                continue;
+            };
+            match elem {
+                DocE::Text(_, _, _, t) => {
+                    if let Some(n) = limit.as_mut() {
+                        #[allow(clippy::cast_possible_truncation, clippy::cast_possible_wrap)]
+                        {
+                            *n -= text_width(t) as i32;
+                        }
                     }
+                    result.push(elem.clone());
                 }
-                result.push(elem.clone());
-            }
-            DocE::Spacing(Spacing::Hardspace | Spacing::Space | Spacing::Softspace) => {
-                if let Some(n) = limit.as_mut() {
-                    *n -= 1;
+                DocE::Spacing(Spacing::Hardspace | Spacing::Space | Spacing::Softspace) => {
+                    if let Some(n) = limit.as_mut() {
+                        *n -= 1;
+                    }
+                    result.push(DocE::Spacing(Spacing::Hardspace));
                 }
-                result.push(DocE::Spacing(Spacing::Hardspace));
+                DocE::Spacing(Spacing::Break | Spacing::Softbreak) => {}
+                DocE::Spacing(_) => return None,
+                DocE::Nest(..) => result.push(elem.clone()),
+                DocE::Group(_, inner) => stack.push(inner.iter()),
             }
-            DocE::Spacing(Spacing::Break | Spacing::Softbreak) => {}
-            DocE::Spacing(_) => return None,
-            DocE::Nest(..) => result.push(elem.clone()),
-            DocE::Group(_, inner) => stack.push(inner.iter()),
+            if matches!(limit, Some(n) if n < 0) {
+                return None;
+            }
         }
-        if matches!(limit, Some(n) if n < 0) {
-            return None;
-        }
+        Some(Self(result))
     }
-    Some(Doc(result))
 }

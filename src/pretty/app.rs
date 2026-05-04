@@ -1,4 +1,4 @@
-use crate::predoc::{Doc, DocE, GroupAnn, Pretty, line, try_compact};
+use crate::predoc::{Doc, DocE, GroupAnn, Pretty, line};
 use crate::types::{Expression, FirstToken, Item, Parameter, Term, Token, Trivia};
 
 use super::absorb::push_absorb_paren;
@@ -92,7 +92,7 @@ fn push_absorb_app(doc: &mut Doc, expr: &Expression, indent_function: bool, comm
     // Selections must not priority-expand: only the `.`-suffix would move,
     // which looks odd.
     let arg_ann = if matches!(**a, Expression::Term(Term::Selection { .. })) {
-        GroupAnn::RegularG
+        GroupAnn::Regular
     } else {
         GroupAnn::Priority
     };
@@ -228,7 +228,7 @@ pub(super) fn push_pretty_app(
 
     // renderSimple
     if expr.is_simple()
-        && let Some(unexpanded) = try_compact(None, &rendered_f)
+        && let Some(unexpanded) = rendered_f.try_compact(None)
     {
         doc.group(|g| {
             g.extend(unexpanded);

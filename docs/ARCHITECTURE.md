@@ -51,7 +51,7 @@ enum DocE { Text(..), Spacing(Spacing), Group(GroupAnn, Doc) }
 
 enum Spacing  { Softbreak, Break, Hardspace, Softspace, Space,
                 Hardline, Emptyline, Newlines(usize) }
-enum GroupAnn { RegularG, Transparent, Priority }
+enum GroupAnn { Regular, Transparent, Priority }
 ```
 
 - **`fixup`** normalises the tree: merges adjacent `Spacing` to their

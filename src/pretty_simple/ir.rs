@@ -56,10 +56,12 @@ impl PrettySimple for Spacing {
 
 impl PrettySimple for GroupAnn {
     fn format<W: Writer>(&self, w: &mut W) {
-        crate::format_enum!(self, w, {
-            RegularG => [],
-            Priority => [],
-            Transparent => [],
+        // Reference `nixfmt --ir` uses Haskell constructor names; preserve
+        // them so the snapshot diffing against the reference stays exact.
+        w.write_plain(match self {
+            Self::Regular => "RegularG",
+            Self::Priority => "Priority",
+            Self::Transparent => "Transparent",
         });
     }
 
@@ -70,11 +72,11 @@ impl PrettySimple for GroupAnn {
 
 impl PrettySimple for TextAnn {
     fn format<W: Writer>(&self, w: &mut W) {
-        crate::format_enum!(self, w, {
-            RegularT => [],
-            Comment => [],
-            TrailingComment => [],
-            Trailing => [],
+        w.write_plain(match self {
+            Self::Regular => "RegularT",
+            Self::Comment => "Comment",
+            Self::TrailingComment => "TrailingComment",
+            Self::Trailing => "Trailing",
         });
     }
 
