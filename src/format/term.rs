@@ -243,34 +243,26 @@ impl<T: Emit> Emit for Items<T> {
 
 impl<T: Emit> Items<T> {
     pub(super) fn emit_sep(&self, doc: &mut Doc, sep: &Elem) {
-        let items = &self.0;
-        match items.as_slice() {
-            [] => {}
-            [item] => item.emit(doc),
-            items => {
-                let mut i = 0;
-                while i < items.len() {
-                    if i > 0 {
-                        doc.push_raw(sep.clone());
-                    }
-
-                    // Special case: language annotation comment followed by string item
-                    if i + 1 < items.len()
-                        && let Item::Comments(trivia) = &items[i]
-                        && trivia.len() == 1
-                        && let ann @ TriviaPiece::LanguageAnnotation(_) = &trivia[0]
-                        && let Item::Item(string_item) = &items[i + 1]
-                    {
-                        ann.emit(doc);
-                        doc.group(|d| string_item.emit(d));
-                        i += 2;
-                        continue;
-                    }
-
-                    items[i].emit(doc);
-                    i += 1;
-                }
+        let mut iter = self.0.iter().peekable();
+        let mut first = true;
+        while let Some(item) = iter.next() {
+            if !first {
+                doc.push_raw(sep.clone());
             }
+            first = false;
+
+            // A lone language-annotation comment fuses with the following item.
+            if let Item::Comments(trivia) = item
+                && let [ann @ TriviaPiece::LanguageAnnotation(_)] = &**trivia
+                && let Some(Item::Item(next)) = iter.peek()
+            {
+                ann.emit(doc);
+                doc.group(|d| next.emit(d));
+                iter.next();
+                continue;
+            }
+
+            item.emit(doc);
         }
     }
 }

@@ -69,7 +69,7 @@ impl Parser {
     fn parse_expression(&mut self) -> Result<Expression> {
         // Match Haskell's order: try operation, then abstraction, then keywords
         match &self.current.value {
-            Token::KLet => {
+            Token::Let => {
                 // Old-style `let { }` vs modern `let ... in ...`
                 if self.lexer.peek() == Some('{') {
                     self.parse_abstraction_or_operation()
@@ -77,9 +77,9 @@ impl Parser {
                     self.parse_let()
                 }
             }
-            Token::KIf => self.parse_if(),
-            Token::KWith => self.parse_with(),
-            Token::KAssert => self.parse_assert(),
+            Token::If => self.parse_if(),
+            Token::With => self.parse_with(),
+            Token::Assert => self.parse_assert(),
             _ => self.parse_abstraction_or_operation(),
         }
     }
@@ -87,7 +87,7 @@ impl Parser {
     /// Parse abstraction or operation (handles ambiguity)
     fn parse_abstraction_or_operation(&mut self) -> Result<Expression> {
         match &self.current.value {
-            Token::TBraceOpen => self.parse_set_parameter_or_literal(),
+            Token::BraceOpen => self.parse_set_parameter_or_literal(),
             Token::Identifier(_) => {
                 // URI check must precede the lambda-parameter check: both look for `:`.
                 if self.looks_like_uri() {
@@ -120,7 +120,7 @@ impl Parser {
         let open_span = open_brace.span;
 
         match &self.current.value {
-            Token::TBraceClose => {
+            Token::BraceClose => {
                 // Empty set: {} - could be parameter or literal
                 let close_brace = self.take_and_advance()?;
 
@@ -153,7 +153,7 @@ impl Parser {
                     Self::check_duplicate_formals(&attrs)?;
 
                     let close_brace =
-                        self.expect_closing_delimiter(open_span, '{', Token::TBraceClose)?;
+                        self.expect_closing_delimiter(open_span, '{', Token::BraceClose)?;
                     let close_span = close_brace.span;
 
                     match self.finish_abstraction(Parameter::Set { open: open_brace, attrs, close: close_brace })? {
@@ -172,17 +172,17 @@ impl Parser {
 
                     let bindings = self.parse_binders()?;
                     let close_brace =
-                        self.expect_closing_delimiter(open_span, '{', Token::TBraceClose)?;
+                        self.expect_closing_delimiter(open_span, '{', Token::BraceClose)?;
                     self.finish_set_literal_expr(open_brace, bindings, close_brace)
                 }
             }
-            Token::TEllipsis => {
+            Token::Ellipsis => {
                 // Definitely a parameter: { ... }
                 let attrs = self.parse_param_attrs()?;
                 Self::check_duplicate_formals(&attrs)?;
 
                 let close_brace =
-                    self.expect_closing_delimiter(open_span, '{', Token::TBraceClose)?;
+                    self.expect_closing_delimiter(open_span, '{', Token::BraceClose)?;
                 let close_span = close_brace.span;
 
                 match self.finish_abstraction(Parameter::Set {
@@ -202,7 +202,7 @@ impl Parser {
                 // Must be set literal with bindings
                 let bindings = self.parse_binders()?;
                 let close_brace =
-                    self.expect_closing_delimiter(open_span, '{', Token::TBraceClose)?;
+                    self.expect_closing_delimiter(open_span, '{', Token::BraceClose)?;
                 self.finish_set_literal_expr(open_brace, bindings, close_brace)
             }
         }
@@ -218,7 +218,7 @@ impl Parser {
     ///   operation, or a hard error).
     fn finish_abstraction(&mut self, first: Parameter) -> Result<SetOrLambda> {
         match self.current.value {
-            Token::TColon => {
+            Token::Colon => {
                 let colon = self.take_and_advance()?;
                 let body = self.parse_expression()?;
                 Ok(SetOrLambda::Lambda(Expression::Lambda {
@@ -227,11 +227,11 @@ impl Parser {
                     body: Box::new(body),
                 }))
             }
-            Token::TAt => {
+            Token::At => {
                 let at_tok = self.take_and_advance()?;
                 let second = self.parse_context_second(&first)?;
-                if !matches!(self.current.value, Token::TColon) {
-                    if matches!(self.current.value, Token::TAt) {
+                if !matches!(self.current.value, Token::Colon) {
+                    if matches!(self.current.value, Token::At) {
                         return Err(ParseError::unexpected(
                             self.current.span,
                             vec!["':'".to_string()],
@@ -244,7 +244,7 @@ impl Parser {
                         Some("use 'name1 @ name2: body' for function parameters".to_string()),
                     ));
                 }
-                let colon = self.expect_token(Token::TColon, "':'")?;
+                let colon = self.expect_token(Token::Colon, "':'")?;
                 let body = self.parse_expression()?;
                 Ok(SetOrLambda::Lambda(Expression::Lambda {
                     param: Parameter::Context {
@@ -283,7 +283,7 @@ impl Parser {
 
         // Member check (?) is handled in parse_application so that `?` binds tighter than prefix `!`/`-`.
 
-        if matches!(self.current.value, Token::TColon | Token::TAt) {
+        if matches!(self.current.value, Token::Colon | Token::At) {
             return Err(Self::reject_non_parameter_expr(&expr));
         }
 
@@ -404,7 +404,7 @@ impl Parser {
             ))
         } else {
             // Special case: comma inside parentheses (common mistake from other languages)
-            if opening_char == '(' && matches!(self.current.value, Token::TComma) {
+            if opening_char == '(' && matches!(self.current.value, Token::Comma) {
                 return Err(ParseError::invalid(
                     self.current.span,
                     "comma not allowed inside parentheses",
@@ -412,7 +412,7 @@ impl Parser {
                 ));
             }
 
-            if opening_char == '{' && matches!(self.current.value, Token::TColon) {
+            if opening_char == '{' && matches!(self.current.value, Token::Colon) {
                 return Err(ParseError::invalid(
                     self.current.span,
                     "unexpected ':' inside '{ ... }'",
@@ -425,7 +425,7 @@ impl Parser {
 
             if matches!(
                 self.current.value,
-                Token::TBraceClose | Token::TBrackClose | Token::TParenClose | Token::TInterClose
+                Token::BraceClose | Token::BrackClose | Token::ParenClose | Token::InterClose
             ) {
                 return Err(ParseError::invalid(
                     self.current.span,
@@ -468,7 +468,7 @@ impl Parser {
     /// Expect a `;` and emit a `MissingToken` error mentioning the preceding
     /// construct otherwise.
     fn expect_semicolon_after(&mut self, after: &'static str) -> Result<Leaf> {
-        if matches!(self.current.value, Token::TSemicolon) {
+        if matches!(self.current.value, Token::Semicolon) {
             self.take_and_advance()
         } else {
             Err(ParseError::missing(self.current.span, "';'", after))

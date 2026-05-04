@@ -29,9 +29,6 @@ impl Expression {
     }
 }
 
-/// Render a `with` expression.
-/// Mirrors Haskell `prettyWith False` (Pretty.hs); the `prettyWith True`
-/// path is open-coded inside `absorb_expr`.
 /// `instance Pretty Expression` clause for `Let` (Pretty.hs).
 pub(super) fn emit_let(
     doc: &mut Doc,
@@ -62,6 +59,8 @@ pub(super) fn emit_let(
     });
 }
 
+/// Mirrors Haskell `prettyWith False` (Pretty.hs); the `prettyWith True`
+/// path is open-coded inside `absorb`.
 pub(super) fn emit_with(
     doc: &mut Doc,
     with: &Leaf,

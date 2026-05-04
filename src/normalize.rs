@@ -257,7 +257,7 @@ fn normalize_expr(e: &mut Expression) {
             normalize_leaf(op);
             normalize_expr(rhs);
         }
-        Expression::MemberCheck {
+        Expression::HasAttr {
             lhs,
             question,
             path,
@@ -268,8 +268,7 @@ fn normalize_expr(e: &mut Expression) {
                 normalize_selector(s);
             }
         }
-        Expression::Negation { minus: op, expr: a }
-        | Expression::Inversion { bang: op, expr: a } => {
+        Expression::Negation { minus: op, expr: a } | Expression::Not { bang: op, expr: a } => {
             normalize_leaf(op);
             normalize_expr(a);
         }

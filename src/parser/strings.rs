@@ -18,7 +18,7 @@ impl Parser {
             let open_quote_pos = p.current.span;
 
             // DON'T advance - just verify we're at a quote
-            if !matches!(p.current.value, Token::TDoubleQuote) {
+            if !matches!(p.current.value, Token::DoubleQuote) {
                 return Err(ParseError::unexpected(
                     open_quote_pos,
                     vec!["'\"'".to_string()],
@@ -128,7 +128,7 @@ impl Parser {
         // Re-sync parser
         self.current = self.lexer.lexeme()?;
 
-        if matches!(self.current.value, Token::TBraceClose) {
+        if matches!(self.current.value, Token::BraceClose) {
             return Err(ParseError::invalid(
                 self.current.span,
                 "empty interpolation expression",
@@ -158,7 +158,7 @@ impl Parser {
             }
         };
 
-        if !matches!(self.current.value, Token::TBraceClose) {
+        if !matches!(self.current.value, Token::BraceClose) {
             return Err(ParseError::invalid(
                 self.current.span,
                 format!(
@@ -300,7 +300,7 @@ impl Parser {
     /// Parse selector interpolation: ${expr} within attribute paths
     pub(super) fn parse_selector_interpolation(&mut self) -> Result<Annotated<StringPart>> {
         let mut open = self.take_current();
-        debug_assert!(matches!(open.value, Token::TInterOpen));
+        debug_assert!(matches!(open.value, Token::InterOpen));
         // Haskell parses `${` with `rawSymbol`, so a comment immediately after
         // it becomes leading trivia of the body's first token. Our `${` came
         // through `lexeme()`, which classified that comment as `trail_comment`;
@@ -314,7 +314,7 @@ impl Parser {
         self.advance()?;
 
         let expr = self.parse_expression()?;
-        let close = self.expect_token(Token::TBraceClose, "'}'")?;
+        let close = self.expect_token(Token::BraceClose, "'}'")?;
 
         Ok(Annotated {
             pre_trivia: open.pre_trivia,

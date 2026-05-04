@@ -76,7 +76,7 @@ oracle_tests! {
 
     test_negation => ["-5"],
 
-    // Expression::Inversion
+    // Expression::Not
     test_boolean_not => ["!true"],
 
     // -----------------------------------------------------------------------

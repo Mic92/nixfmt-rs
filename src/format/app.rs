@@ -58,6 +58,30 @@ fn absorb_head(doc: &mut Doc, expr: &Expression, indent_function: bool, comment:
     }
 }
 
+/// If `a` and the previous argument (the rightmost in `f`/`head`) are both
+/// lists, return `(chain head before them, first list, remaining virtual head)`
+/// so the caller can group the pair.
+fn list_pair<'a>(
+    f: &'a Expression,
+    a: &'a Expression,
+    head: Option<&'a Expression>,
+) -> Option<(&'a Expression, &'a Expression, Option<&'a Expression>)> {
+    if !matches!(a, Expression::Term(Term::List { .. })) {
+        return None;
+    }
+    if let Expression::Apply { func: f2, arg: l1 } = f
+        && matches!(**l1, Expression::Term(Term::List { .. }))
+    {
+        return Some((f2, l1, head));
+    }
+    if let Some(h) = head
+        && matches!(f, Expression::Term(Term::List { .. }))
+    {
+        return Some((h, f, None));
+    }
+    None
+}
+
 fn absorb_arg(doc: &mut Doc, a: &Expression) {
     doc.line();
     // Selections must not priority-expand: only the `.`-suffix would move,
@@ -100,20 +124,7 @@ fn absorb_app(
     };
 
     // Two consecutive list arguments stay together: if one wraps, both wrap.
-    let pair_head = if let Expression::Apply { func: f2, arg: l1 } = &**f
-        && matches!(**l1, Expression::Term(Term::List { .. }))
-    {
-        Some((&**f2, &**l1, head))
-    } else if let Some(h) = head
-        && matches!(**f, Expression::Term(Term::List { .. }))
-    {
-        Some((h, &**f, None))
-    } else {
-        None
-    };
-    if matches!(**a, Expression::Term(Term::List { .. }))
-        && let Some((f2, l1, h2)) = pair_head
-    {
+    if let Some((f2, l1, h2)) = list_pair(f, a, head) {
         doc.transparent_group(|outer| {
             recurse_head(outer, f2, h2);
             outer.nested(|n| {
@@ -239,20 +250,7 @@ pub(super) fn emit_app_parts(
 
     // Two trailing list arguments are rendered as a pair of regular groups so
     // they wrap together; lists are never "simple", so renderSimple cannot apply.
-    let pair_head = if let Expression::Apply { func: f2, arg: l1 } = f
-        && matches!(**l1, Expression::Term(Term::List { .. }))
-    {
-        Some((&**f2, &**l1, head))
-    } else if let Some(h) = head
-        && matches!(f, Expression::Term(Term::List { .. }))
-    {
-        Some((h, f, None))
-    } else {
-        None
-    };
-    if matches!(a, Expression::Term(Term::List { .. }))
-        && let Some((f2, l1, h2)) = pair_head
-    {
+    if let Some((f2, l1, h2)) = list_pair(f, a, head) {
         doc.group(|g| {
             g.0.extend_from_slice(pre);
             g.transparent_group(|inner| {

@@ -102,7 +102,7 @@ oracle_tests! {
 
     regression_emptyline_pretrivia_inline => ["\n\nlet x = 1; in x"],
 
-    // `?` binds tighter than `!`: Inversion(MemberCheck(a)...).
+    // `?` binds tighter than `!`: Not(HasAttr(a)...).
     regression_not_member_check => ["!a ? b"],
 
     // `->` binds looser than `||`: (a || b) -> c.
@@ -186,7 +186,7 @@ oracle_tests! {
     // From nixpkgs/nixos/modules/services/monitoring/prometheus/exporters.nix line 353
     regression_identifier_slash_path => ["mkDefault /tmp"],
 
-    // "http://example.com" was tokenized as "http:" followed by TUpdate ("//").
+    // "http://example.com" was tokenized as "http:" followed by Update ("//").
     // From nix/tests/functional/lang/parse-okay-regression-20041027.nix line 6
     regression_unquoted_url => ["{ url = http://example.com/path; }"],
 

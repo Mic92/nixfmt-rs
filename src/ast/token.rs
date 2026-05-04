@@ -13,60 +13,60 @@ pub enum Token {
     EnvPath(TokenText),
 
     // Keywords
-    KAssert,
-    KElse,
-    KIf,
-    KIn,
-    KInherit,
-    KLet,
-    KOr,
-    KRec,
-    KThen,
-    KWith,
+    Assert,
+    Else,
+    If,
+    In,
+    Inherit,
+    Let,
+    OrDefault,
+    Rec,
+    Then,
+    With,
 
     // Delimiters
-    TBraceOpen,
-    TBraceClose,
-    TBrackOpen,
-    TBrackClose,
-    TInterOpen,  // ${
-    TInterClose, // }
-    TParenOpen,
-    TParenClose,
+    BraceOpen,
+    BraceClose,
+    BrackOpen,
+    BrackClose,
+    InterOpen,  // ${
+    InterClose, // }
+    ParenOpen,
+    ParenClose,
 
     // Operators
-    TAssign,            // =
-    TAt,                // @
-    TColon,             // :
-    TComma,             // ,
-    TDot,               // .
-    TDoubleQuote,       // "
-    TDoubleSingleQuote, // ''
-    TEllipsis,          // ...
-    TQuestion,          // ?
-    TSemicolon,         // ;
-    TConcat,            // ++
-    TNegate,            // - (as operator)
-    TUpdate,            // //
-    TPlus,              // +
-    TMinus,             // -
-    TMul,               // *
-    TDiv,               // /
-    TAnd,               // &&
-    TOr,                // ||
-    TEqual,             // ==
-    TGreater,           // >
-    TGreaterEqual,      // >=
-    TImplies,           // ->
-    TLess,              // <
-    TLessEqual,         // <=
-    TNot,               // !
-    TUnequal,           // !=
-    TPipeForward,       // |>
-    TPipeBackward,      // <|
+    Assign,            // =
+    At,                // @
+    Colon,             // :
+    Comma,             // ,
+    Dot,               // .
+    DoubleQuote,       // "
+    DoubleSingleQuote, // ''
+    Ellipsis,          // ...
+    Question,          // ?
+    Semicolon,         // ;
+    Concat,            // ++
+    Negate,            // - (as operator)
+    Update,            // //
+    Plus,              // +
+    Minus,             // -
+    Mul,               // *
+    Div,               // /
+    And,               // &&
+    Or,                // ||
+    Equal,             // ==
+    Greater,           // >
+    GreaterEqual,      // >=
+    Implies,           // ->
+    Less,              // <
+    LessEqual,         // <=
+    Not,               // !
+    Unequal,           // !=
+    PipeForward,       // |>
+    PipeBackward,      // <|
 
-    Sof,    // Start of file
-    TTilde, // ~ (for paths)
+    Sof,   // Start of file
+    Tilde, // ~ (for paths)
 }
 
 impl Token {
@@ -76,58 +76,58 @@ impl Token {
             Self::Identifier(s) | Self::Integer(s) | Self::Float(s) | Self::EnvPath(s) => {
                 s.as_str()
             }
-            Self::KAssert => "assert",
-            Self::KElse => "else",
-            Self::KIf => "if",
-            Self::KIn => "in",
-            Self::KInherit => "inherit",
-            Self::KLet => "let",
-            Self::KOr => "or",
-            Self::KRec => "rec",
-            Self::KThen => "then",
-            Self::KWith => "with",
-            Self::TBraceOpen => "{",
-            Self::TBraceClose | Self::TInterClose => "}",
-            Self::TBrackOpen => "[",
-            Self::TBrackClose => "]",
-            Self::TInterOpen => "${",
-            Self::TParenOpen => "(",
-            Self::TParenClose => ")",
-            Self::TAssign => "=",
-            Self::TAt => "@",
-            Self::TColon => ":",
-            Self::TComma => ",",
-            Self::TDot => ".",
-            Self::TDoubleQuote => "\"",
-            Self::TDoubleSingleQuote => "''",
-            Self::TEllipsis => "...",
-            Self::TQuestion => "?",
-            Self::TSemicolon => ";",
-            Self::TPlus => "+",
-            Self::TMinus | Self::TNegate => "-",
-            Self::TMul => "*",
-            Self::TDiv => "/",
-            Self::TConcat => "++",
-            Self::TUpdate => "//",
-            Self::TAnd => "&&",
-            Self::TOr => "||",
-            Self::TEqual => "==",
-            Self::TGreater => ">",
-            Self::TGreaterEqual => ">=",
-            Self::TImplies => "->",
-            Self::TLess => "<",
-            Self::TLessEqual => "<=",
-            Self::TNot => "!",
-            Self::TUnequal => "!=",
-            Self::TPipeForward => "|>",
-            Self::TPipeBackward => "<|",
+            Self::Assert => "assert",
+            Self::Else => "else",
+            Self::If => "if",
+            Self::In => "in",
+            Self::Inherit => "inherit",
+            Self::Let => "let",
+            Self::OrDefault => "or",
+            Self::Rec => "rec",
+            Self::Then => "then",
+            Self::With => "with",
+            Self::BraceOpen => "{",
+            Self::BraceClose | Self::InterClose => "}",
+            Self::BrackOpen => "[",
+            Self::BrackClose => "]",
+            Self::InterOpen => "${",
+            Self::ParenOpen => "(",
+            Self::ParenClose => ")",
+            Self::Assign => "=",
+            Self::At => "@",
+            Self::Colon => ":",
+            Self::Comma => ",",
+            Self::Dot => ".",
+            Self::DoubleQuote => "\"",
+            Self::DoubleSingleQuote => "''",
+            Self::Ellipsis => "...",
+            Self::Question => "?",
+            Self::Semicolon => ";",
+            Self::Plus => "+",
+            Self::Minus | Self::Negate => "-",
+            Self::Mul => "*",
+            Self::Div => "/",
+            Self::Concat => "++",
+            Self::Update => "//",
+            Self::And => "&&",
+            Self::Or => "||",
+            Self::Equal => "==",
+            Self::Greater => ">",
+            Self::GreaterEqual => ">=",
+            Self::Implies => "->",
+            Self::Less => "<",
+            Self::LessEqual => "<=",
+            Self::Not => "!",
+            Self::Unequal => "!=",
+            Self::PipeForward => "|>",
+            Self::PipeBackward => "<|",
             Self::Sof => "end of file",
-            Self::TTilde => "~",
+            Self::Tilde => "~",
         }
     }
 
     /// Check if this is an update, concat, or plus operator (for special formatting)
     pub const fn is_update_concat_plus(&self) -> bool {
-        matches!(self, Self::TUpdate | Self::TConcat | Self::TPlus)
+        matches!(self, Self::Update | Self::Concat | Self::Plus)
     }
 }

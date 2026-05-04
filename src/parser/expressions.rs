@@ -14,9 +14,9 @@ use super::Parser;
 impl Parser {
     /// Parse let expression: let bindings in expr
     pub(super) fn parse_let(&mut self) -> Result<Expression> {
-        let let_tok = self.expect_token(Token::KLet, "'let'")?;
+        let let_tok = self.expect_token(Token::Let, "'let'")?;
         let bindings = self.parse_binders()?;
-        let in_tok = self.expect_token(Token::KIn, "'in'")?;
+        let in_tok = self.expect_token(Token::In, "'in'")?;
         let body = self.parse_expression()?;
 
         Ok(Expression::Let {
@@ -29,11 +29,11 @@ impl Parser {
 
     /// Parse if expression: if cond then expr else expr
     pub(super) fn parse_if(&mut self) -> Result<Expression> {
-        let if_tok = self.expect_token(Token::KIf, "'if'")?;
+        let if_tok = self.expect_token(Token::If, "'if'")?;
         let cond = self.parse_expression()?;
-        let then_tok = self.expect_token(Token::KThen, "'then'")?;
+        let then_tok = self.expect_token(Token::Then, "'then'")?;
         let then_expr = self.parse_expression()?;
-        let else_tok = self.expect_token(Token::KElse, "'else'")?;
+        let else_tok = self.expect_token(Token::Else, "'else'")?;
         let else_expr = self.parse_expression()?;
 
         Ok(Expression::If {
@@ -49,7 +49,7 @@ impl Parser {
     /// Parse with expression: with expr ; expr
     pub(super) fn parse_with(&mut self) -> Result<Expression> {
         self.parse_keyword_semi_expr(
-            Token::KWith,
+            Token::With,
             "'with'",
             "'with' expression",
             |kw, head, semi, body| Expression::With {
@@ -64,7 +64,7 @@ impl Parser {
     /// Parse assert expression: assert cond ; expr
     pub(super) fn parse_assert(&mut self) -> Result<Expression> {
         self.parse_keyword_semi_expr(
-            Token::KAssert,
+            Token::Assert,
             "'assert'",
             "'assert' condition",
             |kw, head, semi, body| Expression::Assert {

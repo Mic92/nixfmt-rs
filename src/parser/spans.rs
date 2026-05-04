@@ -20,12 +20,12 @@ impl Expression {
             | Self::Apply { arg: expr, .. }
             | Self::Operation { rhs: expr, .. }
             | Self::Negation { expr, .. }
-            | Self::Inversion { expr, .. } => expr.end_span(),
-            Self::MemberCheck {
+            | Self::Not { expr, .. } => expr.end_span(),
+            Self::HasAttr {
                 path: selectors, ..
             } => selectors
                 .last()
-                // No selectors - shouldn't happen for a parsed MemberCheck.
+                // No selectors - shouldn't happen for a parsed HasAttr.
                 .map_or(Span::point(0), |last| last.selector.end_span()),
         }
     }
