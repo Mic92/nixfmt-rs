@@ -34,7 +34,7 @@ fn absorb_operation(doc: &mut Doc, expr: &Expression) {
                 expr.emit(group_doc);
             });
         }
-        Expression::Application { .. } => {
+        Expression::Apply { .. } => {
             doc.group(|g| emit_app(g, false, &[line()], false, expr));
         }
         _ => {

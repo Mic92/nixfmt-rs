@@ -67,7 +67,7 @@ impl Parser {
             let mut app_expr = expr;
             while self.is_term_start() && !self.is_expression_end() {
                 let arg = Expression::Term(self.parse_term()?);
-                app_expr = Expression::Application {
+                app_expr = Expression::Apply {
                     func: Box::new(app_expr),
                     arg: Box::new(arg),
                 };

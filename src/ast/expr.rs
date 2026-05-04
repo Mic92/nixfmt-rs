@@ -216,13 +216,13 @@ pub enum Expression {
         else_branch: Box<Self>,
     },
     /// `param : body`
-    Abstraction {
+    Lambda {
         param: Parameter,
         colon: Leaf,
         body: Box<Self>,
     },
     /// function application
-    Application {
+    Apply {
         func: Box<Self>,
         arg: Box<Self>,
     },
@@ -255,15 +255,15 @@ impl Expression {
     pub fn is_simple(&self) -> bool {
         match self {
             Self::Term(term) => term.is_simple(),
-            Self::Application { func: f, arg: a } => Self::app_is_simple(f, a),
+            Self::Apply { func: f, arg: a } => Self::app_is_simple(f, a),
             _ => false,
         }
     }
 
     pub fn app_is_simple(f: &Self, a: &Self) -> bool {
         // No more than two arguments.
-        if let Self::Application { func: f2, .. } = f
-            && matches!(**f2, Self::Application { .. })
+        if let Self::Apply { func: f2, .. } = f
+            && matches!(**f2, Self::Apply { .. })
         {
             return false;
         }
@@ -299,8 +299,8 @@ first_token_impl! { Expression;
     | Self::If { kw_if: kw, .. }
     | Self::Negation { minus: kw, .. }
     | Self::Inversion { bang: kw, .. } => leaf kw,
-    Self::Abstraction { param, .. } => recurse param,
-    Self::Application { func: g, .. }
+    Self::Lambda { param, .. } => recurse param,
+    Self::Apply { func: g, .. }
     | Self::Operation { lhs: g, .. }
     | Self::MemberCheck { lhs: g, .. } => recurse g,
 }

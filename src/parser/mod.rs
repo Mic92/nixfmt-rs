@@ -210,7 +210,7 @@ impl Parser {
 
     /// After a candidate lambda parameter `first` has been parsed, try to
     /// consume the optional `@ second` part and the mandatory `: body` and
-    /// build an `Expression::Abstraction`.
+    /// build an `Expression::Lambda`.
     ///
     /// * `Lambda(expr)` – a full abstraction was parsed.
     /// * `Set(first)` – neither `:` nor `@` follows; `first` is handed
@@ -221,7 +221,7 @@ impl Parser {
             Token::TColon => {
                 let colon = self.take_and_advance()?;
                 let body = self.parse_expression()?;
-                Ok(SetOrLambda::Lambda(Expression::Abstraction {
+                Ok(SetOrLambda::Lambda(Expression::Lambda {
                     param: first,
                     colon,
                     body: Box::new(body),
@@ -246,7 +246,7 @@ impl Parser {
                 }
                 let colon = self.expect_token(Token::TColon, "':'")?;
                 let body = self.parse_expression()?;
-                Ok(SetOrLambda::Lambda(Expression::Abstraction {
+                Ok(SetOrLambda::Lambda(Expression::Lambda {
                     param: Parameter::Context {
                         lhs: Box::new(first),
                         at: at_tok,

@@ -282,7 +282,7 @@ impl Expression {
             _ if self.is_absorbable() => {
                 doc.group(|inner| self.absorb(inner, Width::Regular));
             }
-            Self::Application { .. } => {
+            Self::Apply { .. } => {
                 emit_app(doc, true, &[], true, self);
             }
             Self::Term(Term::Selection { base: term, .. }) if term.is_absorbable() => {

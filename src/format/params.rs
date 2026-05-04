@@ -77,8 +77,8 @@ fn take_last_trail_comment_expr(expr: &mut Expression) -> Option<TrailingComment
         | Expression::If {
             else_branch: body, ..
         }
-        | Expression::Abstraction { body, .. }
-        | Expression::Application { arg: body, .. }
+        | Expression::Lambda { body, .. }
+        | Expression::Apply { arg: body, .. }
         | Expression::Operation { rhs: body, .. }
         | Expression::Negation { expr: body, .. }
         | Expression::Inversion { expr: body, .. } => take_last_trail_comment_expr(body),

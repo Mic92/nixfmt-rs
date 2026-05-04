@@ -87,7 +87,7 @@ fn absorb_app(
         });
     };
 
-    let Expression::Application { func: f, arg: a } = expr else {
+    let Expression::Apply { func: f, arg: a } = expr else {
         match head {
             None => absorb_head(doc, expr, indent_function, comment),
             Some(h) => {
@@ -100,7 +100,7 @@ fn absorb_app(
     };
 
     // Two consecutive list arguments stay together: if one wraps, both wrap.
-    let pair_head = if let Expression::Application { func: f2, arg: l1 } = &**f
+    let pair_head = if let Expression::Apply { func: f2, arg: l1 } = &**f
         && matches!(**l1, Expression::Term(Term::List { .. }))
     {
         Some((&**f2, &**l1, head))
@@ -154,7 +154,7 @@ fn absorb_last(doc: &mut Doc, arg: &Expression) {
     }) = arg
     {
         // Parenthesised single-ID-parameter abstraction with absorbable body.
-        if let Expression::Abstraction {
+        if let Expression::Lambda {
             param: Parameter::Id(name),
             colon,
             body,
@@ -175,7 +175,7 @@ fn absorb_last(doc: &mut Doc, arg: &Expression) {
             });
         }
         // Parenthesised `ident { ... }` application with absorbable body.
-        if let Expression::Application { func: f, arg: a } = &**inner
+        if let Expression::Apply { func: f, arg: a } = &**inner
             && let Expression::Term(Term::Token(ident)) = &**f
             && matches!(ident.value, Token::Identifier(_))
             && let Expression::Term(body_term) = &**a
@@ -208,8 +208,8 @@ pub(super) fn emit_app(
     has_post: bool,
     expr: &Expression,
 ) {
-    let Expression::Application { func: f, arg: a } = expr else {
-        unreachable!("emit_app requires an Application");
+    let Expression::Apply { func: f, arg: a } = expr else {
+        unreachable!("emit_app requires an Apply");
     };
     emit_app_parts(doc, indent_function, pre, has_post, f, a, None);
 }
@@ -217,7 +217,7 @@ pub(super) fn emit_app(
 /// As [`emit_app`], but with `func`/`arg` destructured and an optional `head`
 /// virtually prepended at the leftmost position of the chain. Lets `assert`
 /// render `assert cond` as an application without cloning `cond` into a
-/// synthetic `Application` node (the Haskell `insertIntoApp` approach).
+/// synthetic `Apply` node (the Haskell `insertIntoApp` approach).
 pub(super) fn emit_app_parts(
     doc: &mut Doc,
     indent_function: bool,
@@ -239,7 +239,7 @@ pub(super) fn emit_app_parts(
 
     // Two trailing list arguments are rendered as a pair of regular groups so
     // they wrap together; lists are never "simple", so renderSimple cannot apply.
-    let pair_head = if let Expression::Application { func: f2, arg: l1 } = f
+    let pair_head = if let Expression::Apply { func: f2, arg: l1 } = f
         && matches!(**l1, Expression::Term(Term::List { .. }))
     {
         Some((&**f2, &**l1, head))

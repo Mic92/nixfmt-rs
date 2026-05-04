@@ -57,7 +57,7 @@ oracle_tests! {
 
     test_if_then_else => ["if true then 1 else 2"],
 
-    // Expression::Abstraction / Parameter::ID
+    // Expression::Lambda / Parameter::ID
     test_simple_lambda => ["x: x"],
 
     // Parameter::Set

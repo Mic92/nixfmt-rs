@@ -6,7 +6,7 @@ use crate::error::{ParseError, Result};
 
 impl Parser {
     /// Parse function application (left-associative)
-    /// Application only consumes TERMS, not unary expressions
+    /// Apply only consumes TERMS, not unary expressions
     pub(super) fn parse_application(&mut self) -> Result<Expression> {
         // Prefix unary operators recurse so that postfix `?` (handled below) binds tighter.
         match &self.current.value {
@@ -35,7 +35,7 @@ impl Parser {
         // IMPORTANT: Don't treat binary operators as term starts even if they could start paths
         while self.is_term_start() && !self.is_binary_op() && !self.is_expression_end() {
             let arg = Expression::Term(self.parse_term()?);
-            expr = Expression::Application {
+            expr = Expression::Apply {
                 func: Box::new(expr),
                 arg: Box::new(arg),
             };

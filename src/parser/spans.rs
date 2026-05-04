@@ -16,8 +16,8 @@ impl Expression {
             | Self::If {
                 else_branch: expr, ..
             }
-            | Self::Abstraction { body: expr, .. }
-            | Self::Application { arg: expr, .. }
+            | Self::Lambda { body: expr, .. }
+            | Self::Apply { arg: expr, .. }
             | Self::Operation { rhs: expr, .. }
             | Self::Negation { expr, .. }
             | Self::Inversion { expr, .. } => expr.end_span(),
