@@ -56,12 +56,12 @@ pub(super) fn emit_operation(
     // LHS's last line whenever the remainder fits.
     if matches!(
         op.value,
-        Token::TLess
-            | Token::TGreater
-            | Token::TLessEqual
-            | Token::TGreaterEqual
-            | Token::TEqual
-            | Token::TUnequal
+        Token::Less
+            | Token::Greater
+            | Token::LessEqual
+            | Token::GreaterEqual
+            | Token::Equal
+            | Token::Unequal
     ) {
         left.emit(doc);
         doc.softline();

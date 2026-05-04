@@ -150,7 +150,7 @@ fn move_params_comments(attrs: &[ParamAttr]) -> Vec<ParamAttr> {
             } if is_last => {
                 *comma = Some(Annotated {
                     pre_trivia: Trivia::new(),
-                    value: Token::TComma,
+                    value: Token::Comma,
                     span: name.span,
                     trail_comment: None,
                 });

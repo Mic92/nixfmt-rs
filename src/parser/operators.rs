@@ -9,12 +9,12 @@ use crate::error::{ParseError, Result};
 const fn is_comparison_operator(token: &Token) -> bool {
     matches!(
         token,
-        Token::TEqual
-            | Token::TUnequal
-            | Token::TLess
-            | Token::TGreater
-            | Token::TLessEqual
-            | Token::TGreaterEqual
+        Token::Equal
+            | Token::Unequal
+            | Token::Less
+            | Token::Greater
+            | Token::LessEqual
+            | Token::GreaterEqual
     )
 }
 
@@ -22,24 +22,24 @@ impl Parser {
     /// Check if current token is a binary operator
     pub(super) fn is_binary_op(&self) -> bool {
         match self.current.value {
-            // TDiv can start a path (e.g., /tmp), so check if it looks like one
-            Token::TDiv => !self.looks_like_path(),
-            Token::TPlus
-            | Token::TMinus
-            | Token::TMul
-            | Token::TConcat
-            | Token::TUpdate
-            | Token::TAnd
-            | Token::TOr
-            | Token::TEqual
-            | Token::TUnequal
-            | Token::TLess
-            | Token::TGreater
-            | Token::TLessEqual
-            | Token::TGreaterEqual
-            | Token::TImplies
-            | Token::TPipeForward
-            | Token::TPipeBackward => true,
+            // Div can start a path (e.g., /tmp), so check if it looks like one
+            Token::Div => !self.looks_like_path(),
+            Token::Plus
+            | Token::Minus
+            | Token::Mul
+            | Token::Concat
+            | Token::Update
+            | Token::And
+            | Token::Or
+            | Token::Equal
+            | Token::Unequal
+            | Token::Less
+            | Token::Greater
+            | Token::LessEqual
+            | Token::GreaterEqual
+            | Token::Implies
+            | Token::PipeForward
+            | Token::PipeBackward => true,
             _ => false,
         }
     }
@@ -55,7 +55,7 @@ impl Parser {
 
     /// Continue parsing operation from a given left expression
     pub(super) fn continue_operation_from(&mut self, expr: Expression) -> Result<Expression> {
-        let expr = if matches!(self.current.value, Token::TQuestion) {
+        let expr = if matches!(self.current.value, Token::Question) {
             let question = self.take_and_advance()?;
             let selectors = self.parse_selector_path()?;
             Expression::MemberCheck {
@@ -111,7 +111,7 @@ impl Parser {
                 Err(e) => {
                     // If we failed to parse the right-hand side and current token is }
                     // (closing an interpolation), provide a more helpful error
-                    if matches!(self.current.value, Token::TBraceClose | Token::TInterClose) {
+                    if matches!(self.current.value, Token::BraceClose | Token::InterClose) {
                         return Err(ParseError::invalid(
                             self.current.span,
                             format!(
@@ -134,18 +134,18 @@ impl Parser {
                 right = self.parse_binary_operation(right, self.get_precedence())?;
             }
 
-            // HACK: nixfmt parses TPlus as left-associative but restructures it to right-associative
+            // HACK: nixfmt parses Plus as left-associative but restructures it to right-associative
             // in the AST. This is needed because some formatting code needs to match on the first
             // operand, and doing that with a left-associative chain is not possible.
             // If we have: (a + b) + c, restructure to: a + (b + c)
-            left = if matches!(op_token.value, Token::TPlus) {
+            left = if matches!(op_token.value, Token::Plus) {
                 if let Expression::Operation {
                     lhs: one,
                     op: op1,
                     rhs: two,
                 } = left
                 {
-                    if matches!(op1.value, Token::TPlus) {
+                    if matches!(op1.value, Token::Plus) {
                         Expression::Operation {
                             lhs: one,
                             op: op1,
@@ -204,36 +204,33 @@ impl Parser {
     const fn get_precedence_for(token: &Token) -> u8 {
         match token {
             // Highest precedence (tightest binding)
-            Token::TConcat => 14,               // ++ (line 575 in nixfmt)
-            Token::TMul | Token::TDiv => 13,    // * / (lines 576-577)
-            Token::TPlus | Token::TMinus => 12, // + - (lines 579-580)
-            // Note: Prefix TNot would be at precedence 11 (line 582) but it's handled separately
-            Token::TUpdate => 10, // // (line 583)
-            Token::TLess | Token::TGreater | Token::TLessEqual | Token::TGreaterEqual => 9, // comparisons (lines 584-587)
-            Token::TEqual | Token::TUnequal => 8, // == != (lines 589-590)
-            Token::TAnd => 7,                     // && (line 592)
-            Token::TOr => 6,                      // || (line 593)
-            Token::TImplies => 5,                 // -> (line 594)
-            Token::TPipeForward => 4,             // |> (line 595)
-            Token::TPipeBackward => 3,            // <| (line 596) - lowest!
-            _ => 0,                               // Unknown/not a binary operator
+            Token::Concat => 14,              // ++ (line 575 in nixfmt)
+            Token::Mul | Token::Div => 13,    // * / (lines 576-577)
+            Token::Plus | Token::Minus => 12, // + - (lines 579-580)
+            // Note: Prefix Not would be at precedence 11 (line 582) but it's handled separately
+            Token::Update => 10, // // (line 583)
+            Token::Less | Token::Greater | Token::LessEqual | Token::GreaterEqual => 9, // comparisons (lines 584-587)
+            Token::Equal | Token::Unequal => 8, // == != (lines 589-590)
+            Token::And => 7,                    // && (line 592)
+            Token::Or => 6,                     // || (line 593)
+            Token::Implies => 5,                // -> (line 594)
+            Token::PipeForward => 4,            // |> (line 595)
+            Token::PipeBackward => 3,           // <| (line 596) - lowest!
+            _ => 0,                             // Unknown/not a binary operator
         }
     }
 
     /// Check if an operator is right-associative
     ///
     /// Right-associative operators per nixfmt Types.hs:
-    /// - `TConcat` (++) - line 575: `InfixR`
-    /// - `TUpdate` (//) - line 583: `InfixR`
-    /// - `TPipeBackward` (<|) - line 596: `InfixR`
+    /// - `Concat` (++) - line 575: `InfixR`
+    /// - `Update` (//) - line 583: `InfixR`
+    /// - `PipeBackward` (<|) - line 596: `InfixR`
     ///
-    /// Note: `TPlus` (+) is `InfixL` in the spec and is parsed as left-associative,
+    /// Note: `Plus` (+) is `InfixL` in the spec and is parsed as left-associative,
     /// but nixfmt uses a HACK to restructure it to right-associative in the AST.
     /// This is handled separately in the `parse_binary_operation` function.
     const fn is_right_associative(token: &Token) -> bool {
-        matches!(
-            token,
-            Token::TConcat | Token::TUpdate | Token::TPipeBackward
-        )
+        matches!(token, Token::Concat | Token::Update | Token::PipeBackward)
     }
 }

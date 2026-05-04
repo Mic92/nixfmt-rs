@@ -371,6 +371,37 @@ impl Dump for StringPart {
     }
 }
 
+/// Haskell `nixfmt --ast` constructor names for [`Token`]. The Rust enum
+/// dropped the `K`/`T` Hungarian prefixes; map them back for byte-compat.
+const fn token_haskell_name(t: &Token) -> Option<&'static str> {
+    macro_rules! map {
+        ($($v:ident => $s:literal),* $(,)?) => {
+            match t { $(Token::$v => Some($s),)* _ => None }
+        };
+    }
+    map! {
+        Assert => "KAssert", Else => "KElse", If => "KIf", In => "KIn",
+        Inherit => "KInherit", Let => "KLet", OrDefault => "KOr", Rec => "KRec",
+        Then => "KThen", With => "KWith",
+        BraceOpen => "TBraceOpen", BraceClose => "TBraceClose",
+        BrackOpen => "TBrackOpen", BrackClose => "TBrackClose",
+        InterOpen => "TInterOpen", InterClose => "TInterClose",
+        ParenOpen => "TParenOpen", ParenClose => "TParenClose",
+        Assign => "TAssign", At => "TAt", Colon => "TColon", Comma => "TComma",
+        Dot => "TDot", DoubleQuote => "TDoubleQuote",
+        DoubleSingleQuote => "TDoubleSingleQuote", Ellipsis => "TEllipsis",
+        Question => "TQuestion", Semicolon => "TSemicolon",
+        Concat => "TConcat", Negate => "TNegate", Update => "TUpdate",
+        Plus => "TPlus", Minus => "TMinus", Mul => "TMul", Div => "TDiv",
+        And => "TAnd", Or => "TOr", Equal => "TEqual",
+        Greater => "TGreater", GreaterEqual => "TGreaterEqual",
+        Implies => "TImplies", Less => "TLess", LessEqual => "TLessEqual",
+        Not => "TNot", Unequal => "TUnequal",
+        PipeForward => "TPipeForward", PipeBackward => "TPipeBackward",
+        Tilde => "TTilde", Sof => "SOF",
+    }
+}
+
 /// `Dump` for Token - constructor applications for data-carrying tokens
 impl Dump for Token {
     fn dump<W: Writer>(&self, w: &mut W) {
@@ -380,7 +411,7 @@ impl Dump for Token {
             Identifier(s) => [&s.as_str()],
             EnvPath(s) => [&s.as_str()],
             _ => {
-                w.write_plain(&format!("{self:?}"));
+                w.write_plain(token_haskell_name(self).expect("data-carrying tokens handled above"));
             }
         });
     }

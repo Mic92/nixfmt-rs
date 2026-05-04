@@ -25,38 +25,38 @@ impl Lexer {
         }
 
         match ch {
-            '{' => Ok(self.single(Token::TBraceOpen)),
-            '}' => Ok(self.single(Token::TBraceClose)),
-            '[' => Ok(self.single(Token::TBrackOpen)),
-            ']' => Ok(self.single(Token::TBrackClose)),
-            '(' => Ok(self.single(Token::TParenOpen)),
-            ')' => Ok(self.single(Token::TParenClose)),
-            '=' => Ok(self.try_two_char('=', Token::TEqual, Token::TAssign)),
-            '@' => Ok(self.single(Token::TAt)),
-            ':' => Ok(self.single(Token::TColon)),
-            ',' => Ok(self.single(Token::TComma)),
-            ';' => Ok(self.single(Token::TSemicolon)),
-            '?' => Ok(self.single(Token::TQuestion)),
+            '{' => Ok(self.single(Token::BraceOpen)),
+            '}' => Ok(self.single(Token::BraceClose)),
+            '[' => Ok(self.single(Token::BrackOpen)),
+            ']' => Ok(self.single(Token::BrackClose)),
+            '(' => Ok(self.single(Token::ParenOpen)),
+            ')' => Ok(self.single(Token::ParenClose)),
+            '=' => Ok(self.try_two_char('=', Token::Equal, Token::Assign)),
+            '@' => Ok(self.single(Token::At)),
+            ':' => Ok(self.single(Token::Colon)),
+            ',' => Ok(self.single(Token::Comma)),
+            ';' => Ok(self.single(Token::Semicolon)),
+            '?' => Ok(self.single(Token::Question)),
             '.' => Ok(self.parse_dot_token()),
-            '+' => Ok(self.try_two_char('+', Token::TConcat, Token::TPlus)),
-            '-' => Ok(self.try_two_char('>', Token::TImplies, Token::TMinus)),
-            '*' => Ok(self.single(Token::TMul)),
-            '/' => Ok(self.try_two_char('/', Token::TUpdate, Token::TDiv)),
-            '!' => Ok(self.try_two_char('=', Token::TUnequal, Token::TNot)),
+            '+' => Ok(self.try_two_char('+', Token::Concat, Token::Plus)),
+            '-' => Ok(self.try_two_char('>', Token::Implies, Token::Minus)),
+            '*' => Ok(self.single(Token::Mul)),
+            '/' => Ok(self.try_two_char('/', Token::Update, Token::Div)),
+            '!' => Ok(self.try_two_char('=', Token::Unequal, Token::Not)),
             '<' if self.peek_ahead(1).is_some_and(char::is_alphanumeric) => self.parse_env_path(),
             '<' => {
                 self.advance();
                 Ok(match self.peek() {
-                    Some('=') => self.single(Token::TLessEqual),
-                    Some('|') => self.single(Token::TPipeBackward),
-                    _ => Token::TLess,
+                    Some('=') => self.single(Token::LessEqual),
+                    Some('|') => self.single(Token::PipeBackward),
+                    _ => Token::Less,
                 })
             }
-            '>' => Ok(self.try_two_char('=', Token::TGreaterEqual, Token::TGreater)),
+            '>' => Ok(self.try_two_char('=', Token::GreaterEqual, Token::Greater)),
             '&' => {
                 if self.at("&&") {
                     self.advance_by(2);
-                    Ok(Token::TAnd)
+                    Ok(Token::And)
                 } else {
                     // Don't advance: keep the error span on the '&' itself.
                     self.err_unexpected(&["'&&'"], "'&'")
@@ -65,19 +65,19 @@ impl Lexer {
             '|' => {
                 if self.at("||") {
                     self.advance_by(2);
-                    Ok(Token::TOr)
+                    Ok(Token::Or)
                 } else if self.at("|>") {
                     self.advance_by(2);
-                    Ok(Token::TPipeForward)
+                    Ok(Token::PipeForward)
                 } else {
                     self.err_unexpected(&["'||'", "'|>'"], "'|'")
                 }
             }
-            '"' => Ok(self.single(Token::TDoubleQuote)),
+            '"' => Ok(self.single(Token::DoubleQuote)),
             '\'' => {
                 if self.at("''") {
                     self.advance_by(2);
-                    Ok(Token::TDoubleSingleQuote)
+                    Ok(Token::DoubleSingleQuote)
                 } else {
                     self.err_unexpected(&["''"], "'")
                 }
@@ -85,13 +85,13 @@ impl Lexer {
             '$' => {
                 if self.at("${") {
                     self.advance_by(2);
-                    Ok(Token::TInterOpen)
+                    Ok(Token::InterOpen)
                 } else {
                     self.err_unexpected(&["'${'"], "'$'")
                 }
             }
             '0'..='9' => Ok(self.parse_number()),
-            '~' => Ok(self.single(Token::TTilde)),
+            '~' => Ok(self.single(Token::Tilde)),
             _ => {
                 // `ch` was derived from a single byte; for the error message
                 // decode the actual codepoint so multi-byte input is reported
@@ -116,24 +116,24 @@ impl Lexer {
         // to a single comparison instead of up to nine `memcmp`s.
 
         match (len, bytes[start_byte]) {
-            (6, b'a') if text == "assert" => Token::KAssert,
-            (4, b'e') if text == "else" => Token::KElse,
-            (2, b'i') if text == "if" => Token::KIf,
-            (2, b'i') if text == "in" => Token::KIn,
-            (7, b'i') if text == "inherit" => Token::KInherit,
-            (3, b'l') if text == "let" => Token::KLet,
-            (3, b'r') if text == "rec" => Token::KRec,
-            (4, b't') if text == "then" => Token::KThen,
-            (4, b'w') if text == "with" => Token::KWith,
+            (6, b'a') if text == "assert" => Token::Assert,
+            (4, b'e') if text == "else" => Token::Else,
+            (2, b'i') if text == "if" => Token::If,
+            (2, b'i') if text == "in" => Token::In,
+            (7, b'i') if text == "inherit" => Token::Inherit,
+            (3, b'l') if text == "let" => Token::Let,
+            (3, b'r') if text == "rec" => Token::Rec,
+            (4, b't') if text == "then" => Token::Then,
+            (4, b'w') if text == "with" => Token::With,
             _ => Token::Identifier(text.into()),
         }
     }
 
-    /// `.` may start `...`, a leading-dot float, or be `TDot`.
+    /// `.` may start `...`, a leading-dot float, or be `Dot`.
     fn parse_dot_token(&mut self) -> Token {
         if self.at("...") {
             self.advance_by(3);
-            Token::TEllipsis
+            Token::Ellipsis
         } else if self.peek_ahead(1).is_some_and(|c| c.is_ascii_digit()) {
             self.advance();
             let mut num = String::from(".");
@@ -144,7 +144,7 @@ impl Lexer {
             Token::Float(num.into())
         } else {
             self.advance();
-            Token::TDot
+            Token::Dot
         }
     }
 

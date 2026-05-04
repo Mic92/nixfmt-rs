@@ -132,7 +132,7 @@ impl Lexer {
         let token_span = crate::ast::Span::with_lines(token_start, token_end, start_line, end_line);
 
         // String/path delimiters: defer trivia so the parser sees raw source content.
-        let skip_trivia = matches!(token, Token::TDoubleQuote | Token::TDoubleSingleQuote);
+        let skip_trivia = matches!(token, Token::DoubleQuote | Token::DoubleSingleQuote);
 
         let trailing_comment;
         if skip_trivia {

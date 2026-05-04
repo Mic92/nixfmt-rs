@@ -52,13 +52,13 @@ impl Parser {
     pub(super) fn parse_context_second(&mut self, first: &Parameter) -> Result<Parameter> {
         match first {
             Parameter::Id(name) => {
-                let open = self.expect_token(Token::TBraceOpen, "'{'")?;
+                let open = self.expect_token(Token::BraceOpen, "'{'")?;
                 let attrs = self.parse_param_attrs()?;
                 Self::check_duplicate_formals(&attrs)?;
                 if let Token::Identifier(n) = &name.value {
                     Self::check_pattern_shadows_formal(n, &attrs)?;
                 }
-                let close = self.expect_token(Token::TBraceClose, "'}'")?;
+                let close = self.expect_token(Token::BraceClose, "'}'")?;
                 Ok(Parameter::Set { open, attrs, close })
             }
             Parameter::Set { attrs, .. } => {
@@ -100,24 +100,24 @@ impl Parser {
     pub(super) fn try_parse_param_attrs(&mut self) -> Result<Option<Vec<ParamAttr>>> {
         let mut attrs = Vec::new();
 
-        while !matches!(self.current.value, Token::TBraceClose | Token::Sof) {
-            if matches!(self.current.value, Token::TEllipsis) {
+        while !matches!(self.current.value, Token::BraceClose | Token::Sof) {
+            if matches!(self.current.value, Token::Ellipsis) {
                 let dots = self.take_and_advance()?;
                 attrs.push(ParamAttr::Ellipsis(dots));
 
-                if matches!(self.current.value, Token::TComma) {
+                if matches!(self.current.value, Token::Comma) {
                     self.advance()?;
                 }
                 break; // Ellipsis must be last
             } else if matches!(self.current.value, Token::Identifier(_)) {
                 let name = self.take_and_advance()?;
 
-                if matches!(self.current.value, Token::TAssign | Token::TDot) {
+                if matches!(self.current.value, Token::Assign | Token::Dot) {
                     // This is a binding (a = ...), not a parameter!
                     return Ok(None);
                 }
 
-                let default = if matches!(self.current.value, Token::TQuestion) {
+                let default = if matches!(self.current.value, Token::Question) {
                     let q = self.take_and_advance()?;
                     let def_expr = self.parse_expression()?;
                     Some(ParamDefault {
@@ -128,7 +128,7 @@ impl Parser {
                     None
                 };
 
-                let comma = if matches!(self.current.value, Token::TComma) {
+                let comma = if matches!(self.current.value, Token::Comma) {
                     Some(self.take_and_advance()?)
                 } else {
                     None

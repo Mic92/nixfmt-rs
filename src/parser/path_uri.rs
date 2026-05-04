@@ -80,13 +80,13 @@ impl Parser {
                     parts.push(StringPart::TextPart(ident.as_str().into()));
                 }
                 // ./ or ../ — the following `/` is consumed by the tail loop.
-                Token::TDot if p.lexer.peek() == Some('.') => {
+                Token::Dot if p.lexer.peek() == Some('.') => {
                     p.lexer.advance();
                     push_path_text(&mut parts, "..");
                 }
-                Token::TDot => push_path_text(&mut parts, "."),
-                Token::TDiv => push_path_text(&mut parts, "/"),
-                Token::TTilde => push_path_text(&mut parts, "~"),
+                Token::Dot => push_path_text(&mut parts, "."),
+                Token::Div => push_path_text(&mut parts, "/"),
+                Token::Tilde => push_path_text(&mut parts, "~"),
                 _ => {}
             }
 
@@ -193,17 +193,17 @@ impl Parser {
             }
 
             // ./ or ../
-            Token::TDot => match (self.lexer.peek(), self.lexer.peek_ahead(1)) {
+            Token::Dot => match (self.lexer.peek(), self.lexer.peek_ahead(1)) {
                 (Some('/'), _) => self.is_path_content_at(1), // ./
                 (Some('.'), Some('/')) => self.is_path_content_at(2), // ../
                 _ => false,
             },
 
             // /path → path (no space before), expr /path → division (space before)
-            Token::TDiv => self.is_path_content_at(0) && !self.has_preceding_whitespace(),
+            Token::Div => self.is_path_content_at(0) && !self.has_preceding_whitespace(),
 
             // ~/
-            Token::TTilde => self.lexer.peek() == Some('/') && self.is_path_content_at(1),
+            Token::Tilde => self.lexer.peek() == Some('/') && self.is_path_content_at(1),
 
             _ => false,
         }

@@ -68,31 +68,31 @@ fn test_parse_block_comment() {
 #[test]
 fn test_tokenize_keywords() {
     let mut lexer = Lexer::new("let in if then else");
-    assert!(matches!(lexer.next_token(), Ok(Token::KLet)));
-    assert!(matches!(lexer.next_token(), Ok(Token::KIn)));
-    assert!(matches!(lexer.next_token(), Ok(Token::KIf)));
-    assert!(matches!(lexer.next_token(), Ok(Token::KThen)));
-    assert!(matches!(lexer.next_token(), Ok(Token::KElse)));
+    assert!(matches!(lexer.next_token(), Ok(Token::Let)));
+    assert!(matches!(lexer.next_token(), Ok(Token::In)));
+    assert!(matches!(lexer.next_token(), Ok(Token::If)));
+    assert!(matches!(lexer.next_token(), Ok(Token::Then)));
+    assert!(matches!(lexer.next_token(), Ok(Token::Else)));
 }
 
 #[test]
 fn test_tokenize_operators() {
     let mut lexer = Lexer::new("+ - * / ++ // == != < > <= >= && || ->");
-    assert!(matches!(lexer.next_token(), Ok(Token::TPlus)));
-    assert!(matches!(lexer.next_token(), Ok(Token::TMinus)));
-    assert!(matches!(lexer.next_token(), Ok(Token::TMul)));
-    assert!(matches!(lexer.next_token(), Ok(Token::TDiv)));
-    assert!(matches!(lexer.next_token(), Ok(Token::TConcat)));
-    assert!(matches!(lexer.next_token(), Ok(Token::TUpdate)));
-    assert!(matches!(lexer.next_token(), Ok(Token::TEqual)));
-    assert!(matches!(lexer.next_token(), Ok(Token::TUnequal)));
-    assert!(matches!(lexer.next_token(), Ok(Token::TLess)));
-    assert!(matches!(lexer.next_token(), Ok(Token::TGreater)));
-    assert!(matches!(lexer.next_token(), Ok(Token::TLessEqual)));
-    assert!(matches!(lexer.next_token(), Ok(Token::TGreaterEqual)));
-    assert!(matches!(lexer.next_token(), Ok(Token::TAnd)));
-    assert!(matches!(lexer.next_token(), Ok(Token::TOr)));
-    assert!(matches!(lexer.next_token(), Ok(Token::TImplies)));
+    assert!(matches!(lexer.next_token(), Ok(Token::Plus)));
+    assert!(matches!(lexer.next_token(), Ok(Token::Minus)));
+    assert!(matches!(lexer.next_token(), Ok(Token::Mul)));
+    assert!(matches!(lexer.next_token(), Ok(Token::Div)));
+    assert!(matches!(lexer.next_token(), Ok(Token::Concat)));
+    assert!(matches!(lexer.next_token(), Ok(Token::Update)));
+    assert!(matches!(lexer.next_token(), Ok(Token::Equal)));
+    assert!(matches!(lexer.next_token(), Ok(Token::Unequal)));
+    assert!(matches!(lexer.next_token(), Ok(Token::Less)));
+    assert!(matches!(lexer.next_token(), Ok(Token::Greater)));
+    assert!(matches!(lexer.next_token(), Ok(Token::LessEqual)));
+    assert!(matches!(lexer.next_token(), Ok(Token::GreaterEqual)));
+    assert!(matches!(lexer.next_token(), Ok(Token::And)));
+    assert!(matches!(lexer.next_token(), Ok(Token::Or)));
+    assert!(matches!(lexer.next_token(), Ok(Token::Implies)));
 }
 
 #[test]
@@ -106,18 +106,18 @@ fn test_tokenize_numbers() {
 #[test]
 fn test_tokenize_delimiters() {
     let mut lexer = Lexer::new("{ } [ ] ( ) , ; : @ . ...");
-    assert!(matches!(lexer.next_token(), Ok(Token::TBraceOpen)));
-    assert!(matches!(lexer.next_token(), Ok(Token::TBraceClose)));
-    assert!(matches!(lexer.next_token(), Ok(Token::TBrackOpen)));
-    assert!(matches!(lexer.next_token(), Ok(Token::TBrackClose)));
-    assert!(matches!(lexer.next_token(), Ok(Token::TParenOpen)));
-    assert!(matches!(lexer.next_token(), Ok(Token::TParenClose)));
-    assert!(matches!(lexer.next_token(), Ok(Token::TComma)));
-    assert!(matches!(lexer.next_token(), Ok(Token::TSemicolon)));
-    assert!(matches!(lexer.next_token(), Ok(Token::TColon)));
-    assert!(matches!(lexer.next_token(), Ok(Token::TAt)));
-    assert!(matches!(lexer.next_token(), Ok(Token::TDot)));
-    assert!(matches!(lexer.next_token(), Ok(Token::TEllipsis)));
+    assert!(matches!(lexer.next_token(), Ok(Token::BraceOpen)));
+    assert!(matches!(lexer.next_token(), Ok(Token::BraceClose)));
+    assert!(matches!(lexer.next_token(), Ok(Token::BrackOpen)));
+    assert!(matches!(lexer.next_token(), Ok(Token::BrackClose)));
+    assert!(matches!(lexer.next_token(), Ok(Token::ParenOpen)));
+    assert!(matches!(lexer.next_token(), Ok(Token::ParenClose)));
+    assert!(matches!(lexer.next_token(), Ok(Token::Comma)));
+    assert!(matches!(lexer.next_token(), Ok(Token::Semicolon)));
+    assert!(matches!(lexer.next_token(), Ok(Token::Colon)));
+    assert!(matches!(lexer.next_token(), Ok(Token::At)));
+    assert!(matches!(lexer.next_token(), Ok(Token::Dot)));
+    assert!(matches!(lexer.next_token(), Ok(Token::Ellipsis)));
 }
 
 #[test]
@@ -131,12 +131,12 @@ fn test_tokenize_identifiers() {
 #[test]
 fn test_tokenize_simple_expression() {
     let mut lexer = Lexer::new("{ a = 1; }");
-    assert!(matches!(lexer.next_token(), Ok(Token::TBraceOpen)));
+    assert!(matches!(lexer.next_token(), Ok(Token::BraceOpen)));
     assert!(matches!(lexer.next_token(), Ok(Token::Identifier(s)) if s == "a"));
-    assert!(matches!(lexer.next_token(), Ok(Token::TAssign)));
+    assert!(matches!(lexer.next_token(), Ok(Token::Assign)));
     assert!(matches!(lexer.next_token(), Ok(Token::Integer(s)) if s == "1"));
-    assert!(matches!(lexer.next_token(), Ok(Token::TSemicolon)));
-    assert!(matches!(lexer.next_token(), Ok(Token::TBraceClose)));
+    assert!(matches!(lexer.next_token(), Ok(Token::Semicolon)));
+    assert!(matches!(lexer.next_token(), Ok(Token::BraceClose)));
 }
 
 #[test]
@@ -146,7 +146,7 @@ fn test_lexeme_with_comments() {
 
     // First token: { with leading comment
     let brace = lexer.lexeme().unwrap();
-    assert!(matches!(brace.value, Token::TBraceOpen));
+    assert!(matches!(brace.value, Token::BraceOpen));
     assert_eq!(brace.pre_trivia.len(), 1); // Should have the leading comment
     assert!(
         matches!(&brace.pre_trivia[0], TriviaPiece::LineComment(s) if &**s == " leading comment")
@@ -158,7 +158,7 @@ fn test_lexeme_with_comments() {
 
     // Third token: =
     let eq = lexer.lexeme().unwrap();
-    assert!(matches!(eq.value, Token::TAssign));
+    assert!(matches!(eq.value, Token::Assign));
 
     // Fourth token: 1
     let num = lexer.lexeme().unwrap();
@@ -166,7 +166,7 @@ fn test_lexeme_with_comments() {
 
     // Fifth token: ; with trailing comment
     let semi = lexer.lexeme().unwrap();
-    assert!(matches!(semi.value, Token::TSemicolon));
+    assert!(matches!(semi.value, Token::Semicolon));
     assert!(semi.trail_comment.is_some());
     if let Some(ref tc) = semi.trail_comment {
         assert_eq!(&*tc.0, "trailing");
@@ -174,7 +174,7 @@ fn test_lexeme_with_comments() {
 
     // Sixth token: }
     let close = lexer.lexeme().unwrap();
-    assert!(matches!(close.value, Token::TBraceClose));
+    assert!(matches!(close.value, Token::BraceClose));
 }
 
 #[test]
@@ -183,7 +183,7 @@ fn test_lexeme_preserves_trivia() {
     lexer.start_parse();
 
     let let_tok = lexer.lexeme().unwrap();
-    assert!(matches!(let_tok.value, Token::KLet));
+    assert!(matches!(let_tok.value, Token::Let));
 
     // 'a' should have EmptyLine and comment
     let a_tok = lexer.lexeme().unwrap();

@@ -13,18 +13,18 @@ use super::Parser;
 impl Parser {
     /// Parse attribute set: { ... } or rec { ... } or let { ... }
     pub(super) fn parse_set(&mut self) -> Result<Term> {
-        let prefix_tok = if matches!(self.current.value, Token::KRec | Token::KLet) {
+        let prefix_tok = if matches!(self.current.value, Token::Rec | Token::Let) {
             let tok = self.take_and_advance()?;
             Some(tok)
         } else {
             None
         };
 
-        let open_brace = self.expect_token(Token::TBraceOpen, "'{'")?;
+        let open_brace = self.expect_token(Token::BraceOpen, "'{'")?;
         let opening_span = open_brace.span;
         let bindings = self.parse_binders()?;
 
-        let close_brace = self.expect_closing_delimiter(opening_span, '{', Token::TBraceClose)?;
+        let close_brace = self.expect_closing_delimiter(opening_span, '{', Token::BraceClose)?;
 
         Ok(Term::Set {
             rec: prefix_tok,
@@ -36,11 +36,11 @@ impl Parser {
 
     /// Parse list: [ ... ]
     pub(super) fn parse_list(&mut self) -> Result<Term> {
-        let open_bracket = self.expect_token(Token::TBrackOpen, "'['")?;
+        let open_bracket = self.expect_token(Token::BrackOpen, "'['")?;
         let opening_span = open_bracket.span;
         let items = self.parse_list_items()?;
 
-        let close_bracket = self.expect_closing_delimiter(opening_span, '[', Token::TBrackClose)?;
+        let close_bracket = self.expect_closing_delimiter(opening_span, '[', Token::BrackClose)?;
 
         Ok(Term::List {
             open: open_bracket,
@@ -52,10 +52,10 @@ impl Parser {
     /// Parse list items (terms)
     fn parse_list_items(&mut self) -> Result<Items<Term>> {
         self.parse_items(
-            |t| matches!(t, Token::TBrackClose | Token::Sof),
+            |t| matches!(t, Token::BrackClose | Token::Sof),
             |p| {
                 // Check for commas (not valid in Nix lists)
-                if matches!(p.current.value, Token::TComma) {
+                if matches!(p.current.value, Token::Comma) {
                     return Err(ParseError::invalid(
                         p.current.span,
                         "commas are not used to separate list elements in Nix",
@@ -66,7 +66,7 @@ impl Parser {
                 // Check for mismatched closing delimiters before trying to parse
                 if matches!(
                     p.current.value,
-                    Token::TBraceClose | Token::TParenClose | Token::TInterClose
+                    Token::BraceClose | Token::ParenClose | Token::InterClose
                 ) {
                     return Err(ParseError::invalid(
                         p.current.span,
@@ -88,12 +88,12 @@ impl Parser {
 
     /// Parse parenthesized expression: ( expr )
     pub(super) fn parse_parenthesized(&mut self) -> Result<Term> {
-        let open_paren = self.expect_token(Token::TParenOpen, "'('")?;
+        let open_paren = self.expect_token(Token::ParenOpen, "'('")?;
         let opening_span = open_paren.span;
 
         let expr = self.parse_expression()?;
 
-        let close_paren = self.expect_closing_delimiter(opening_span, '(', Token::TParenClose)?;
+        let close_paren = self.expect_closing_delimiter(opening_span, '(', Token::ParenClose)?;
 
         Ok(Term::Parenthesized {
             open: open_paren,

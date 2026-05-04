@@ -10,7 +10,7 @@ impl Parser {
     pub(super) fn parse_application(&mut self) -> Result<Expression> {
         // Prefix unary operators recurse so that postfix `?` (handled below) binds tighter.
         match &self.current.value {
-            Token::TMinus => {
+            Token::Minus => {
                 let op = self.take_and_advance()?;
                 let inner = self.parse_application()?;
                 return Ok(Expression::Negation {
@@ -18,7 +18,7 @@ impl Parser {
                     expr: Box::new(inner),
                 });
             }
-            Token::TNot => {
+            Token::Not => {
                 let op = self.take_and_advance()?;
                 let inner = self.parse_application()?;
                 return Ok(Expression::Inversion {
@@ -43,7 +43,7 @@ impl Parser {
 
         // Postfix `?` has higher precedence than prefix `!`/`-`; checking it here ensures
         // `!a ? b` parses as `!(a ? b)`, not `(!a) ? b`.
-        if matches!(self.current.value, Token::TQuestion) {
+        if matches!(self.current.value, Token::Question) {
             let question = self.take_and_advance()?;
             let selectors = self.parse_selector_path()?;
             expr = Expression::MemberCheck {
@@ -63,15 +63,15 @@ impl Parser {
             | Token::Integer(_)
             | Token::Float(_)
             | Token::EnvPath(_)
-            | Token::TBraceOpen
-            | Token::KRec
-            | Token::TBrackOpen
-            | Token::TParenOpen
-            | Token::TDoubleQuote
-            | Token::TDoubleSingleQuote => true,
+            | Token::BraceOpen
+            | Token::Rec
+            | Token::BrackOpen
+            | Token::ParenOpen
+            | Token::DoubleQuote
+            | Token::DoubleSingleQuote => true,
 
             // These can start paths, but only in specific contexts
-            Token::TDot | Token::TDiv | Token::TTilde => self.looks_like_path(),
+            Token::Dot | Token::Div | Token::Tilde => self.looks_like_path(),
 
             _ => false,
         }
@@ -81,13 +81,13 @@ impl Parser {
     pub(super) const fn is_expression_end(&self) -> bool {
         matches!(
             self.current.value,
-            Token::TSemicolon
-                | Token::KThen
-                | Token::KElse
-                | Token::KIn
-                | Token::TParenClose
-                | Token::TBraceClose
-                | Token::TBrackClose
+            Token::Semicolon
+                | Token::Then
+                | Token::Else
+                | Token::In
+                | Token::ParenClose
+                | Token::BraceClose
+                | Token::BrackClose
                 | Token::Sof
         )
     }
@@ -106,11 +106,11 @@ impl Parser {
             Token::Identifier(_) | Token::Integer(_) | Token::Float(_) | Token::EnvPath(_) => {
                 self.parse_token_term()
             }
-            Token::TBraceOpen | Token::KRec | Token::KLet => self.parse_set(),
-            Token::TBrackOpen => self.parse_list(),
-            Token::TParenOpen => self.parse_parenthesized(),
-            Token::TDoubleQuote => self.parse_simple_string(),
-            Token::TDoubleSingleQuote => self.parse_indented_string(),
+            Token::BraceOpen | Token::Rec | Token::Let => self.parse_set(),
+            Token::BrackOpen => self.parse_list(),
+            Token::ParenOpen => self.parse_parenthesized(),
+            Token::DoubleQuote => self.parse_simple_string(),
+            Token::DoubleSingleQuote => self.parse_indented_string(),
             _ => Err(ParseError::unexpected(
                 self.current.span,
                 vec![
@@ -132,7 +132,7 @@ impl Parser {
     pub(super) fn parse_postfix_selection(&mut self, base_term: Term) -> Result<Term> {
         let mut selectors = Vec::new();
 
-        while matches!(self.current.value, Token::TDot) {
+        while matches!(self.current.value, Token::Dot) {
             let saved_state = self.save_state();
 
             self.advance()?;
@@ -155,8 +155,8 @@ impl Parser {
         // must be left for the application parser.
         let or_default = if !selectors.is_empty() && self.is_or_token() {
             let mut or_tok = self.take_current();
-            // is_or_token() guarantees this is either KOr or Identifier("or").
-            or_tok.value = Token::KOr;
+            // is_or_token() guarantees this is either OrDefault or Identifier("or").
+            or_tok.value = Token::OrDefault;
             self.advance()?;
 
             // Nix requires a default expression here; `a.b or ]`/`a.b or;`
