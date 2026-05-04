@@ -14,5 +14,6 @@ nixfmt.overrideAttrs (old: {
     ./patches/0003-Pretty-do-not-hoist-a-lone-language-annotation-off-a.patch
     ./patches/0004-Pretty-suppress-language-annotation-fuse-after-an-op.patch
     ./patches/0005-Pretty-ignore-trivia-in-isAbsorbable-for-Parenthesiz.patch
+    ./patches/0006-Pretty-attach-in-comments-to-the-let-body-s-first-to.patch
   ];
 })
