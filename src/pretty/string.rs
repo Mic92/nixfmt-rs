@@ -1,9 +1,8 @@
 use crate::predoc::{Doc, DocE, Pretty, TextAnn, newline, text_width, unexpand_spacing_prime};
 use crate::types::{Expression, StringPart};
 
-use super::absorb::is_absorbable_term;
 use super::term::push_parenthesized_inner;
-use super::util::{is_simple_expression, is_spaces};
+use super::util::is_spaces;
 
 /// Wrap content in `${ ... }` with a group: try to compact it onto one line
 /// (within `max_width` columns), otherwise break with `line'`.
@@ -36,7 +35,7 @@ impl Pretty for StringPart {
 
                 if trailing_empty
                     && let Expression::Term(term) = value
-                    && is_absorbable_term(term)
+                    && term.is_absorbable()
                 {
                     doc.group(|g| {
                         g.text("${");
@@ -46,7 +45,7 @@ impl Pretty for StringPart {
                     return;
                 }
 
-                if trailing_empty && is_simple_expression(value) {
+                if trailing_empty && value.is_simple() {
                     doc.text("${");
                     let mut rendered = Doc::new();
                     value.pretty(&mut rendered);

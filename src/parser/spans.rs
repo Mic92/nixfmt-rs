@@ -1,61 +1,67 @@
 //! Span utilities for locating the end positions of AST nodes
 //!
-//! These functions traverse AST nodes to find their rightmost/ending spans,
+//! These methods traverse AST nodes to find their rightmost/ending spans,
 //! which is useful for error reporting and source location tracking.
 
 use crate::types::{Expression, SimpleSelector, Span, Term};
 
-/// Get the ending span of an expression (the span of its last/rightmost token)
-pub(super) fn expr_end(expr: &Expression) -> Span {
-    match expr {
-        Expression::Term(term) => term_end(term),
-        Expression::With { body: expr, .. }
-        | Expression::Let { body: expr, .. }
-        | Expression::Assert { body: expr, .. }
-        | Expression::If {
-            else_branch: expr, ..
-        }
-        | Expression::Abstraction { body: expr, .. }
-        | Expression::Application { arg: expr, .. }
-        | Expression::Operation { rhs: expr, .. }
-        | Expression::Negation { expr, .. }
-        | Expression::Inversion { expr, .. } => expr_end(expr),
-        Expression::MemberCheck {
-            path: selectors, ..
-        } => selectors
-            .last()
-            // No selectors - shouldn't happen for a parsed MemberCheck.
-            .map_or(Span::point(0), |last| simple_selector_end(&last.selector)),
-    }
-}
-
-/// Get the ending span of a term
-fn term_end(term: &Term) -> Span {
-    match term {
-        Term::Token(leaf) => leaf.span,
-        Term::SimpleString(s) | Term::IndentedString(s) => s.span,
-        Term::Path(p) => p.span,
-        Term::List { close, .. } | Term::Set { close, .. } | Term::Parenthesized { close, .. } => {
-            close.span
-        }
-        Term::Selection {
-            selectors, default, ..
-        } => {
-            // Rightmost element: default > last selector. The parser only
-            // builds `Selection` when `selectors` is non-empty.
-            default.as_ref().map_or_else(
-                || simple_selector_end(&selectors.last().expect("≥1 selector").selector),
-                |d| term_end(&d.value),
-            )
+impl Expression {
+    /// Get the ending span of an expression (the span of its last/rightmost token)
+    pub(super) fn end_span(&self) -> Span {
+        match self {
+            Self::Term(term) => term.end_span(),
+            Self::With { body: expr, .. }
+            | Self::Let { body: expr, .. }
+            | Self::Assert { body: expr, .. }
+            | Self::If {
+                else_branch: expr, ..
+            }
+            | Self::Abstraction { body: expr, .. }
+            | Self::Application { arg: expr, .. }
+            | Self::Operation { rhs: expr, .. }
+            | Self::Negation { expr, .. }
+            | Self::Inversion { expr, .. } => expr.end_span(),
+            Self::MemberCheck {
+                path: selectors, ..
+            } => selectors
+                .last()
+                // No selectors - shouldn't happen for a parsed MemberCheck.
+                .map_or(Span::point(0), |last| last.selector.end_span()),
         }
     }
 }
 
-/// Get the ending span of a simple selector
-const fn simple_selector_end(sel: &SimpleSelector) -> Span {
-    match sel {
-        SimpleSelector::ID(leaf) => leaf.span,
-        SimpleSelector::Interpol(ann) => ann.span,
-        SimpleSelector::String(s) => s.span,
+impl Term {
+    /// Get the ending span of a term
+    fn end_span(&self) -> Span {
+        match self {
+            Self::Token(leaf) => leaf.span,
+            Self::SimpleString(s) | Self::IndentedString(s) => s.span,
+            Self::Path(p) => p.span,
+            Self::List { close, .. }
+            | Self::Set { close, .. }
+            | Self::Parenthesized { close, .. } => close.span,
+            Self::Selection {
+                selectors, default, ..
+            } => {
+                // Rightmost element: default > last selector. The parser only
+                // builds `Selection` when `selectors` is non-empty.
+                default.as_ref().map_or_else(
+                    || selectors.last().expect("≥1 selector").selector.end_span(),
+                    |d| d.value.end_span(),
+                )
+            }
+        }
+    }
+}
+
+impl SimpleSelector {
+    /// Get the ending span of a simple selector
+    const fn end_span(&self) -> Span {
+        match self {
+            Self::ID(leaf) => leaf.span,
+            Self::Interpol(ann) => ann.span,
+            Self::String(s) => s.span,
+        }
     }
 }

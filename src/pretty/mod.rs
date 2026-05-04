@@ -17,7 +17,7 @@ mod string;
 mod term;
 mod util;
 
-use absorb::{is_absorbable_term, push_absorb_rhs};
+use absorb::push_absorb_rhs;
 use app::push_pretty_app;
 use op::pretty_operation;
 use stmt::{insert_into_app, pretty_if, pretty_let, pretty_with, push_absorb_abs};
@@ -25,7 +25,7 @@ use string::{push_pretty_indented_string, push_pretty_simple_string};
 use term::{
     push_pretty_parenthesized, push_pretty_set, push_pretty_term_list, push_pretty_term_wide,
 };
-use util::{Width, is_simple_selector, move_trailing_comment_up, pretty_ann_with};
+use util::{Width, pretty_ann_with};
 
 impl Pretty for TrailingComment {
     fn pretty(&self, doc: &mut Doc) {
@@ -161,7 +161,7 @@ impl Pretty for Binder {
             } => {
                 // Only allow a break after `=` when the key is long/dynamic;
                 // for short plain-id keys the extra line buys almost nothing.
-                let simple_lhs = selectors.len() <= 4 && selectors.iter().all(is_simple_selector);
+                let simple_lhs = selectors.len() <= 4 && selectors.iter().all(Selector::is_simple);
                 doc.group(|d| {
                     d.hcat(selectors.iter().cloned());
                     d.nested(|inner| {
@@ -340,7 +340,7 @@ impl Pretty for Expression {
             } => {
                 // group' RegularG $ prettyIf line $ mapFirstToken moveTrailingCommentUp expr
                 // The first token of an `If` is always the `if` keyword itself.
-                let if_kw_moved = move_trailing_comment_up(kw_if);
+                let if_kw_moved = kw_if.move_trailing_comment_up();
                 let expr_moved = Self::If {
                     kw_if: if_kw_moved,
                     cond: cond.clone(),
@@ -401,7 +401,7 @@ impl Pretty for Expression {
                 // Haskell `Abstraction` (set-param) clause: absorbable body
                 // gets `group (prettyTermWide t)`.
                 if let Self::Term(t) = &**body
-                    && is_absorbable_term(t)
+                    && t.is_absorbable()
                 {
                     doc.group(|g| push_pretty_term_wide(g, t));
                     return;

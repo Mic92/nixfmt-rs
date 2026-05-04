@@ -6,7 +6,7 @@
 use crate::error::{ParseError, Result};
 use crate::types::{Binder, Expression, Items, Selector, SimpleSelector, StringPart, Term, Token};
 
-use super::{Parser, spans};
+use super::Parser;
 
 impl Parser {
     /// Parse a list of binders (for let expressions and attribute sets)
@@ -101,8 +101,8 @@ impl Parser {
         // a semicolon and the parser treated the next line as a function argument.
         // Point to the end of the LEFT side (the function) instead of the RIGHT side.
         let expr_end_span = match &expr {
-            Expression::Application { func, .. } => spans::expr_end(func),
-            _ => spans::expr_end(&expr),
+            Expression::Application { func, .. } => func.end_span(),
+            _ => expr.end_span(),
         };
 
         if matches!(self.current.value, Token::TSemicolon) {

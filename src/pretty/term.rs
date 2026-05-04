@@ -1,12 +1,9 @@
 use crate::predoc::{Doc, DocE, Pretty, hardline, hardspace, line};
 use crate::types::{Ann, Binder, Expression, Item, Items, Leaf, Term, Token, Trivium};
 
-use super::absorb::{is_absorbable_expr, is_absorbable_term, push_absorb_expr};
+use super::absorb::push_absorb_expr;
 use super::app::push_pretty_app;
-use super::util::{
-    Width, has_trivia, is_lone_ann, items_has_only_comments, push_empty_brackets,
-    split_paren_trivia,
-};
+use super::util::{Width, push_empty_brackets, split_paren_trivia};
 
 /// Mirrors `prettyTerm (List ..)` in Nixfmt/Pretty.hs (no surrounding group).
 pub(super) fn push_pretty_term_list(doc: &mut Doc, open: &Leaf, items: &Items<Term>, close: &Leaf) {
@@ -55,8 +52,8 @@ pub(super) fn push_render_list(
     open.without_trail().pretty(doc);
 
     let sur = if open.span.start_line() != close.span.start_line()
-        || items_has_only_comments(items)
-        || (has_trivia(open) && items.0.is_empty())
+        || items.has_only_comments()
+        || (open.has_trivia() && items.0.is_empty())
     {
         hardline()
     } else if items.0.is_empty() {
@@ -84,7 +81,7 @@ pub(super) fn push_pretty_set(
     items: &Items<Binder>,
     close: &Ann<Token>,
 ) {
-    if items.0.is_empty() && is_lone_ann(open) && close.pre_trivia.is_empty() {
+    if items.0.is_empty() && open.is_lone() && close.pre_trivia.is_empty() {
         if let Some(rec) = krec {
             rec.pretty(doc);
             doc.hardspace();
@@ -167,7 +164,7 @@ fn push_pretty_items_sep<T: Pretty>(doc: &mut Doc, items: &Items<T>, sep: &DocE)
 /// Mirrors `inner` in Haskell `prettyTerm (Parenthesized ...)`.
 pub(super) fn push_parenthesized_inner(doc: &mut Doc, expr: &Expression) {
     match expr {
-        _ if is_absorbable_expr(expr) => {
+        _ if expr.is_absorbable() => {
             doc.group(|inner| {
                 push_absorb_expr(inner, Width::Regular, expr);
             });
@@ -175,7 +172,7 @@ pub(super) fn push_parenthesized_inner(doc: &mut Doc, expr: &Expression) {
         Expression::Application { .. } => {
             push_pretty_app(doc, true, &[], true, expr);
         }
-        Expression::Term(Term::Selection { base: term, .. }) if is_absorbable_term(term) => {
+        Expression::Term(Term::Selection { base: term, .. }) if term.is_absorbable() => {
             doc.line_prime();
             doc.group(|inner| {
                 expr.pretty(inner);

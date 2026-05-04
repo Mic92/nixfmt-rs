@@ -1,64 +1,65 @@
 use crate::predoc::{Doc, DocE, GroupAnn, Pretty, hardspace, line};
-use crate::types::{Ann, Binder, Expression, Item, Parameter, Term, Token};
+use crate::types::{Ann, Binder, Expression, FirstToken, Item, Parameter, Term, Token};
 
 use super::app::push_pretty_app;
 use super::op::push_pretty_operation;
 use super::term::{push_pretty_term, push_pretty_term_wide};
-use super::util::{
-    Width, has_trivia, is_lone_ann, items_has_only_comments, split_paren_trivia,
-    term_first_token_has_pre_trivia,
-};
+use super::util::{Width, split_paren_trivia};
 
-/// Haskell `isAbsorbable` / `isAbsorbableTerm` (Pretty.hs).
-pub(super) fn is_absorbable_term(term: &Term) -> bool {
-    match term {
-        // Multi-line indented string
-        Term::IndentedString(s) if s.value.len() >= 2 => true,
-        // Non-empty sets and lists
-        Term::Set { items, .. } if !items.0.is_empty() => true,
-        Term::List { items, .. } if !items.0.is_empty() => true,
-        // Empty sets and lists if they have a line break
-        // https://github.com/NixOS/nixfmt/issues/253
-        Term::Set {
-            open, items, close, ..
-        } if items.0.is_empty() && open.span.start_line() != close.span.start_line() => true,
-        Term::List { open, items, close }
-            if items.0.is_empty() && open.span.start_line() != close.span.start_line() =>
-        {
-            true
+impl Term {
+    /// Haskell `isAbsorbable` / `isAbsorbableTerm` (Pretty.hs).
+    pub(super) fn is_absorbable(&self) -> bool {
+        match self {
+            // Multi-line indented string
+            Self::IndentedString(s) if s.value.len() >= 2 => true,
+            // Non-empty sets and lists
+            Self::Set { items, .. } if !items.0.is_empty() => true,
+            Self::List { items, .. } if !items.0.is_empty() => true,
+            // Empty sets and lists if they have a line break
+            // https://github.com/NixOS/nixfmt/issues/253
+            Self::Set {
+                open, items, close, ..
+            } if items.0.is_empty() && open.span.start_line() != close.span.start_line() => true,
+            Self::List { open, items, close }
+                if items.0.is_empty() && open.span.start_line() != close.span.start_line() =>
+            {
+                true
+            }
+            // Lists/sets with only comments are absorbable
+            // https://github.com/NixOS/nixfmt/issues/362
+            Self::List { open, items, .. } if open.has_trivia() || items.has_only_comments() => {
+                true
+            }
+            Self::Set { open, items, .. } if open.has_trivia() || items.has_only_comments() => true,
+            // Parenthesized absorbable term, only when the open paren has no trivia
+            Self::Parenthesized { open, expr, .. } if open.is_lone() => {
+                matches!(&**expr, Expression::Term(t) if t.is_absorbable())
+            }
+            _ => false,
         }
-        // Lists/sets with only comments are absorbable
-        // https://github.com/NixOS/nixfmt/issues/362
-        Term::List { open, items, .. } if has_trivia(open) || items_has_only_comments(items) => {
-            true
-        }
-        Term::Set { open, items, .. } if has_trivia(open) || items_has_only_comments(items) => true,
-        // Parenthesized absorbable term, only when the open paren has no trivia
-        Term::Parenthesized { open, expr, .. } if is_lone_ann(open) => {
-            matches!(&**expr, Expression::Term(t) if is_absorbable_term(t))
-        }
-        _ => false,
     }
 }
 
-/// Haskell `isAbsorbableExpr` (Pretty.hs).
-pub(super) fn is_absorbable_expr(expr: &Expression) -> bool {
-    match expr {
-        Expression::Term(t) => is_absorbable_term(t),
-        Expression::With { body, .. } => {
-            matches!(&**body, Expression::Term(t) if is_absorbable_term(t))
-        }
-        // Absorb function declarations but only those with simple parameter(s)
-        Expression::Abstraction {
-            param: Parameter::Id(_),
-            body,
-            ..
-        } => match &**body {
-            Expression::Term(t) => is_absorbable_term(t),
-            Expression::Abstraction { .. } => is_absorbable_expr(body),
+impl Expression {
+    /// Haskell `isAbsorbableExpr` (Pretty.hs).
+    pub(super) fn is_absorbable(&self) -> bool {
+        match self {
+            Self::Term(t) => t.is_absorbable(),
+            Self::With { body, .. } => {
+                matches!(&**body, Self::Term(t) if t.is_absorbable())
+            }
+            // Absorb function declarations but only those with simple parameter(s)
+            Self::Abstraction {
+                param: Parameter::Id(_),
+                body,
+                ..
+            } => match &**body {
+                Self::Term(t) => t.is_absorbable(),
+                Self::Abstraction { .. } => body.is_absorbable(),
+                _ => false,
+            },
             _ => false,
-        },
-        _ => false,
+        }
     }
 }
 
@@ -68,7 +69,7 @@ pub(super) fn is_absorbable_expr(expr: &Expression) -> bool {
 /// turn out not to be absorbable; in that case they fall through to `pretty`.
 pub(super) fn push_absorb_expr(doc: &mut Doc, width: Width, expr: &Expression) {
     match expr {
-        Expression::Term(t) if is_absorbable_term(t) => match width {
+        Expression::Term(t) if t.is_absorbable() => match width {
             Width::Wide => push_pretty_term_wide(doc, t),
             Width::Regular => push_pretty_term(doc, t),
         },
@@ -79,7 +80,7 @@ pub(super) fn push_absorb_expr(doc: &mut Doc, width: Width, expr: &Expression) {
             scope: env,
             semi: semicolon,
             body,
-        } if matches!(&**body, Expression::Term(t) if is_absorbable_term(t)) => {
+        } if matches!(&**body, Expression::Term(t) if t.is_absorbable()) => {
             let Expression::Term(t) = &**body else {
                 unreachable!()
             };
@@ -125,7 +126,7 @@ pub(super) fn push_absorb_rhs(doc: &mut Doc, expr: &Expression) {
         }
 
         // Absorbable expression. Always start on the same line, force-expand attrsets.
-        _ if is_absorbable_expr(expr) => {
+        _ if expr.is_absorbable() => {
             push_nested_rhs(doc, hardspace(), |inner| {
                 push_absorb_expr(inner, Width::Wide, expr);
             });
@@ -185,7 +186,7 @@ pub(super) fn push_absorb_rhs(doc: &mut Doc, expr: &Expression) {
                 && matches!(
                     &**left,
                     Expression::Term(t)
-                        if is_absorbable_term(t) && !term_first_token_has_pre_trivia(t)
+                        if t.is_absorbable() && t.first_token().pre_trivia.is_empty()
                 ) =>
         {
             doc.hardspace();
@@ -198,9 +199,9 @@ pub(super) fn push_absorb_rhs(doc: &mut Doc, expr: &Expression) {
             lhs: left,
             op,
             rhs: right,
-        } if is_lone_ann(op)
+        } if op.is_lone()
             && op.value.is_update_concat_plus()
-            && matches!(&**right, Expression::Term(t) if is_absorbable_term(t)) =>
+            && matches!(&**right, Expression::Term(t) if t.is_absorbable()) =>
         {
             let Expression::Term(t) = &**right else {
                 unreachable!()
