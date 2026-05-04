@@ -41,40 +41,81 @@ fn strip_first_comment(expr: &Expression) -> Expression {
     e
 }
 
+/// Emit the leftmost expression of a call chain. Its first-token trivia was
+/// already emitted by `emit_app`, so strip it here when `comment` is non-empty.
+fn absorb_head(doc: &mut Doc, expr: &Expression, indent_function: bool, comment: &Trivia) {
+    if !comment.is_empty() {
+        strip_first_comment(expr).emit(doc);
+    } else if indent_function {
+        doc.nested(|n| {
+            n.group(|g| {
+                g.linebreak();
+                expr.emit(g);
+            });
+        });
+    } else {
+        expr.emit(doc);
+    }
+}
+
+fn absorb_arg(doc: &mut Doc, a: &Expression) {
+    doc.line();
+    // Selections must not priority-expand: only the `.`-suffix would move,
+    // which looks odd.
+    let arg_ann = if matches!(a, Expression::Term(Term::Selection { .. })) {
+        GroupKind::Regular
+    } else {
+        GroupKind::Priority
+    };
+    doc.nested(|n| {
+        n.group_with(arg_ann, |g| absorb_inner(g, a));
+    });
+}
+
 /// Walk the function-call chain. Mirrors Haskell `absorbApp` (Pretty.hs).
-fn absorb_app(doc: &mut Doc, expr: &Expression, indent_function: bool, comment: &Trivia) {
-    let recurse_head = |doc: &mut Doc, head: &Expression| {
+/// `head` is threaded through to the base case; see [`emit_app_parts`].
+fn absorb_app(
+    doc: &mut Doc,
+    expr: &Expression,
+    indent_function: bool,
+    comment: &Trivia,
+    head: Option<&Expression>,
+) {
+    let recurse_head = |doc: &mut Doc, f: &Expression, head| {
         doc.transparent_group(|g| {
-            absorb_app(g, head, indent_function, comment);
+            absorb_app(g, f, indent_function, comment, head);
         });
     };
 
     let Expression::Application { func: f, arg: a } = expr else {
-        // Base case: the function expression itself. The first token's
-        // pre-trivia/trailing comment was already emitted by `emit_app`,
-        // so render the head with that trivia stripped.
-        if !comment.is_empty() {
-            strip_first_comment(expr).emit(doc);
-        } else if indent_function {
-            doc.nested(|n| {
-                n.group(|g| {
-                    g.linebreak();
-                    expr.emit(g);
-                });
-            });
-        } else {
-            expr.emit(doc);
+        match head {
+            None => absorb_head(doc, expr, indent_function, comment),
+            Some(h) => {
+                // Effective chain is `h expr`.
+                recurse_head(doc, h, None);
+                absorb_arg(doc, expr);
+            }
         }
         return;
     };
 
     // Two consecutive list arguments stay together: if one wraps, both wrap.
-    if matches!(**a, Expression::Term(Term::List { .. }))
-        && let Expression::Application { func: f2, arg: l1 } = &**f
+    let pair_head = if let Expression::Application { func: f2, arg: l1 } = &**f
         && matches!(**l1, Expression::Term(Term::List { .. }))
     {
+        Some((&**f2, &**l1, head))
+    } else if let Some(h) = head
+        && matches!(**f, Expression::Term(Term::List { .. }))
+    {
+        Some((h, &**f, None))
+    } else {
+        None
+    };
+    if matches!(**a, Expression::Term(Term::List { .. }))
+        && let Some((f2, l1, h2)) = pair_head
+    {
         doc.transparent_group(|outer| {
-            recurse_head(outer, f2);
+            recurse_head(outer, f2, h2);
             outer.nested(|n| {
                 n.group(|g| {
                     g.line();
@@ -87,18 +128,8 @@ fn absorb_app(doc: &mut Doc, expr: &Expression, indent_function: bool, comment: 
         return;
     }
 
-    recurse_head(doc, f);
-    doc.line();
-    // Selections must not priority-expand: only the `.`-suffix would move,
-    // which looks odd.
-    let arg_ann = if matches!(**a, Expression::Term(Term::Selection { .. })) {
-        GroupKind::Regular
-    } else {
-        GroupKind::Priority
-    };
-    doc.nested(|n| {
-        n.group_with(arg_ann, |g| absorb_inner(g, a));
-    });
+    recurse_head(doc, f, head);
+    absorb_arg(doc, a);
 }
 
 /// `group' Priority $ nest …`
@@ -180,8 +211,23 @@ pub(super) fn emit_app(
     let Expression::Application { func: f, arg: a } = expr else {
         unreachable!("emit_app requires an Application");
     };
+    emit_app_parts(doc, indent_function, pre, has_post, f, a, None);
+}
 
-    let comment = first_token_comment(f);
+/// As [`emit_app`], but with `func`/`arg` destructured and an optional `head`
+/// virtually prepended at the leftmost position of the chain. Lets `assert`
+/// render `assert cond` as an application without cloning `cond` into a
+/// synthetic `Application` node (the Haskell `insertIntoApp` approach).
+pub(super) fn emit_app_parts(
+    doc: &mut Doc,
+    indent_function: bool,
+    pre: &[Elem],
+    has_post: bool,
+    f: &Expression,
+    a: &Expression,
+    head: Option<&Expression>,
+) {
+    let comment = first_token_comment(head.unwrap_or(f));
 
     let post_hardline = |doc: &mut Doc| {
         if has_post && !comment.is_empty() {
@@ -193,14 +239,24 @@ pub(super) fn emit_app(
 
     // Two trailing list arguments are rendered as a pair of regular groups so
     // they wrap together; lists are never "simple", so renderSimple cannot apply.
-    if matches!(**a, Expression::Term(Term::List { .. }))
-        && let Expression::Application { func: f2, arg: l1 } = &**f
+    let pair_head = if let Expression::Application { func: f2, arg: l1 } = f
         && matches!(**l1, Expression::Term(Term::List { .. }))
+    {
+        Some((&**f2, &**l1, head))
+    } else if let Some(h) = head
+        && matches!(f, Expression::Term(Term::List { .. }))
+    {
+        Some((h, f, None))
+    } else {
+        None
+    };
+    if matches!(a, Expression::Term(Term::List { .. }))
+        && let Some((f2, l1, h2)) = pair_head
     {
         doc.group(|g| {
             g.0.extend_from_slice(pre);
             g.transparent_group(|inner| {
-                absorb_app(inner, f2, indent_function, &comment);
+                absorb_app(inner, f2, indent_function, &comment, h2);
             });
             g.line();
             g.nested(|n| {
@@ -220,11 +276,13 @@ pub(super) fn emit_app(
 
     let mut rendered_f = Doc::from(pre.to_vec());
     rendered_f.transparent_group(|g| {
-        absorb_app(g, f, indent_function, &comment);
+        absorb_app(g, f, indent_function, &comment, head);
     });
 
-    // renderSimple
-    if expr.is_simple()
+    // renderSimple. A prepended `head` is only ever the `assert` keyword,
+    // which is not `is_simple`, so the synthetic chain is never simple.
+    if head.is_none()
+        && Expression::app_is_simple(f, a)
         && let Some(unexpanded) = rendered_f.try_compact(None)
     {
         doc.group(|g| {
