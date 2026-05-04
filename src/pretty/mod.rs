@@ -16,14 +16,12 @@ mod stmt;
 mod string;
 mod term;
 
-use absorb::push_absorb_rhs;
-use app::push_pretty_app;
+use absorb::absorb_rhs;
+use app::pretty_app;
 use op::pretty_operation;
-use stmt::{insert_into_app, pretty_if, pretty_let, pretty_with, push_absorb_abs};
-use string::{push_pretty_indented_string, push_pretty_simple_string};
-use term::{
-    push_pretty_parenthesized, push_pretty_set, push_pretty_term_list, push_pretty_term_wide,
-};
+use stmt::{absorb_abs, insert_into_app, pretty_if, pretty_let, pretty_with};
+use string::{pretty_indented_string, pretty_simple_string};
+use term::{pretty_list, pretty_paren, pretty_set, pretty_term_wide};
 
 /// Whether a set/absorbed term should prefer its expanded (multi-line) layout.
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -199,11 +197,11 @@ impl Pretty for Binder {
                         inner.hardspace();
                         assign.pretty(inner);
                         if simple_lhs {
-                            push_absorb_rhs(inner, expr);
+                            absorb_rhs(inner, expr);
                         } else {
                             inner.linebreak();
                             inner.priority_group(|g| {
-                                push_absorb_rhs(g, expr);
+                                absorb_rhs(g, expr);
                             });
                         }
                     });
@@ -229,7 +227,7 @@ impl Pretty for SimpleSelector {
         match self {
             Self::ID(id) => id.pretty(doc),
             Self::String(ann) => {
-                ann.pretty_with(doc, |d, v| push_pretty_simple_string(d, v));
+                ann.pretty_with(doc, |d, v| pretty_simple_string(d, v));
             }
             Self::Interpol(interp) => interp.pretty(doc),
         }
@@ -250,10 +248,10 @@ impl Pretty for Term {
         match self {
             Self::Token(t) => t.pretty(doc),
             Self::SimpleString(s) => {
-                s.pretty_with(doc, |d, v| push_pretty_simple_string(d, v));
+                s.pretty_with(doc, |d, v| pretty_simple_string(d, v));
             }
             Self::IndentedString(s) => {
-                s.pretty_with(doc, |d, v| push_pretty_indented_string(d, v));
+                s.pretty_with(doc, |d, v| pretty_indented_string(d, v));
             }
             Self::Path(p) => p.pretty_with(doc, |d, v| {
                 for part in v {
@@ -261,10 +259,10 @@ impl Pretty for Term {
                 }
             }),
             Self::Parenthesized { open, expr, close } => {
-                push_pretty_parenthesized(doc, open, expr, close);
+                pretty_paren(doc, open, expr, close);
             }
             Self::List { open, items, close } => {
-                doc.group(|g| push_pretty_term_list(g, open, items, close));
+                doc.group(|g| pretty_list(g, open, items, close));
             }
             Self::Set {
                 rec: krec,
@@ -272,7 +270,7 @@ impl Pretty for Term {
                 items: binders,
                 close,
             } => {
-                push_pretty_set(doc, Width::Regular, krec.as_ref(), open, binders, close);
+                pretty_set(doc, Width::Regular, krec.as_ref(), open, binders, close);
             }
             Self::Selection {
                 base: term,
@@ -323,7 +321,7 @@ impl Pretty for Expression {
         match self {
             Self::Term(t) => t.pretty(doc),
             Self::Application { .. } => {
-                push_pretty_app(doc, false, &[], false, self);
+                pretty_app(doc, false, &[], false, self);
             }
             Self::Operation {
                 lhs: left,
@@ -399,7 +397,7 @@ impl Pretty for Expression {
                         func: Box::new(f),
                         arg: Box::new(a),
                     };
-                    push_pretty_app(g, false, &[], false, &app);
+                    pretty_app(g, false, &[], false, &app);
                     semicolon.pretty(g);
                     g.hardline();
                     expr.pretty(g);
@@ -422,7 +420,7 @@ impl Pretty for Expression {
                     group_doc.linebreak();
                     param.pretty(group_doc);
                     colon.pretty(group_doc);
-                    push_absorb_abs(group_doc, 1, body);
+                    absorb_abs(group_doc, 1, body);
                 });
             }
             Self::Abstraction { param, colon, body } => {
@@ -434,7 +432,7 @@ impl Pretty for Expression {
                 if let Self::Term(t) = &**body
                     && t.is_absorbable()
                 {
-                    doc.group(|g| push_pretty_term_wide(g, t));
+                    doc.group(|g| pretty_term_wide(g, t));
                     return;
                 }
                 body.pretty(doc);

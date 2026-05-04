@@ -1,7 +1,7 @@
 use crate::predoc::{Doc, Elem, Pretty, TextKind, newline, text_width};
 use crate::types::{Expression, StringPart};
 
-use super::term::push_parenthesized_inner;
+use super::term::pretty_paren_body;
 
 fn is_spaces(s: &str) -> bool {
     s.chars().all(char::is_whitespace)
@@ -9,7 +9,7 @@ fn is_spaces(s: &str) -> bool {
 
 /// Wrap content in `${ ... }` with a group: try to compact it onto one line
 /// (within `max_width` columns), otherwise break with `linebreak`.
-fn push_interpolation_braces(doc: &mut Doc, max_width: i32, body: Doc) {
+fn interpolation_braces(doc: &mut Doc, max_width: i32, body: Doc) {
     doc.group(|g| {
         g.text("${");
         match body.try_compact(Some(max_width)) {
@@ -64,7 +64,7 @@ impl Pretty for StringPart {
                 // ≤30 columns, force it onto this line even past the width limit.
                 let mut rendered = Doc::new();
                 whole.pretty(&mut rendered);
-                push_interpolation_braces(doc, 30, rendered);
+                interpolation_braces(doc, 30, rendered);
             }
         }
     }
@@ -91,7 +91,7 @@ impl Pretty for Vec<StringPart> {
             doc.offset(text_width(pre), |d| {
                 d.group(|g| {
                     g.text("${");
-                    g.nested(|n| push_parenthesized_inner(n, expr));
+                    g.nested(|n| pretty_paren_body(n, expr));
                     g.text("}");
                 });
             });
@@ -103,7 +103,7 @@ impl Pretty for Vec<StringPart> {
             [StringPart::Interpolation(whole)] => {
                 let mut rendered = Doc::new();
                 whole.pretty(&mut rendered);
-                push_interpolation_braces(doc, 0, rendered);
+                interpolation_braces(doc, 0, rendered);
             }
             // If a line is split across multiple code lines due to large
             // interpolations, indent the continuation by the line's leading
@@ -131,7 +131,7 @@ impl Pretty for Vec<StringPart> {
 }
 
 /// Format a simple string (with double quotes)
-pub(super) fn push_pretty_simple_string(doc: &mut Doc, parts: &[Vec<StringPart>]) {
+pub(super) fn pretty_simple_string(doc: &mut Doc, parts: &[Vec<StringPart>]) {
     doc.group(|d| {
         d.text("\"");
         // Literal \n avoids the indentation that newline() would inject
@@ -142,7 +142,7 @@ pub(super) fn push_pretty_simple_string(doc: &mut Doc, parts: &[Vec<StringPart>]
 }
 
 /// Format an indented string (with '')
-pub(super) fn push_pretty_indented_string(doc: &mut Doc, parts: &[Vec<StringPart>]) {
+pub(super) fn pretty_indented_string(doc: &mut Doc, parts: &[Vec<StringPart>]) {
     doc.group(|d| {
         d.text("''");
         // For multi-line strings, add a potential line break after opening ''

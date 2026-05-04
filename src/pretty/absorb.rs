@@ -4,9 +4,9 @@ use crate::types::{
 };
 
 use super::Width;
-use super::app::push_pretty_app;
-use super::op::push_pretty_operation;
-use super::term::{push_pretty_term, push_pretty_term_wide};
+use super::app::pretty_app;
+use super::op::pretty_operation_chain;
+use super::term::{pretty_term, pretty_term_wide};
 
 impl Term {
     /// Haskell `isAbsorbable` / `isAbsorbableTerm` (Pretty.hs).
@@ -60,11 +60,11 @@ impl Expression {
 ///
 /// Unlike absorbable terms which can be force-absorbed, some expressions may
 /// turn out not to be absorbable; in that case they fall through to `pretty`.
-pub(super) fn push_absorb_expr(doc: &mut Doc, width: Width, expr: &Expression) {
+pub(super) fn absorb_expr(doc: &mut Doc, width: Width, expr: &Expression) {
     match expr {
         Expression::Term(t) if t.is_absorbable() => match width {
-            Width::Wide => push_pretty_term_wide(doc, t),
-            Width::Regular => push_pretty_term(doc, t),
+            Width::Wide => pretty_term_wide(doc, t),
+            Width::Regular => pretty_term(doc, t),
         },
         // With expression with absorbable body: treat as absorbable term via
         // `prettyWith True`.
@@ -86,7 +86,7 @@ pub(super) fn push_absorb_expr(doc: &mut Doc, width: Width, expr: &Expression) {
                 });
                 semicolon.pretty(g);
                 g.hardspace();
-                g.priority_group(|pg| push_pretty_term_wide(pg, t));
+                g.priority_group(|pg| pretty_term_wide(pg, t));
             });
         }
         _ => expr.pretty(doc),
@@ -94,7 +94,7 @@ pub(super) fn push_absorb_expr(doc: &mut Doc, width: Width, expr: &Expression) {
 }
 
 /// `nest $ lead <> group …`
-fn push_nested_rhs(doc: &mut Doc, lead: Elem, f: impl FnOnce(&mut Doc)) {
+fn nested_rhs(doc: &mut Doc, lead: Elem, f: impl FnOnce(&mut Doc)) {
     doc.nested(|d| {
         d.push_raw(lead);
         d.group(f);
@@ -106,22 +106,22 @@ fn push_nested_rhs(doc: &mut Doc, lead: Elem, f: impl FnOnce(&mut Doc)) {
 /// This mirrors Haskell `absorbRHS` (Pretty.hs ~ line 657) one-to-one: each match
 /// arm corresponds to exactly one Haskell `case` arm, in the same order, so that
 /// behavioural differences against the reference implementation are easy to locate.
-pub(super) fn push_absorb_rhs(doc: &mut Doc, expr: &Expression) {
+pub(super) fn absorb_rhs(doc: &mut Doc, expr: &Expression) {
     match expr {
         // Exception to the absorbable-expr case below: do not force-expand attrsets
         // that only contain a single `inherit` statement.
         Expression::Term(Term::Set { items: binders, .. })
             if matches!(binders.0.as_slice(), [Item::Item(Binder::Inherit { .. })]) =>
         {
-            push_nested_rhs(doc, hardspace(), |inner| {
-                push_absorb_expr(inner, Width::Regular, expr);
+            nested_rhs(doc, hardspace(), |inner| {
+                absorb_expr(inner, Width::Regular, expr);
             });
         }
 
         // Absorbable expression. Always start on the same line, force-expand attrsets.
         _ if expr.is_absorbable() => {
-            push_nested_rhs(doc, hardspace(), |inner| {
-                push_absorb_expr(inner, Width::Wide, expr);
+            nested_rhs(doc, hardspace(), |inner| {
+                absorb_expr(inner, Width::Wide, expr);
             });
         }
 
@@ -134,14 +134,14 @@ pub(super) fn push_absorb_rhs(doc: &mut Doc, expr: &Expression) {
         }) => {
             doc.nested(|d| {
                 d.hardspace();
-                push_absorb_paren(d, open, inner, close);
+                absorb_paren(d, open, inner, close);
             });
         }
 
         // Not all strings are absorbable, but there is nothing to gain from
         // starting them on a new line; same for paths.
         Expression::Term(Term::SimpleString(_) | Term::IndentedString(_) | Term::Path(_)) => {
-            push_nested_rhs(doc, hardspace(), |inner| expr.pretty(inner));
+            nested_rhs(doc, hardspace(), |inner| expr.pretty(inner));
         }
 
         // Non-absorbable term: if multi-line, force it onto a new indented line.
@@ -157,7 +157,7 @@ pub(super) fn push_absorb_rhs(doc: &mut Doc, expr: &Expression) {
         // Function call: absorb if all arguments except the last fit on the line,
         // start on a new line otherwise.
         Expression::Application { .. } => {
-            doc.nested(|d| push_pretty_app(d, false, &[line()], false, expr));
+            doc.nested(|d| pretty_app(d, false, &[line()], false, expr));
         }
 
         // `with ...;` keeps the leading `line` inside the group so it can collapse
@@ -183,7 +183,7 @@ pub(super) fn push_absorb_rhs(doc: &mut Doc, expr: &Expression) {
                 ) =>
         {
             doc.hardspace();
-            push_pretty_operation(doc, true, expr, op);
+            pretty_operation_chain(doc, true, expr, op);
         }
 
         // Case 2: operator has no trivia and RHS is an absorbable term → keep
@@ -208,7 +208,7 @@ pub(super) fn push_absorb_rhs(doc: &mut Doc, expr: &Expression) {
                         op.pretty(tg);
                         tg.hardspace();
                         tg.priority_group(|pg| {
-                            push_pretty_term_wide(pg, t);
+                            pretty_term_wide(pg, t);
                         });
                     });
                 });
@@ -220,13 +220,13 @@ pub(super) fn push_absorb_rhs(doc: &mut Doc, expr: &Expression) {
         // - fits with a newline after `=` → do that
         // - otherwise start on a new line and expand fully
         _ => {
-            push_nested_rhs(doc, line(), |inner| expr.pretty(inner));
+            nested_rhs(doc, line(), |inner| expr.pretty(inner));
         }
     }
 }
 
 /// Render parenthesized expression in a Priority group (Haskell `absorbParen`).
-pub(super) fn push_absorb_paren(
+pub(super) fn absorb_paren(
     doc: &mut Doc,
     open: &Ann<Token>,
     expr: &Expression,

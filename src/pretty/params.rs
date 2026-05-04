@@ -4,8 +4,8 @@ use crate::types::{
     TrailingComment, Trivia,
 };
 
-use super::absorb::push_absorb_rhs;
-use super::term::push_empty_brackets;
+use super::absorb::absorb_rhs;
+use super::term::empty_brackets;
 
 impl Pretty for ParamAttr {
     fn pretty(&self, doc: &mut Doc) {
@@ -23,7 +23,7 @@ impl Pretty for ParamAttr {
                         d.hardspace();
                         d.nested(|inner| {
                             def.question.pretty(inner);
-                            push_absorb_rhs(inner, &def.value);
+                            absorb_rhs(inner, &def.value);
                         });
                     }
 
@@ -227,7 +227,7 @@ impl Pretty for Parameter {
             Self::Set { open, attrs, close } => {
                 let open = open.move_trailing_comment_up();
                 if attrs.is_empty() {
-                    doc.group(|doc| push_empty_brackets(doc, &open, close));
+                    doc.group(|doc| empty_brackets(doc, &open, close));
                     return;
                 }
 

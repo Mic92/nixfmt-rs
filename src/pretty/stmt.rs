@@ -1,12 +1,12 @@
 use crate::predoc::{Doc, Elem, Pretty, hardline, line};
 use crate::types::{Binder, Expression, Items, Leaf, Parameter, Trivia, Trivium};
 
-use super::term::push_pretty_items;
+use super::term::pretty_items;
 
 use super::Width;
-use super::absorb::push_absorb_expr;
+use super::absorb::absorb_expr;
 
-pub(super) fn push_absorb_abs(doc: &mut Doc, depth: usize, expr: &Expression) {
+pub(super) fn absorb_abs(doc: &mut Doc, depth: usize, expr: &Expression) {
     match expr {
         Expression::Abstraction {
             param: Parameter::Id(param),
@@ -16,12 +16,12 @@ pub(super) fn push_absorb_abs(doc: &mut Doc, depth: usize, expr: &Expression) {
             doc.hardspace();
             param.pretty(doc);
             colon.pretty(doc);
-            push_absorb_abs(doc, depth + 1, body);
+            absorb_abs(doc, depth + 1, body);
         }
         _ if expr.is_absorbable() => {
             doc.hardspace();
             doc.priority_group(|priority_group| {
-                push_absorb_expr(priority_group, Width::Regular, expr);
+                absorb_expr(priority_group, Width::Regular, expr);
             });
         }
         _ => {
@@ -52,7 +52,7 @@ pub(super) fn insert_into_app(insert: Expression, expr: Expression) -> (Expressi
 
 /// Render a `with` expression.
 /// Mirrors Haskell `prettyWith False` (Pretty.hs); the `prettyWith True`
-/// path is open-coded inside `push_absorb_expr`.
+/// path is open-coded inside `absorb_expr`.
 /// `instance Pretty Expression` clause for `Let` (Pretty.hs).
 pub(super) fn pretty_let(
     doc: &mut Doc,
@@ -77,7 +77,7 @@ pub(super) fn pretty_let(
     doc.group(|g| {
         let_kw.pretty(g);
         g.hardline();
-        g.nested(|n| push_pretty_items(n, binders));
+        g.nested(|n| pretty_items(n, binders));
     });
     doc.hardline();
     // inPart = group $ pretty in_ <> hardline <> trivia <> pretty expr

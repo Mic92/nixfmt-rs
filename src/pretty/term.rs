@@ -2,12 +2,12 @@ use crate::predoc::{Doc, Elem, Pretty, hardline, hardspace, line};
 use crate::types::{Ann, Binder, Expression, Item, Items, Leaf, Term, Token, Trivium};
 
 use super::Width;
-use super::absorb::push_absorb_expr;
-use super::app::push_pretty_app;
+use super::absorb::absorb_expr;
+use super::app::pretty_app;
 
 /// Render an empty bracketed container (`[]`, `{}`), preserving a user-inserted
 /// line break between the delimiters. Shared by empty list / set / param-set.
-pub(super) fn push_empty_brackets(doc: &mut Doc, open: &Leaf, close: &Leaf) {
+pub(super) fn empty_brackets(doc: &mut Doc, open: &Leaf, close: &Leaf) {
     open.pretty(doc);
     if open.span.start_line() == close.span.start_line() {
         doc.hardspace();
@@ -18,25 +18,25 @@ pub(super) fn push_empty_brackets(doc: &mut Doc, open: &Leaf, close: &Leaf) {
 }
 
 /// Mirrors `prettyTerm (List ..)` in Nixfmt/Pretty.hs (no surrounding group).
-pub(super) fn push_pretty_term_list(doc: &mut Doc, open: &Leaf, items: &Items<Term>, close: &Leaf) {
+pub(super) fn pretty_list(doc: &mut Doc, open: &Leaf, items: &Items<Term>, close: &Leaf) {
     if items.0.is_empty() && open.trail_comment.is_none() && close.pre_trivia.is_empty() {
-        push_empty_brackets(doc, open, close);
+        empty_brackets(doc, open, close);
     } else {
-        push_render_list(doc, &hardline(), open, items, close);
+        render_list(doc, &hardline(), open, items, close);
     }
 }
 
 /// Mirrors Haskell `prettyTerm`: like `impl Pretty for Term` but *without* the
 /// extra outer group around `List`.
-pub(super) fn push_pretty_term(doc: &mut Doc, term: &Term) {
+pub(super) fn pretty_term(doc: &mut Doc, term: &Term) {
     match term {
-        Term::List { open, items, close } => push_pretty_term_list(doc, open, items, close),
+        Term::List { open, items, close } => pretty_list(doc, open, items, close),
         _ => term.pretty(doc),
     }
 }
 
 /// Mirrors `prettyTermWide` in Nixfmt/Pretty.hs.
-pub(super) fn push_pretty_term_wide(doc: &mut Doc, term: &Term) {
+pub(super) fn pretty_term_wide(doc: &mut Doc, term: &Term) {
     match term {
         Term::Set {
             rec: krec,
@@ -44,17 +44,17 @@ pub(super) fn push_pretty_term_wide(doc: &mut Doc, term: &Term) {
             items,
             close,
         } => {
-            push_pretty_set(doc, Width::Wide, krec.as_ref(), open, items, close);
+            pretty_set(doc, Width::Wide, krec.as_ref(), open, items, close);
         }
         // `prettyTermWide` delegates to `prettyTerm`, which unlike `instance
         // Pretty Term` does *not* wrap lists in an extra group.
-        Term::List { open, items, close } => push_pretty_term_list(doc, open, items, close),
+        Term::List { open, items, close } => pretty_list(doc, open, items, close),
         _ => term.pretty(doc),
     }
 }
 
 /// `renderList` from Pretty.hs.
-pub(super) fn push_render_list(
+pub(super) fn render_list(
     doc: &mut Doc,
     item_sep: &Elem,
     open: &Ann<Token>,
@@ -77,7 +77,7 @@ pub(super) fn push_render_list(
     doc.surrounded(&[sur], |d| {
         d.nested(|inner| {
             open.trail_comment.pretty(inner);
-            push_pretty_items_sep(inner, items, item_sep);
+            pretty_items_sep(inner, items, item_sep);
         });
     });
     close.pretty(doc);
@@ -85,7 +85,7 @@ pub(super) fn push_render_list(
 
 /// Format an attribute set with optional rec keyword
 /// Based on Haskell prettySet (Pretty.hs:185-205)
-pub(super) fn push_pretty_set(
+pub(super) fn pretty_set(
     doc: &mut Doc,
     wide: Width,
     krec: Option<&Ann<Token>>,
@@ -98,7 +98,7 @@ pub(super) fn push_pretty_set(
             rec.pretty(doc);
             doc.hardspace();
         }
-        push_empty_brackets(doc, open, close);
+        empty_brackets(doc, open, close);
         return;
     }
 
@@ -128,18 +128,18 @@ pub(super) fn push_pretty_set(
     doc.surrounded(&[sep], |d| {
         d.nested(|inner| {
             open.trail_comment.pretty(inner);
-            push_pretty_items(inner, items);
+            pretty_items(inner, items);
         });
     });
     close.pretty(doc);
 }
 
 /// Haskell `prettyItems` (Pretty.hs:108-120).
-pub(super) fn push_pretty_items<T: Pretty>(doc: &mut Doc, items: &Items<T>) {
-    push_pretty_items_sep(doc, items, &hardline());
+pub(super) fn pretty_items<T: Pretty>(doc: &mut Doc, items: &Items<T>) {
+    pretty_items_sep(doc, items, &hardline());
 }
 
-fn push_pretty_items_sep<T: Pretty>(doc: &mut Doc, items: &Items<T>, sep: &Elem) {
+fn pretty_items_sep<T: Pretty>(doc: &mut Doc, items: &Items<T>, sep: &Elem) {
     let items = &items.0;
     match items.as_slice() {
         [] => {}
@@ -174,15 +174,15 @@ fn push_pretty_items_sep<T: Pretty>(doc: &mut Doc, items: &Items<T>, sep: &Elem)
 
 /// Render the nested document that appears between parentheses.
 /// Mirrors `inner` in Haskell `prettyTerm (Parenthesized ...)`.
-pub(super) fn push_parenthesized_inner(doc: &mut Doc, expr: &Expression) {
+pub(super) fn pretty_paren_body(doc: &mut Doc, expr: &Expression) {
     match expr {
         _ if expr.is_absorbable() => {
             doc.group(|inner| {
-                push_absorb_expr(inner, Width::Regular, expr);
+                absorb_expr(inner, Width::Regular, expr);
             });
         }
         Expression::Application { .. } => {
-            push_pretty_app(doc, true, &[], true, expr);
+            pretty_app(doc, true, &[], true, expr);
         }
         Expression::Term(Term::Selection { base: term, .. }) if term.is_absorbable() => {
             doc.linebreak();
@@ -208,7 +208,7 @@ pub(super) fn push_parenthesized_inner(doc: &mut Doc, expr: &Expression) {
 }
 
 /// Pretty print a parenthesized expression (Haskell `prettyTerm (Parenthesized ...)`).
-pub(super) fn push_pretty_parenthesized(
+pub(super) fn pretty_paren(
     doc: &mut Doc,
     open: &Ann<Token>,
     expr: &Expression,
@@ -219,7 +219,7 @@ pub(super) fn push_pretty_parenthesized(
         // before the body, not after it on the same line.
         open.move_trailing_comment_up().pretty(g);
         g.nested(|nested| {
-            push_parenthesized_inner(nested, expr);
+            pretty_paren_body(nested, expr);
             close.pre_trivia.pretty(nested);
         });
         close.pretty_tail(g);
