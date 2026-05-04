@@ -1,5 +1,5 @@
 use crate::predoc::{Doc, DocE, GroupAnn, Pretty, hardspace, line};
-use crate::types::{Ann, Binder, Expression, FirstToken, Item, Parameter, Term, Token};
+use crate::types::{Ann, Binder, Expression, FirstToken, Item, Items, Parameter, Term, Token};
 
 use super::app::push_pretty_app;
 use super::op::push_pretty_operation;
@@ -11,33 +11,25 @@ impl Term {
     pub(super) fn is_absorbable(&self) -> bool {
         match self {
             // Multi-line indented string
-            Self::IndentedString(s) if s.value.len() >= 2 => true,
-            // Non-empty sets and lists
-            Self::Set { items, .. } if !items.0.is_empty() => true,
-            Self::List { items, .. } if !items.0.is_empty() => true,
-            // Empty sets and lists if they have a line break
-            // https://github.com/NixOS/nixfmt/issues/253
+            Self::IndentedString(s) => s.value.len() >= 2,
             Self::Set {
                 open, items, close, ..
-            } if items.0.is_empty() && open.span.start_line() != close.span.start_line() => true,
-            Self::List { open, items, close }
-                if items.0.is_empty() && open.span.start_line() != close.span.start_line() =>
-            {
-                true
-            }
-            // Lists/sets with only comments are absorbable
-            // https://github.com/NixOS/nixfmt/issues/362
-            Self::List { open, items, .. } if open.has_trivia() || items.has_only_comments() => {
-                true
-            }
-            Self::Set { open, items, .. } if open.has_trivia() || items.has_only_comments() => true,
+            } => is_absorbable_braces(open, items, close),
+            Self::List { open, items, close } => is_absorbable_braces(open, items, close),
             // Parenthesized absorbable term, only when the open paren has no trivia
-            Self::Parenthesized { open, expr, .. } if open.is_lone() => {
-                matches!(&**expr, Expression::Term(t) if t.is_absorbable())
+            Self::Parenthesized { open, expr, .. } => {
+                open.is_lone() && matches!(&**expr, Expression::Term(t) if t.is_absorbable())
             }
             _ => false,
         }
     }
+}
+
+/// Shared absorbability rule for `[ ... ]` and `{ ... }`: absorb when the
+/// braces enclose anything at all: items/comments (NixOS/nixfmt#362),
+/// trivia on the opener, or a user-inserted line break (NixOS/nixfmt#253).
+fn is_absorbable_braces<T>(open: &Ann<Token>, items: &Items<T>, close: &Ann<Token>) -> bool {
+    !items.0.is_empty() || open.has_trivia() || open.span.start_line() != close.span.start_line()
 }
 
 impl Expression {

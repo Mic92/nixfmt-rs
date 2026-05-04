@@ -169,14 +169,16 @@ fn parameter_separator(open: &Leaf, attrs: &[ParamAttr], close: &Leaf) -> DocE {
     if open.span.start_line() != close.span.start_line() {
         return hardline();
     }
-
-    match attrs {
-        [attr] if attr.is_ellipsis() => line(),
-        [attr] if attr.has_no_default() => line(),
-        [a, b] if a.has_no_default() && b.is_ellipsis() => line(),
-        [a, b] if a.has_no_default() && b.has_no_default() => line(),
-        [a, b, c] if a.has_no_default() && b.has_no_default() && c.is_ellipsis() => line(),
-        _ => hardline(),
+    // Allow a compact `{ a, b, ... }` only for at most two plain attrs
+    // optionally followed by `...`.
+    let plain = match attrs.split_last() {
+        Some((last, init)) if last.is_ellipsis() => init,
+        _ => attrs,
+    };
+    if plain.len() <= 2 && plain.iter().all(ParamAttr::has_no_default) {
+        line()
+    } else {
+        hardline()
     }
 }
 
