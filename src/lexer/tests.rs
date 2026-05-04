@@ -1,7 +1,7 @@
 //! Lexer unit tests
 
 use super::*;
-use crate::types::Trivium;
+use crate::ast::Trivium;
 
 #[test]
 fn test_split_lines() {

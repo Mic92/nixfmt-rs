@@ -2,11 +2,11 @@
 //!
 //! Implements formatting rules from nixfmt's Pretty.hs
 
-use crate::predoc::{Doc, Pretty, hardline, line, linebreak};
-use crate::types::{
+use crate::ast::{
     Annotated, Binder, Expression, Item, Parameter, Selector, SimpleSelector, Term, Token, Trailed,
     TrailingComment, Trivia, Trivium,
 };
+use crate::predoc::{Doc, Pretty, hardline, line, linebreak};
 
 mod absorb;
 mod app;

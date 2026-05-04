@@ -1,7 +1,7 @@
 //! Error formatting with source snippets
 
+use crate::ast::Span;
 use crate::error::{ErrorKind, ParseError};
-use crate::types::Span;
 use std::fmt::{self, Write as _};
 
 use super::context::ErrorContext;

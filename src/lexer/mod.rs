@@ -2,7 +2,7 @@
 //!
 //! Ports the comment normalization logic from nixfmt's Lexer.hs
 
-use crate::types::{Token, Trivia};
+use crate::ast::{Token, Trivia};
 
 mod comments;
 mod numbers;
@@ -132,7 +132,7 @@ impl Lexer {
 
     /// Parse a lexeme (token with trivia annotations)
     /// This is the main entry point for the parser
-    pub(crate) fn lexeme(&mut self) -> crate::error::Result<crate::types::Annotated<Token>> {
+    pub(crate) fn lexeme(&mut self) -> crate::error::Result<crate::ast::Annotated<Token>> {
         let mut leading_trivia = std::mem::take(&mut self.trivia_buffer);
 
         let _ = self.skip_hspace();
@@ -155,8 +155,7 @@ impl Lexer {
 
         let token_end = self.byte_pos;
         let end_line = self.line;
-        let token_span =
-            crate::types::Span::with_lines(token_start, token_end, start_line, end_line);
+        let token_span = crate::ast::Span::with_lines(token_start, token_end, start_line, end_line);
 
         // String/path delimiters: defer trivia so the parser sees raw source content.
         let skip_trivia = matches!(token, Token::TDoubleQuote | Token::TDoubleSingleQuote);
@@ -169,7 +168,7 @@ impl Lexer {
             // Fast path hit: only whitespace between this token and the next.
             trailing_comment = None;
             self.trivia_buffer = if newlines > 1 {
-                Trivia::one(crate::types::Trivium::EmptyLine())
+                Trivia::one(crate::ast::Trivium::EmptyLine())
             } else {
                 Trivia::new()
             };
@@ -180,7 +179,7 @@ impl Lexer {
             self.trivia_buffer = next;
         }
 
-        Ok(crate::types::Annotated {
+        Ok(crate::ast::Annotated {
             pre_trivia: leading_trivia,
             span: token_span,
             value: token,
@@ -198,14 +197,14 @@ impl Lexer {
     /// parser does not need direct access to the scratch buffer.
     pub(crate) fn parse_and_convert_trivia(
         &mut self,
-    ) -> (Option<crate::types::TrailingComment>, Trivia) {
+    ) -> (Option<crate::ast::TrailingComment>, Trivia) {
         self.parse_trivia();
         trivia::convert_trivia(&self.trivia_scratch, self.column)
     }
 
     /// Get current position as a zero-length span (in byte offsets)
-    pub(crate) const fn current_pos(&self) -> crate::types::Span {
-        crate::types::Span::point(self.byte_pos)
+    pub(crate) const fn current_pos(&self) -> crate::ast::Span {
+        crate::ast::Span::point(self.byte_pos)
     }
 
     /// Parse next token (without trivia handling)

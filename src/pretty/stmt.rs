@@ -1,5 +1,5 @@
+use crate::ast::{Binder, Expression, Items, Leaf, Parameter, Trivia, Trivium};
 use crate::predoc::{Doc, Elem, Pretty, hardline, line};
-use crate::types::{Binder, Expression, Items, Leaf, Parameter, Trivia, Trivium};
 
 use super::Width;
 

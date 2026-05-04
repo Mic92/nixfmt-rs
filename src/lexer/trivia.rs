@@ -6,7 +6,7 @@
 //! and leading trivia (comments and empty lines before the next token).
 
 use super::ParseTrivium;
-use crate::types::{TrailingComment, Trivia, Trivium};
+use crate::ast::{TrailingComment, Trivia, Trivium};
 
 /// Check if a `ParseTrivium` should be classified as trailing
 const fn is_trailing(pt: &ParseTrivium) -> bool {

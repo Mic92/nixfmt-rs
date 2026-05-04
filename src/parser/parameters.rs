@@ -6,8 +6,8 @@
 //! - Set patterns with defaults: `{x, y ? 1, z ? 2}:`
 //! - Context parameters: `args@{x, y}:` or `{x, y}@args:`
 
+use crate::ast::{Expression, ParamAttr, ParamDefault, Parameter, Span, Term, Token};
 use crate::error::{ParseError, Result};
-use crate::types::{Expression, ParamAttr, ParamDefault, Parameter, Span, Term, Token};
 
 use super::Parser;
 

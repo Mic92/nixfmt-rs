@@ -1,5 +1,5 @@
+use crate::ast::{Expression, FirstToken, Item, Parameter, Term, Token, Trivia};
 use crate::predoc::{Doc, Elem, GroupKind, Pretty, line};
-use crate::types::{Expression, FirstToken, Item, Parameter, Term, Token, Trivia};
 
 use super::absorb::absorb_paren;
 use super::term::render_list;

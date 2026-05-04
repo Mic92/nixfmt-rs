@@ -4,13 +4,13 @@ use super::{
     NUMBER_COLOR, PrettySimple, STRING_CONTENT_COLOR, STRING_QUOTE_COLOR, Writer, escape_string,
     format_bracket_list, sub_expr, with_brackets,
 };
-use crate::format_constructor;
-use crate::format_enum;
-use crate::format_record;
-use crate::types::{
+use crate::ast::{
     Annotated, Binder, Expression, Item, ParamAttr, ParamDefault, Parameter, Selector, SetDefault,
     SimpleSelector, Span, StringPart, Term, Token, Trailed, TrailingComment, Trivia, Trivium,
 };
+use crate::format_constructor;
+use crate::format_enum;
+use crate::format_record;
 
 /// Generate a `PrettySimple` impl for a primitive/atomic type:
 /// `is_simple` and `is_atomic` are always `true`; only `format` varies.

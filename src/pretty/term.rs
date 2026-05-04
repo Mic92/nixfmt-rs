@@ -1,5 +1,5 @@
+use crate::ast::{Annotated, Binder, Expression, Item, Items, Leaf, Term, Token, Trivium};
 use crate::predoc::{Doc, Elem, Pretty, hardline, hardspace, line};
-use crate::types::{Annotated, Binder, Expression, Item, Items, Leaf, Term, Token, Trivium};
 
 use super::Width;
 use super::app::pretty_app;

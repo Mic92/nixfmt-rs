@@ -22,9 +22,9 @@ annotations) plus an optional same-line trailing comment. Mirrors
 `Nixfmt/Lexer.hs`'s `lexeme`/`takeTrivia` split; sub-expressions inside
 `${…}` get an isolated trivia buffer the way `whole` does upstream.
 
-## Parser — `src/parser/`, `src/types.rs`
+## Parser — `src/parser/`, `src/ast/`
 
-Recursive descent producing the AST in `src/types.rs`, which is a
+Recursive descent producing the AST in `src/ast/`, which is a
 field-for-field transcription of `Nixfmt/Types.hs` (`Annotated`, `Trivium`,
 `Item`, `Expression`, `Term`, …). Because the types line up, the
 `--ast` dump (rendered by `src/pretty_simple/`) is byte-identical to

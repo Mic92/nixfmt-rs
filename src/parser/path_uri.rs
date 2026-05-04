@@ -4,8 +4,8 @@
 //! and URIs (e.g., `https://example.com`). Paths in Nix can contain interpolations
 //! and have specific validation rules (e.g., no trailing slashes).
 
+use crate::ast::{Span, StringPart, Term, Token};
 use crate::error::{ParseError, Result};
-use crate::types::{Span, StringPart, Term, Token};
 
 use super::Parser;
 

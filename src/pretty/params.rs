@@ -1,8 +1,8 @@
-use crate::predoc::{Doc, Elem, Pretty, hardline, line};
-use crate::types::{
+use crate::ast::{
     Annotated, Expression, Leaf, ParamAttr, Parameter, Selector, SimpleSelector, Term, Token,
     TrailingComment, Trivia,
 };
+use crate::predoc::{Doc, Elem, Pretty, hardline, line};
 
 use super::term::empty_brackets;
 

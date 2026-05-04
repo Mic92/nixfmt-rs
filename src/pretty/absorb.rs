@@ -1,7 +1,7 @@
-use crate::predoc::{Doc, Elem, Pretty, hardspace, line};
-use crate::types::{
+use crate::ast::{
     Annotated, Binder, Expression, FirstToken, Item, Items, Parameter, Term, Token, Trivia,
 };
+use crate::predoc::{Doc, Elem, Pretty, hardspace, line};
 
 use super::Width;
 use super::app::pretty_app;

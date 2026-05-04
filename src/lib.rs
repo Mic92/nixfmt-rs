@@ -31,11 +31,11 @@ mod colored_writer;
 mod pretty_simple;
 
 // Internal modules - not exposed as public API
+mod ast;
 mod lexer;
 mod normalize;
 mod parser;
 mod pretty;
-mod types;
 
 pub use error::ParseError;
 
@@ -45,8 +45,8 @@ pub const VERSION: &str = env!("CARGO_PKG_VERSION");
 use predoc::{Pretty, RenderConfig};
 
 // Internal-only Result type and AST types
+pub(crate) use ast::File;
 pub(crate) use error::Result;
-pub(crate) use types::File;
 
 /// Layout options for [`format_with`].
 ///

@@ -3,8 +3,8 @@
 //! This module handles parsing of bindings in Nix attribute sets and let expressions,
 //! including both `inherit` statements and attribute assignments (name = value).
 
+use crate::ast::{Binder, Expression, Items, Selector, SimpleSelector, StringPart, Term, Token};
 use crate::error::{ParseError, Result};
-use crate::types::{Binder, Expression, Items, Selector, SimpleSelector, StringPart, Term, Token};
 
 use super::Parser;
 

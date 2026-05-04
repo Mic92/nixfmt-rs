@@ -10,12 +10,12 @@ mod path_uri;
 mod spans;
 mod strings;
 
-use crate::error::{ParseError, Result};
-use crate::lexer::Lexer;
-use crate::types::{
+use crate::ast::{
     Annotated, Binder, Expression, File, Item, Items, Leaf, Parameter, Selector, Span, Term, Token,
     Trailed, Trivia,
 };
+use crate::error::{ParseError, Result};
+use crate::lexer::Lexer;
 
 pub struct Parser {
     lexer: Lexer,
@@ -674,7 +674,7 @@ impl Parser {
                 ));
             }
             let default_term = self.parse_term()?;
-            Some(crate::types::SetDefault {
+            Some(crate::ast::SetDefault {
                 or_kw: or_tok,
                 value: Box::new(default_term),
             })
@@ -702,9 +702,7 @@ impl Parser {
     /// Parse trivia after manually consuming content (strings, paths, etc.)
     /// and return the trailing comment for the previous construct.
     /// This also stores leading trivia for the next token and advances to it.
-    fn parse_trailing_trivia_and_advance(
-        &mut self,
-    ) -> Result<Option<crate::types::TrailingComment>> {
+    fn parse_trailing_trivia_and_advance(&mut self) -> Result<Option<crate::ast::TrailingComment>> {
         let (trail_comment, next_leading) = self.lexer.parse_and_convert_trivia();
 
         self.lexer.trivia_buffer = next_leading;

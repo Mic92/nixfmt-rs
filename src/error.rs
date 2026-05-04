@@ -1,6 +1,6 @@
 //! Error types for parsing and formatting
 
-use crate::types::Span;
+use crate::ast::Span;
 use std::fmt;
 
 pub mod context;

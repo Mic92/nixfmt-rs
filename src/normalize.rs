@@ -8,7 +8,7 @@
 //! Used by the fuzzing harness to check that `parse → format → parse`
 //! is a semantic round-trip.
 
-use crate::types::{
+use crate::ast::{
     Annotated, Binder, Expression, File, Item, Items, Leaf, NixString, ParamAttr, Parameter,
     Selector, SimpleSelector, Span, StringPart, Term, Trailed, Trivia,
 };

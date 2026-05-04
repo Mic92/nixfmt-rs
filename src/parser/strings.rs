@@ -4,8 +4,8 @@
 //! including interpolations, escape sequences, and string normalization (splitting on newlines,
 //! merging adjacent text parts, stripping common indentation).
 
+use crate::ast::{Annotated, StringPart, Term, Token, Trailed, Trivium};
 use crate::error::{ErrorKind, ParseError, Result};
-use crate::types::{Annotated, StringPart, Term, Token, Trailed, Trivium};
 
 use super::Parser;
 
