@@ -178,7 +178,7 @@ pub(super) fn render_list(
     doc.surrounded(&[sur], |d| {
         d.nested(|inner| {
             open.trail_comment.emit(inner);
-            items.emit_sep(inner, item_sep);
+            items.emit_sep(inner, item_sep, open.trail_comment.is_none());
         });
     });
     close.emit(doc);
@@ -229,7 +229,7 @@ pub(super) fn emit_set(
     doc.surrounded(&[sep], |d| {
         d.nested(|inner| {
             open.trail_comment.emit(inner);
-            items.emit(inner);
+            items.emit_sep(inner, &hardline(), open.trail_comment.is_none());
         });
     });
     close.emit(doc);
@@ -237,22 +237,30 @@ pub(super) fn emit_set(
 
 impl<T: Emit> Emit for Items<T> {
     fn emit(&self, doc: &mut Doc) {
-        self.emit_sep(doc, &hardline());
+        self.emit_sep(doc, &hardline(), true);
     }
 }
 
 impl<T: Emit> Items<T> {
-    pub(super) fn emit_sep(&self, doc: &mut Doc, sep: &Elem) {
+    /// `fuse_first`: whether a leading lone `/* lang */` annotation may attach
+    /// to its item with a hardspace. Set to `false` when a trailing line
+    /// comment from the opening token was just emitted: on reparse that comment
+    /// becomes leading trivia merged into the same `Comments` item, which would
+    /// suppress the fuse, so suppressing it up front keeps formatting
+    /// idempotent. Mirrors `nix/patches/0004-*.patch` on the reference.
+    pub(super) fn emit_sep(&self, doc: &mut Doc, sep: &Elem, fuse_first: bool) {
         let mut iter = self.0.iter().peekable();
         let mut first = true;
         while let Some(item) = iter.next() {
             if !first {
                 doc.push_raw(sep.clone());
             }
+            let may_fuse = fuse_first || !first;
             first = false;
 
             // A lone language-annotation comment fuses with the following item.
-            if let Item::Comments(trivia) = item
+            if may_fuse
+                && let Item::Comments(trivia) = item
                 && let [ann @ TriviaPiece::LanguageAnnotation(_)] = &**trivia
                 && let Some(Item::Item(next)) = iter.peek()
             {

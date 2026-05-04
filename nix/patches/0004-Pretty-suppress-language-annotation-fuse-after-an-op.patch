@@ -1,0 +1,84 @@
+From 1215673c208f9c79df6be46edcb2b9751175ac00 Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?J=C3=B6rg=20Thalheim?= <joerg@thalheim.io>
+Date: Mon, 4 May 2026 09:45:33 +0200
+Subject: [PATCH 4/5] Pretty: suppress language-annotation fuse after an
+ opener's trailing comment
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+The trailing comment on [ is rendered on its own line and re-lexes as
+part of the following Comments item; pass 1 saw a lone annotation and
+fused it with the string, pass 2 saw [LineComment, LangAnn] and split.
+
+Signed-off-by: Jörg Thalheim <joerg@thalheim.io>
+---
+ src/Nixfmt/Pretty.hs | 26 ++++++++++++++------------
+ 1 file changed, 14 insertions(+), 12 deletions(-)
+
+diff --git a/src/Nixfmt/Pretty.hs b/src/Nixfmt/Pretty.hs
+index b4cd1de..0bb52e5 100644
+--- a/src/Nixfmt/Pretty.hs
++++ b/src/Nixfmt/Pretty.hs
+@@ -109,20 +109,22 @@ instance (Pretty a) => Pretty (Item a) where
+   pretty (Comments trivia) = pretty trivia
+   pretty (Item x) = group x
+ 
+--- Render items (for lists, attribute sets and let bindings) separated by the given separator
+-renderItems :: (Pretty a) => Doc -> Items a -> Doc
+-renderItems separator (Items items) = go items
++-- Render items (for lists, attribute sets and let bindings) separated by the given separator.
++-- `fuseFirst` is False when the opener's trailing `# c` was just emitted: on reparse it
++-- merges into the first `Comments` item and would suppress the language-annotation fuse.
++renderItems :: (Pretty a) => Bool -> Doc -> Items a -> Doc
++renderItems fuseFirst separator (Items items) = go fuseFirst items
+   where
+-    go [] = mempty
+-    go [item] = pretty item
++    go _ [] = mempty
++    go _ [item] = pretty item
+     -- Special case: language annotation comment followed by string item
+-    go (Comments [LanguageAnnotation lang] : Item stringItem : rest) =
++    go True (Comments [LanguageAnnotation lang] : Item stringItem : rest) =
+       pretty (LanguageAnnotation lang)
+         <> hardspace
+         <> group stringItem
+-        <> if null rest then mempty else separator <> go rest
+-    go (item : rest) =
+-      pretty item <> if null rest then mempty else separator <> go rest
++        <> if null rest then mempty else separator <> go True rest
++    go _ (item : rest) =
++      pretty item <> if null rest then mempty else separator <> go True rest
+ 
+ hasOnlyComments :: Items a -> Bool
+ hasOnlyComments (Items xs) = not (null xs) && all isComment xs
+@@ -134,7 +136,7 @@ hasOnlyComments (Items xs) = not (null xs) && all isComment xs
+ renderList :: Doc -> Ann Token -> Items Term -> Ann Token -> Doc
+ renderList itemSep paropen@Ann{trailComment = post} items parclose =
+   pretty (paropen{trailComment = Nothing})
+-    <> surroundWith sur (nest $ pretty post <> renderItems itemSep items)
++    <> surroundWith sur (nest $ pretty post <> renderItems (isNothing post) itemSep items)
+     <> pretty parclose
+   where
+     sur
+@@ -217,7 +219,7 @@ prettySet _ (krec, paropen@(LoneAnn _), Items [], parclose@Ann{preTrivia = []})
+ -- Singleton sets are allowed to fit onto one line,
+ -- but apart from that always expand.
+ prettySet wide (krec, paropen@Ann{trailComment = post}, binders, parclose) =
+-  let !surrounded = surroundWith sep (nest $ pretty post <> renderItems hardline binders)
++  let !surrounded = surroundWith sep (nest $ pretty post <> renderItems (isNothing post) hardline binders)
+   in pretty (fmap (,hardspace) krec)
+       <> pretty (paropen{trailComment = Nothing})
+       <> surrounded
+@@ -724,7 +726,7 @@ instance Pretty Expression where
+       convertTrailing (Just (TrailingComment t)) = [LineComment (" " <> t)]
+ 
+       letPart = group $ pretty let_ <> hardline <> letBody
+-      letBody = nest $ renderItems hardline binders
++      letBody = nest $ renderItems True hardline binders
+       inPart =
+         group $
+           pretty in_
+-- 
+2.53.0
+

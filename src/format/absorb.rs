@@ -17,8 +17,10 @@ impl Term {
                 open, items, close, ..
             } => is_absorbable_braces(open, items, close),
             Self::List { open, items, close } => is_absorbable_braces(open, items, close),
-            Self::Parenthesized { open, expr, .. } => {
-                !open.has_trivia() && matches!(&**expr, Expression::Term(t) if t.is_absorbable())
+            // `open` trivia is hoisted before `(` so never affects body
+            // absorption; checking it flipped this between passes (patch 0005).
+            Self::Parenthesized { expr, .. } => {
+                matches!(&**expr, Expression::Term(t) if t.is_absorbable())
             }
             _ => false,
         }

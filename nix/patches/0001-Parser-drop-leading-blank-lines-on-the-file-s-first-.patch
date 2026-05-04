@@ -1,0 +1,56 @@
+From 04b6b65812451652897112a06544fb361970e6c9 Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?J=C3=B6rg=20Thalheim?= <joerg@thalheim.io>
+Date: Mon, 4 May 2026 09:42:00 +0200
+Subject: [PATCH 1/5] Parser: drop leading blank lines on the file's first
+ token
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+They never reach the output but make isSimple false on the first term,
+so prettyApp picks a different layout on pass 1 than on pass 2. Done in
+`file`, not `whole`, so interpolation bodies keep their leading blanks.
+
+Signed-off-by: Jörg Thalheim <joerg@thalheim.io>
+---
+ src/Nixfmt/Parser.hs | 12 +++++++++++-
+ 1 file changed, 11 insertions(+), 1 deletion(-)
+
+diff --git a/src/Nixfmt/Parser.hs b/src/Nixfmt/Parser.hs
+index 12b4f1e..83e03fd 100644
+--- a/src/Nixfmt/Parser.hs
++++ b/src/Nixfmt/Parser.hs
+@@ -17,6 +17,7 @@ import Data.Char (isAlpha)
+ import Data.Foldable (toList)
+ import Data.Functor (($>))
+ import Data.Maybe (fromMaybe, mapMaybe, maybeToList)
++import qualified Data.Sequence as Seq
+ import Data.Text (Text, elem, isPrefixOf, pack)
+ import qualified Data.Text as Text
+ import Data.Void (Void)
+@@ -41,7 +42,9 @@ import Nixfmt.Types (
+   StringPart (..),
+   Term (..),
+   Token (..),
++  Trivium (..),
+   Whole (..),
++  mapFirstToken,
+   operators,
+   tokenText,
+  )
+@@ -590,4 +593,11 @@ expression =
+       <|> assert
+ 
+ file :: Parsec Void Text File
+-file = whole (expression <* eof)
++file = stripLeadingBlanks <$> whole (expression <* eof)
++  where
++    -- Leading blank lines never reach the output but make isSimple false on
++    -- the first term, so prettyApp picks a different layout on pass 2 once
++    -- the renderer has trimmed them. Only the file's first token; `whole` is
++    -- also used for interpolations, where leading blanks are preserved.
++    stripLeadingBlanks (Whole e t) =
++      Whole (mapFirstToken (\a -> a{preTrivia = Seq.dropWhileL (== EmptyLine) (preTrivia a)}) e) t
+-- 
+2.53.0
+

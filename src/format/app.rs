@@ -1,4 +1,4 @@
-use crate::ast::{Expression, FirstToken, Item, Parameter, Term, Token, Trivia};
+use crate::ast::{Expression, FirstToken, Item, Parameter, Term, Token, Trivia, TriviaPiece};
 use crate::doc::{Doc, Elem, Emit, GroupKind, Spacing, line};
 
 /// Per-call-site knobs for [`emit_app`]. Mirrors the positional flags of
@@ -258,7 +258,15 @@ pub(super) fn emit_app_parts(
     a: &Expression,
     head: Option<&Expression>,
 ) {
-    let comment = first_token_comment(head.unwrap_or(f));
+    let mut comment = first_token_comment(head.unwrap_or(f));
+
+    // A lone /* lang */ renders inline with no leading separator; hoisting it
+    // would place it directly after the caller's preceding token (re-lexing
+    // `a /` + `/* sh */` as the `//` operator). Leave it on the term so
+    // `ctx.pre` lands first (patch 0003).
+    if let [TriviaPiece::LanguageAnnotation(_)] = &*comment {
+        comment = Trivia::new();
+    }
 
     let post_hardline = |doc: &mut Doc| {
         if ctx.has_post && !comment.is_empty() {
