@@ -1,15 +1,22 @@
 //! Pretty-printing for Nix AST
 //!
-//! Implements formatting rules from nixfmt's Pretty.hs
+//! Implements formatting rules from nixfmt's Pretty.hs.
+//!
+//! Module layout:
+//! - [`base`]: `Pretty` impls for trivia / `Annotated` / `Item` / `Token`
+//! - [`term`]: terms, selectors, binders and bracketed-container helpers
+//! - [`stmt`]: `let` / `with` / `if` / `assert` and lambda-body absorption
+//! - [`app`], [`op`], [`absorb`], [`params`], [`string`]: per-construct rules
+//!
+//! `Pretty for Term` and `Pretty for Expression` stay here as the top-level
+//! dispatchers that fan out into those submodules.
 
-use crate::ast::{
-    Annotated, Binder, Expression, Item, Parameter, Selector, SimpleSelector, Term, Token, Trailed,
-    TrailingComment, Trivia, Trivium,
-};
-use crate::predoc::{Doc, Pretty, hardline, line, linebreak};
+use crate::ast::{Annotated, Expression, Parameter, Term, Token};
+use crate::predoc::{Doc, Pretty, line};
 
 mod absorb;
 mod app;
+mod base;
 mod op;
 mod params;
 mod stmt;
@@ -27,219 +34,6 @@ use term::{pretty_list, pretty_paren, pretty_set};
 enum Width {
     Regular,
     Wide,
-}
-
-impl Pretty for TrailingComment {
-    fn pretty(&self, doc: &mut Doc) {
-        doc.hardspace()
-            .trailing_comment(format!("# {}", self.0))
-            .hardline();
-    }
-}
-
-impl Pretty for Trivium {
-    fn pretty(&self, doc: &mut Doc) {
-        match self {
-            Self::EmptyLine() => {
-                doc.emptyline();
-            }
-            Self::LineComment(c) => {
-                doc.comment(format!("#{c}")).hardline();
-            }
-            Self::BlockComment(is_doc, lines) => {
-                doc.comment(if *is_doc { "/**" } else { "/*" }).hardline();
-                // Indent the comment using offset instead of nest
-                doc.offset(2, |offset_doc| {
-                    for line in lines {
-                        if line.is_empty() {
-                            offset_doc.emptyline();
-                        } else {
-                            offset_doc.comment(&**line).hardline();
-                        }
-                    }
-                });
-                doc.comment("*/").hardline();
-            }
-            Self::LanguageAnnotation(lang) => {
-                doc.comment(format!("/* {lang} */")).hardspace();
-            }
-        }
-    }
-}
-
-impl Pretty for Trivia {
-    fn pretty(&self, doc: &mut Doc) {
-        if self.is_empty() {
-            return;
-        }
-
-        // Special case: single language annotation renders inline
-        if self.len() == 1
-            && let Trivium::LanguageAnnotation(_) = &self[0]
-        {
-            self[0].pretty(doc);
-            return;
-        }
-
-        doc.hardline();
-        for trivium in self {
-            trivium.pretty(doc);
-        }
-    }
-}
-
-impl<T: Pretty> Pretty for Annotated<T> {
-    fn pretty(&self, doc: &mut Doc) {
-        self.pre_trivia.pretty(doc);
-        self.value.pretty(doc);
-        self.trail_comment.pretty(doc);
-    }
-}
-
-impl<T: Pretty> Annotated<T> {
-    /// Emit `pre_trivia` and value, leaving `trail_comment` for the caller to
-    /// place elsewhere (typically inside a following nested group).
-    pub(super) fn pretty_head(&self, doc: &mut Doc) {
-        self.pre_trivia.pretty(doc);
-        self.value.pretty(doc);
-    }
-
-    /// Emit value and `trail_comment`, leaving `pre_trivia` for the caller to
-    /// place elsewhere (typically inside a preceding nested group).
-    pub(super) fn pretty_tail(&self, doc: &mut Doc) {
-        self.value.pretty(doc);
-        self.trail_comment.pretty(doc);
-    }
-}
-
-impl<T> Annotated<T> {
-    /// Emit `pre_trivia`, then the value via `f`, then `trail_comment`.
-    /// Used for `Annotated<T>` payloads that have no blanket `Pretty` impl.
-    pub(super) fn pretty_with(&self, doc: &mut Doc, f: impl FnOnce(&mut Doc, &T)) {
-        self.pre_trivia.pretty(doc);
-        f(doc, &self.value);
-        self.trail_comment.pretty(doc);
-    }
-}
-
-impl<T: Pretty> Pretty for Item<T> {
-    fn pretty(&self, doc: &mut Doc) {
-        match self {
-            Self::Comments(trivia) => trivia.pretty(doc),
-            Self::Item(x) => {
-                doc.group(|d| x.pretty(d));
-            }
-        }
-    }
-}
-
-impl Pretty for Binder {
-    fn pretty(&self, doc: &mut Doc) {
-        match self {
-            Self::Inherit {
-                kw: inherit,
-                from: source,
-                attrs: ids,
-                semi: semicolon,
-            } => {
-                // Determine spacing strategy based on original layout
-                let same_line = inherit.span.start_line() == semicolon.span.start_line();
-                let few_ids = ids.len() < 4;
-                let (sep, nosep) = if same_line && few_ids {
-                    (line(), linebreak())
-                } else {
-                    (hardline(), hardline())
-                };
-
-                doc.group(|d| {
-                    inherit.pretty(d);
-
-                    let sep_doc = [sep.clone()];
-                    let finish_inherit = |nested: &mut Doc| {
-                        if !ids.is_empty() {
-                            nested.sep_by(&sep_doc, ids.iter().cloned());
-                        }
-                        nested.push_raw(nosep.clone());
-                        semicolon.pretty(nested);
-                    };
-
-                    match source {
-                        None => {
-                            d.push_raw(sep.clone());
-                            d.nested(finish_inherit);
-                        }
-                        Some(src) => {
-                            d.nested(|nested| {
-                                nested.group(|g| {
-                                    g.line();
-                                    src.pretty(g);
-                                });
-                                nested.push_raw(sep);
-                                finish_inherit(nested);
-                            });
-                        }
-                    }
-                });
-            }
-            Self::Assignment {
-                path: selectors,
-                eq: assign,
-                value: expr,
-                semi: semicolon,
-            } => {
-                // Only allow a break after `=` when the key is long/dynamic;
-                // for short plain-id keys the extra line buys almost nothing.
-                let simple_lhs = selectors.len() <= 4 && selectors.iter().all(Selector::is_simple);
-                doc.group(|d| {
-                    d.hcat(selectors.iter().cloned());
-                    d.nested(|inner| {
-                        inner.hardspace();
-                        assign.pretty(inner);
-                        if simple_lhs {
-                            expr.absorb_rhs(inner);
-                        } else {
-                            inner.linebreak();
-                            inner.priority_group(|g| {
-                                expr.absorb_rhs(g);
-                            });
-                        }
-                    });
-                    semicolon.pretty(d);
-                });
-            }
-        }
-    }
-}
-
-impl Pretty for Token {
-    fn pretty(&self, doc: &mut Doc) {
-        if let Self::EnvPath(s) = self {
-            doc.text(format!("<{s}>"));
-            return;
-        }
-        doc.text(self.text());
-    }
-}
-
-impl Pretty for SimpleSelector {
-    fn pretty(&self, doc: &mut Doc) {
-        match self {
-            Self::ID(id) => id.pretty(doc),
-            Self::String(ann) => {
-                ann.pretty_with(doc, |d, v| pretty_simple_string(d, v));
-            }
-            Self::Interpol(interp) => interp.pretty(doc),
-        }
-    }
-}
-
-impl Pretty for Selector {
-    fn pretty(&self, doc: &mut Doc) {
-        if let Some(dot) = &self.dot {
-            dot.pretty(doc);
-        }
-        self.selector.pretty(doc);
-    }
 }
 
 impl Pretty for Term {
@@ -437,15 +231,5 @@ impl Pretty for Expression {
                 body.pretty(doc);
             }
         }
-    }
-}
-
-impl<T: Pretty> Pretty for Trailed<T> {
-    fn pretty(&self, doc: &mut Doc) {
-        doc.group(|doc| {
-            self.value.pretty(doc);
-            self.trailing_trivia.pretty(doc);
-        });
-        // No trailing Hardline: reference nixfmt's `--ir` output does not emit one.
     }
 }

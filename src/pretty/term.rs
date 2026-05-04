@@ -1,8 +1,111 @@
-use crate::ast::{Annotated, Binder, Expression, Item, Items, Leaf, Term, Token, Trivium};
-use crate::predoc::{Doc, Elem, Pretty, hardline, hardspace, line};
+use crate::ast::{
+    Annotated, Binder, Expression, Item, Items, Leaf, Selector, SimpleSelector, Term, Token,
+    Trivium,
+};
+use crate::predoc::{Doc, Elem, Pretty, hardline, hardspace, line, linebreak};
 
 use super::Width;
 use super::app::pretty_app;
+use super::string::pretty_simple_string;
+
+impl Pretty for SimpleSelector {
+    fn pretty(&self, doc: &mut Doc) {
+        match self {
+            Self::ID(id) => id.pretty(doc),
+            Self::String(ann) => {
+                ann.pretty_with(doc, |d, v| pretty_simple_string(d, v));
+            }
+            Self::Interpol(interp) => interp.pretty(doc),
+        }
+    }
+}
+
+impl Pretty for Selector {
+    fn pretty(&self, doc: &mut Doc) {
+        if let Some(dot) = &self.dot {
+            dot.pretty(doc);
+        }
+        self.selector.pretty(doc);
+    }
+}
+
+impl Pretty for Binder {
+    fn pretty(&self, doc: &mut Doc) {
+        match self {
+            Self::Inherit {
+                kw: inherit,
+                from: source,
+                attrs: ids,
+                semi: semicolon,
+            } => {
+                // Determine spacing strategy based on original layout
+                let same_line = inherit.span.start_line() == semicolon.span.start_line();
+                let few_ids = ids.len() < 4;
+                let (sep, nosep) = if same_line && few_ids {
+                    (line(), linebreak())
+                } else {
+                    (hardline(), hardline())
+                };
+
+                doc.group(|d| {
+                    inherit.pretty(d);
+
+                    let sep_doc = [sep.clone()];
+                    let finish_inherit = |nested: &mut Doc| {
+                        if !ids.is_empty() {
+                            nested.sep_by(&sep_doc, ids.iter().cloned());
+                        }
+                        nested.push_raw(nosep.clone());
+                        semicolon.pretty(nested);
+                    };
+
+                    match source {
+                        None => {
+                            d.push_raw(sep.clone());
+                            d.nested(finish_inherit);
+                        }
+                        Some(src) => {
+                            d.nested(|nested| {
+                                nested.group(|g| {
+                                    g.line();
+                                    src.pretty(g);
+                                });
+                                nested.push_raw(sep);
+                                finish_inherit(nested);
+                            });
+                        }
+                    }
+                });
+            }
+            Self::Assignment {
+                path: selectors,
+                eq: assign,
+                value: expr,
+                semi: semicolon,
+            } => {
+                // Only allow a break after `=` when the key is long/dynamic;
+                // for short plain-id keys the extra line buys almost nothing.
+                let simple_lhs = selectors.len() <= 4 && selectors.iter().all(Selector::is_simple);
+                doc.group(|d| {
+                    d.hcat(selectors.iter().cloned());
+                    d.nested(|inner| {
+                        inner.hardspace();
+                        assign.pretty(inner);
+                        if simple_lhs {
+                            expr.absorb_rhs(inner);
+                        } else {
+                            inner.linebreak();
+                            inner.priority_group(|g| {
+                                expr.absorb_rhs(g);
+                            });
+                        }
+                    });
+                    semicolon.pretty(d);
+                });
+            }
+        }
+    }
+}
 
 /// Render an empty bracketed container (`[]`, `{}`), preserving a user-inserted
 /// line break between the delimiters. Shared by empty list / set / param-set.
