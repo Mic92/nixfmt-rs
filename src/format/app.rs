@@ -1,5 +1,5 @@
 use crate::ast::{Expression, FirstToken, Item, Parameter, Term, Token, Trivia};
-use crate::doc::{Doc, Elem, GroupKind, Pretty, line};
+use crate::doc::{Doc, Elem, Emit, GroupKind, line};
 
 use super::absorb::absorb_paren;
 use super::term::render_list;
@@ -17,7 +17,7 @@ fn absorb_inner(doc: &mut Doc, arg: &Expression) {
             return;
         }
     }
-    arg.pretty(doc);
+    arg.emit(doc);
 }
 
 /// Collect the leading trivia that would precede `expr`'s first token if its
@@ -51,19 +51,19 @@ fn absorb_app(doc: &mut Doc, expr: &Expression, indent_function: bool, comment: 
 
     let Expression::Application { func: f, arg: a } = expr else {
         // Base case: the function expression itself. The first token's
-        // pre-trivia/trailing comment was already emitted by `pretty_app`,
+        // pre-trivia/trailing comment was already emitted by `emit_app`,
         // so render the head with that trivia stripped.
         if !comment.is_empty() {
-            strip_first_comment(expr).pretty(doc);
+            strip_first_comment(expr).emit(doc);
         } else if indent_function {
             doc.nested(|n| {
                 n.group(|g| {
                     g.linebreak();
-                    expr.pretty(g);
+                    expr.emit(g);
                 });
             });
         } else {
-            expr.pretty(doc);
+            expr.emit(doc);
         }
         return;
     };
@@ -113,7 +113,7 @@ fn absorb_last(doc: &mut Doc, arg: &Expression) {
     if let Expression::Term(t) = arg
         && t.is_absorbable()
     {
-        return priority_nest(doc, |n| t.pretty_bare(n));
+        return priority_nest(doc, |n| t.emit_bare(n));
     }
 
     if let Expression::Term(Term::Parenthesized {
@@ -135,12 +135,12 @@ fn absorb_last(doc: &mut Doc, arg: &Expression) {
             && !colon.has_trivia()
         {
             return priority_nest(doc, |n| {
-                open.pretty(n);
-                name.pretty(n);
-                colon.pretty(n);
+                open.emit(n);
+                name.emit(n);
+                colon.emit(n);
                 n.hardspace();
-                body_term.pretty_wide(n);
-                close.pretty(n);
+                body_term.emit_wide(n);
+                close.emit(n);
             });
         }
         // Parenthesised `ident { ... }` application with absorbable body.
@@ -154,23 +154,23 @@ fn absorb_last(doc: &mut Doc, arg: &Expression) {
             && !close.has_trivia()
         {
             return priority_nest(doc, |n| {
-                open.pretty(n);
-                ident.pretty(n);
+                open.emit(n);
+                ident.emit(n);
                 n.hardspace();
-                body_term.pretty_wide(n);
-                close.pretty(n);
+                body_term.emit_wide(n);
+                close.emit(n);
             });
         }
         return absorb_paren(doc, open, inner, close);
     }
 
     doc.group(|g| {
-        g.nested(|n| arg.pretty(n));
+        g.nested(|n| arg.emit(n));
     });
 }
 
 /// Render function applications (Haskell `prettyApp indentFunction pre hasPost f a`).
-pub(super) fn pretty_app(
+pub(super) fn emit_app(
     doc: &mut Doc,
     indent_function: bool,
     pre: &[Elem],
@@ -178,7 +178,7 @@ pub(super) fn pretty_app(
     expr: &Expression,
 ) {
     let Expression::Application { func: f, arg: a } = expr else {
-        unreachable!("pretty_app requires an Application");
+        unreachable!("emit_app requires an Application");
     };
 
     let comment = first_token_comment(f);
@@ -189,7 +189,7 @@ pub(super) fn pretty_app(
         }
     };
 
-    comment.pretty(doc);
+    comment.emit(doc);
 
     // Two trailing list arguments are rendered as a pair of regular groups so
     // they wrap together; lists are never "simple", so renderSimple cannot apply.

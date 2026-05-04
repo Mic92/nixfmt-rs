@@ -2,35 +2,35 @@ use crate::ast::{
     Annotated, Binder, Expression, Item, Items, Leaf, Selector, SimpleSelector, Term, Token,
     TriviaPiece,
 };
-use crate::doc::{Doc, Elem, Pretty, hardline, hardspace, line, linebreak};
+use crate::doc::{Doc, Elem, Emit, hardline, hardspace, line, linebreak};
 
 use super::Width;
-use super::app::pretty_app;
-use super::string::pretty_simple_string;
+use super::app::emit_app;
+use super::string::emit_simple_string;
 
-impl Pretty for SimpleSelector {
-    fn pretty(&self, doc: &mut Doc) {
+impl Emit for SimpleSelector {
+    fn emit(&self, doc: &mut Doc) {
         match self {
-            Self::ID(id) => id.pretty(doc),
+            Self::ID(id) => id.emit(doc),
             Self::String(ann) => {
-                ann.pretty_with(doc, |d, v| pretty_simple_string(d, v));
+                ann.emit_with(doc, |d, v| emit_simple_string(d, v));
             }
-            Self::Interpol(interp) => interp.pretty(doc),
+            Self::Interpol(interp) => interp.emit(doc),
         }
     }
 }
 
-impl Pretty for Selector {
-    fn pretty(&self, doc: &mut Doc) {
+impl Emit for Selector {
+    fn emit(&self, doc: &mut Doc) {
         if let Some(dot) = &self.dot {
-            dot.pretty(doc);
+            dot.emit(doc);
         }
-        self.selector.pretty(doc);
+        self.selector.emit(doc);
     }
 }
 
-impl Pretty for Binder {
-    fn pretty(&self, doc: &mut Doc) {
+impl Emit for Binder {
+    fn emit(&self, doc: &mut Doc) {
         match self {
             Self::Inherit {
                 kw: inherit,
@@ -48,7 +48,7 @@ impl Pretty for Binder {
                 };
 
                 doc.group(|d| {
-                    inherit.pretty(d);
+                    inherit.emit(d);
 
                     let sep_doc = [sep.clone()];
                     let finish_inherit = |nested: &mut Doc| {
@@ -56,7 +56,7 @@ impl Pretty for Binder {
                             nested.sep_by(&sep_doc, ids.iter().cloned());
                         }
                         nested.push_raw(nosep.clone());
-                        semicolon.pretty(nested);
+                        semicolon.emit(nested);
                     };
 
                     match source {
@@ -68,7 +68,7 @@ impl Pretty for Binder {
                             d.nested(|nested| {
                                 nested.group(|g| {
                                     g.line();
-                                    src.pretty(g);
+                                    src.emit(g);
                                 });
                                 nested.push_raw(sep);
                                 finish_inherit(nested);
@@ -90,7 +90,7 @@ impl Pretty for Binder {
                     d.hcat(selectors.iter().cloned());
                     d.nested(|inner| {
                         inner.hardspace();
-                        assign.pretty(inner);
+                        assign.emit(inner);
                         if simple_lhs {
                             expr.absorb_rhs(inner);
                         } else {
@@ -100,7 +100,7 @@ impl Pretty for Binder {
                             });
                         }
                     });
-                    semicolon.pretty(d);
+                    semicolon.emit(d);
                 });
             }
         }
@@ -110,17 +110,17 @@ impl Pretty for Binder {
 /// Render an empty bracketed container (`[]`, `{}`), preserving a user-inserted
 /// line break between the delimiters. Shared by empty list / set / param-set.
 pub(super) fn empty_brackets(doc: &mut Doc, open: &Leaf, close: &Leaf) {
-    open.pretty(doc);
+    open.emit(doc);
     if open.span.start_line() == close.span.start_line() {
         doc.hardspace();
     } else {
         doc.hardline();
     }
-    close.pretty(doc);
+    close.emit(doc);
 }
 
 /// Mirrors `prettyTerm (List ..)` in Nixfmt/Pretty.hs (no surrounding group).
-pub(super) fn pretty_list(doc: &mut Doc, open: &Leaf, items: &Items<Term>, close: &Leaf) {
+pub(super) fn emit_list(doc: &mut Doc, open: &Leaf, items: &Items<Term>, close: &Leaf) {
     if items.0.is_empty() && open.trail_comment.is_none() && close.pre_trivia.is_empty() {
         empty_brackets(doc, open, close);
     } else {
@@ -129,27 +129,27 @@ pub(super) fn pretty_list(doc: &mut Doc, open: &Leaf, items: &Items<Term>, close
 }
 
 impl Term {
-    /// Like [`Pretty::pretty`] but without the extra outer group around lists.
+    /// Like [`Emit::emit`] but without the extra outer group around lists.
     /// Used where the caller already provides a surrounding group.
-    pub(in crate::format) fn pretty_bare(&self, doc: &mut Doc) {
+    pub(in crate::format) fn emit_bare(&self, doc: &mut Doc) {
         match self {
-            Self::List { open, items, close } => pretty_list(doc, open, items, close),
-            _ => self.pretty(doc),
+            Self::List { open, items, close } => emit_list(doc, open, items, close),
+            _ => self.emit(doc),
         }
     }
 
-    /// Like [`Self::pretty_bare`] but renders sets in their wide (multi-line)
+    /// Like [`Self::emit_bare`] but renders sets in their wide (multi-line)
     /// layout. Used when the term is being absorbed onto a preceding line.
-    pub(in crate::format) fn pretty_wide(&self, doc: &mut Doc) {
+    pub(in crate::format) fn emit_wide(&self, doc: &mut Doc) {
         match self {
             Self::Set {
                 rec,
                 open,
                 items,
                 close,
-            } => pretty_set(doc, Width::Wide, rec.as_ref(), open, items, close),
-            Self::List { open, items, close } => pretty_list(doc, open, items, close),
-            _ => self.pretty(doc),
+            } => emit_set(doc, Width::Wide, rec.as_ref(), open, items, close),
+            Self::List { open, items, close } => emit_list(doc, open, items, close),
+            _ => self.emit(doc),
         }
     }
 }
@@ -162,7 +162,7 @@ pub(super) fn render_list(
     items: &Items<Term>,
     close: &Annotated<Token>,
 ) {
-    open.pretty_head(doc);
+    open.emit_head(doc);
 
     let sur = if open.span.start_line() != close.span.start_line()
         || items.has_only_comments()
@@ -177,16 +177,16 @@ pub(super) fn render_list(
 
     doc.surrounded(&[sur], |d| {
         d.nested(|inner| {
-            open.trail_comment.pretty(inner);
-            items.pretty_sep(inner, item_sep);
+            open.trail_comment.emit(inner);
+            items.emit_sep(inner, item_sep);
         });
     });
-    close.pretty(doc);
+    close.emit(doc);
 }
 
 /// Format an attribute set with optional rec keyword
 /// Based on Haskell prettySet (Pretty.hs:185-205)
-pub(super) fn pretty_set(
+pub(super) fn emit_set(
     doc: &mut Doc,
     wide: Width,
     rec: Option<&Annotated<Token>>,
@@ -196,7 +196,7 @@ pub(super) fn pretty_set(
 ) {
     if items.0.is_empty() && open.is_lone() && close.pre_trivia.is_empty() {
         if let Some(rec) = rec {
-            rec.pretty(doc);
+            rec.emit(doc);
             doc.hardspace();
         }
         empty_brackets(doc, open, close);
@@ -204,11 +204,11 @@ pub(super) fn pretty_set(
     }
 
     if let Some(rec) = rec {
-        rec.pretty(doc);
+        rec.emit(doc);
         doc.hardspace();
     }
 
-    open.pretty_head(doc);
+    open.emit_head(doc);
 
     let starts_with_emptyline = match items.0.first() {
         Some(Item::Comments(trivia)) => {
@@ -230,25 +230,25 @@ pub(super) fn pretty_set(
 
     doc.surrounded(&[sep], |d| {
         d.nested(|inner| {
-            open.trail_comment.pretty(inner);
-            items.pretty(inner);
+            open.trail_comment.emit(inner);
+            items.emit(inner);
         });
     });
-    close.pretty(doc);
+    close.emit(doc);
 }
 
-impl<T: Pretty> Pretty for Items<T> {
-    fn pretty(&self, doc: &mut Doc) {
-        self.pretty_sep(doc, &hardline());
+impl<T: Emit> Emit for Items<T> {
+    fn emit(&self, doc: &mut Doc) {
+        self.emit_sep(doc, &hardline());
     }
 }
 
-impl<T: Pretty> Items<T> {
-    pub(super) fn pretty_sep(&self, doc: &mut Doc, sep: &Elem) {
+impl<T: Emit> Items<T> {
+    pub(super) fn emit_sep(&self, doc: &mut Doc, sep: &Elem) {
         let items = &self.0;
         match items.as_slice() {
             [] => {}
-            [item] => item.pretty(doc),
+            [item] => item.emit(doc),
             items => {
                 let mut i = 0;
                 while i < items.len() {
@@ -263,14 +263,14 @@ impl<T: Pretty> Items<T> {
                         && let TriviaPiece::LanguageAnnotation(lang) = &trivia[0]
                         && let Item::Item(string_item) = &items[i + 1]
                     {
-                        TriviaPiece::LanguageAnnotation(lang.clone()).pretty(doc);
+                        TriviaPiece::LanguageAnnotation(lang.clone()).emit(doc);
                         doc.hardspace();
-                        doc.group(|d| string_item.pretty(d));
+                        doc.group(|d| string_item.emit(d));
                         i += 2;
                         continue;
                     }
 
-                    items[i].pretty(doc);
+                    items[i].emit(doc);
                     i += 1;
                 }
             }
@@ -280,26 +280,26 @@ impl<T: Pretty> Items<T> {
 
 impl Expression {
     /// Render the nested document that appears between parentheses.
-    pub(in crate::format) fn pretty_paren_body(&self, doc: &mut Doc) {
+    pub(in crate::format) fn emit_paren_body(&self, doc: &mut Doc) {
         match self {
             _ if self.is_absorbable() => {
                 doc.group(|inner| self.absorb(inner, Width::Regular));
             }
             Self::Application { .. } => {
-                pretty_app(doc, true, &[], true, self);
+                emit_app(doc, true, &[], true, self);
             }
             Self::Term(Term::Selection { base: term, .. }) if term.is_absorbable() => {
                 doc.linebreak();
-                doc.group(|inner| self.pretty(inner));
+                doc.group(|inner| self.emit(inner));
                 doc.linebreak();
             }
             Self::Term(Term::Selection { .. }) => {
-                doc.group(|inner| self.pretty(inner));
+                doc.group(|inner| self.emit(inner));
                 doc.linebreak();
             }
             _ => {
                 doc.linebreak();
-                doc.group(|inner| self.pretty(inner));
+                doc.group(|inner| self.emit(inner));
                 doc.linebreak();
             }
         }
@@ -307,7 +307,7 @@ impl Expression {
 }
 
 /// Pretty print a parenthesized expression (Haskell `prettyTerm (Parenthesized ...)`).
-pub(super) fn pretty_paren(
+pub(super) fn emit_paren(
     doc: &mut Doc,
     open: &Annotated<Token>,
     expr: &Expression,
@@ -316,11 +316,11 @@ pub(super) fn pretty_paren(
     doc.group(|g| {
         // A trailing comment on `(` becomes leading trivia so it renders
         // before the body, not after it on the same line.
-        open.move_trailing_comment_up().pretty(g);
+        open.move_trailing_comment_up().emit(g);
         g.nested(|nested| {
-            expr.pretty_paren_body(nested);
-            close.pre_trivia.pretty(nested);
+            expr.emit_paren_body(nested);
+            close.pre_trivia.emit(nested);
         });
-        close.pretty_tail(g);
+        close.emit_tail(g);
     });
 }

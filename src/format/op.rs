@@ -1,7 +1,7 @@
 use crate::ast::{Expression, Leaf, Token};
-use crate::doc::{Doc, Pretty, line};
+use crate::doc::{Doc, Emit, line};
 
-use super::app::pretty_app;
+use super::app::emit_app;
 
 fn flatten_operation_chain<'a>(
     target: &'a Leaf,
@@ -26,26 +26,26 @@ fn absorb_operation(doc: &mut Doc, expr: &Expression) {
     match expr {
         Expression::Term(term) if term.is_absorbable() => {
             doc.hardspace();
-            term.pretty(doc);
+            term.emit(doc);
         }
         Expression::Operation { .. } => {
             doc.group(|group_doc| {
                 group_doc.line();
-                expr.pretty(group_doc);
+                expr.emit(group_doc);
             });
         }
         Expression::Application { .. } => {
-            doc.group(|g| pretty_app(g, false, &[line()], false, expr));
+            doc.group(|g| emit_app(g, false, &[line()], false, expr));
         }
         _ => {
             doc.hardspace();
-            expr.pretty(doc);
+            expr.emit(doc);
         }
     }
 }
 
 /// `instance Pretty Expression` clause for `Operation` (Pretty.hs).
-pub(super) fn pretty_operation(
+pub(super) fn emit_operation(
     doc: &mut Doc,
     whole: &Expression,
     left: &Expression,
@@ -63,11 +63,11 @@ pub(super) fn pretty_operation(
             | Token::TEqual
             | Token::TUnequal
     ) {
-        left.pretty(doc);
+        left.emit(doc);
         doc.softline();
-        op.pretty(doc);
+        op.emit(doc);
         doc.hardspace();
-        right.pretty(doc);
+        right.emit(doc);
         return;
     }
 
@@ -78,19 +78,19 @@ pub(super) fn pretty_operation(
         && op.value.is_update_concat_plus()
     {
         doc.group(|inner| {
-            left.pretty(inner);
+            left.emit(inner);
             inner.line();
-            op.pretty(inner);
+            op.emit(inner);
             inner.hardspace();
-            inner.nested(|n| t.pretty(n));
+            inner.nested(|n| t.emit(n));
         });
         return;
     }
 
-    pretty_operation_chain(doc, false, whole, op);
+    emit_operation_chain(doc, false, whole, op);
 }
 
-pub(super) fn pretty_operation_chain(
+pub(super) fn emit_operation_chain(
     doc: &mut Doc,
     force_first_term_wide: bool,
     operation: &Expression,
@@ -104,13 +104,13 @@ pub(super) fn pretty_operation_chain(
             match maybe_op {
                 None => match expr {
                     Expression::Term(term) if force_first_term_wide && term.is_absorbable() => {
-                        term.pretty_wide(group_doc);
+                        term.emit_wide(group_doc);
                     }
-                    _ => expr.pretty(group_doc),
+                    _ => expr.emit(group_doc),
                 },
                 Some(op_leaf) => {
                     group_doc.line();
-                    op_leaf.pretty(group_doc);
+                    op_leaf.emit(group_doc);
                     group_doc.nested(|nested| {
                         absorb_operation(nested, expr);
                     });

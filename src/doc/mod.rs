@@ -153,20 +153,20 @@ impl From<Vec<Elem>> for Doc {
 #[derive(Debug)]
 pub struct IR(pub(crate) Doc);
 
-pub trait Pretty {
-    fn pretty(&self, doc: &mut Doc);
+pub trait Emit {
+    fn emit(&self, doc: &mut Doc);
 }
 
-impl Pretty for Doc {
-    fn pretty(&self, doc: &mut Doc) {
+impl Emit for Doc {
+    fn emit(&self, doc: &mut Doc) {
         doc.0.extend_from_slice(&self.0);
     }
 }
 
-impl<T: Pretty> Pretty for Option<T> {
-    fn pretty(&self, doc: &mut Doc) {
+impl<T: Emit> Emit for Option<T> {
+    fn emit(&self, doc: &mut Doc) {
         if let Some(x) = self {
-            x.pretty(doc);
+            x.emit(doc);
         }
     }
 }

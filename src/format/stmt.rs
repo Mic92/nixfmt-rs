@@ -1,5 +1,5 @@
 use crate::ast::{Binder, Expression, Items, Leaf, Parameter, Trivia, TriviaPiece};
-use crate::doc::{Doc, Elem, Pretty, hardline, line};
+use crate::doc::{Doc, Elem, Emit, hardline, line};
 
 use super::Width;
 
@@ -12,8 +12,8 @@ impl Expression {
                 body,
             } => {
                 doc.hardspace();
-                param.pretty(doc);
-                colon.pretty(doc);
+                param.emit(doc);
+                colon.emit(doc);
                 body.absorb_abs(doc, depth + 1);
             }
             _ if self.is_absorbable() => {
@@ -23,7 +23,7 @@ impl Expression {
             _ => {
                 let separator = if depth <= 2 { line() } else { hardline() };
                 doc.push_raw(separator);
-                self.pretty(doc);
+                self.emit(doc);
             }
         }
     }
@@ -51,7 +51,7 @@ pub(super) fn insert_into_app(insert: Expression, expr: Expression) -> (Expressi
 /// Mirrors Haskell `prettyWith False` (Pretty.hs); the `prettyWith True`
 /// path is open-coded inside `absorb_expr`.
 /// `instance Pretty Expression` clause for `Let` (Pretty.hs).
-pub(super) fn pretty_let(
+pub(super) fn emit_let(
     doc: &mut Doc,
     let_kw: &Leaf,
     binders: &Items<Binder>,
@@ -71,21 +71,21 @@ pub(super) fn pretty_let(
 
     // letPart = group $ pretty let_ <> hardline <> nest (renderItems hardline binders)
     doc.group(|g| {
-        let_kw.pretty(g);
+        let_kw.emit(g);
         g.hardline();
-        g.nested(|n| binders.pretty(n));
+        g.nested(|n| binders.emit(n));
     });
     doc.hardline();
     // inPart = group $ pretty in_ <> hardline <> trivia <> pretty expr
     doc.group(|g| {
-        in_kw_clean.pretty(g);
+        in_kw_clean.emit(g);
         g.hardline();
-        moved_trivia.pretty(g);
-        expr.pretty(g);
+        moved_trivia.emit(g);
+        expr.emit(g);
     });
 }
 
-pub(super) fn pretty_with(
+pub(super) fn emit_with(
     doc: &mut Doc,
     with: &Leaf,
     expr0: &Expression,
@@ -93,21 +93,21 @@ pub(super) fn pretty_with(
     expr1: &Expression,
 ) {
     doc.group(|g| {
-        with.pretty(g);
+        with.emit(g);
         g.hardspace();
         g.nested(|n| {
-            n.group(|inner| expr0.pretty(inner));
+            n.group(|inner| expr0.emit(inner));
         });
-        semicolon.pretty(g);
+        semicolon.emit(g);
     });
     doc.line();
-    expr1.pretty(doc);
+    expr1.emit(doc);
 }
 
 /// Recursive renderer for `if`/`else if` chains.
 /// Mirrors Haskell `prettyIf` (Pretty.hs, inside the `If` clause).
 #[allow(clippy::too_many_arguments)]
-pub(super) fn pretty_if(
+pub(super) fn emit_if(
     doc: &mut Doc,
     sep: Elem,
     if_kw: &Leaf,
@@ -118,18 +118,18 @@ pub(super) fn pretty_if(
     else_branch: &Expression,
 ) {
     doc.group(|g| {
-        if_kw.pretty(g);
+        if_kw.emit(g);
         g.line();
-        g.nested(|n| cond.pretty(n));
+        g.nested(|n| cond.emit(n));
         g.line();
-        then_kw.pretty(g);
+        then_kw.emit(g);
     });
     doc.surrounded(&[sep], |d| {
         d.nested(|n| {
-            n.group(|g| then_branch.pretty(g));
+            n.group(|g| then_branch.emit(g));
         });
     });
-    else_kw.move_trailing_comment_up().pretty(doc);
+    else_kw.move_trailing_comment_up().emit(doc);
     doc.hardspace();
     match else_branch {
         Expression::If {
@@ -139,7 +139,7 @@ pub(super) fn pretty_if(
             then_branch,
             kw_else,
             else_branch,
-        } => pretty_if(
+        } => emit_if(
             doc,
             hardline(),
             kw_if,
@@ -152,7 +152,7 @@ pub(super) fn pretty_if(
         x => {
             doc.line();
             doc.nested(|n| {
-                n.group(|g| x.pretty(g));
+                n.group(|g| x.emit(g));
             });
         }
     }

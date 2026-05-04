@@ -33,7 +33,7 @@ regression suite asserts.
 
 ## Format — `src/format/`
 
-`impl Pretty for <AST node>` turns the tree into the **Doc IR**. This
+`impl Emit for <AST node>` turns the tree into the **Doc IR**. This
 is where all formatting policy lives: absorption (`absorbRHS`,
 `absorbLast`, `absorbParen`), application layout (`prettyApp`),
 `if`/`let`/`with` shaping, operator chains. Every non-trivial function

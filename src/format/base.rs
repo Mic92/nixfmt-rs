@@ -1,19 +1,19 @@
-//! `Pretty` impls for the wrapper / leaf types every other renderer builds on:
+//! `Emit` impls for the wrapper / leaf types every other renderer builds on:
 //! trivia, [`Annotated`], [`Item`], [`Trailed`] and bare [`Token`].
 
 use crate::ast::{Annotated, Item, Token, Trailed, TrailingComment, Trivia, TriviaPiece};
-use crate::doc::{Doc, Pretty};
+use crate::doc::{Doc, Emit};
 
-impl Pretty for TrailingComment {
-    fn pretty(&self, doc: &mut Doc) {
+impl Emit for TrailingComment {
+    fn emit(&self, doc: &mut Doc) {
         doc.hardspace()
             .trailing_comment(format!("# {}", self.0))
             .hardline();
     }
 }
 
-impl Pretty for TriviaPiece {
-    fn pretty(&self, doc: &mut Doc) {
+impl Emit for TriviaPiece {
+    fn emit(&self, doc: &mut Doc) {
         match self {
             Self::EmptyLine() => {
                 doc.emptyline();
@@ -42,8 +42,8 @@ impl Pretty for TriviaPiece {
     }
 }
 
-impl Pretty for Trivia {
-    fn pretty(&self, doc: &mut Doc) {
+impl Emit for Trivia {
+    fn emit(&self, doc: &mut Doc) {
         if self.is_empty() {
             return;
         }
@@ -52,64 +52,64 @@ impl Pretty for Trivia {
         if self.len() == 1
             && let TriviaPiece::LanguageAnnotation(_) = &self[0]
         {
-            self[0].pretty(doc);
+            self[0].emit(doc);
             return;
         }
 
         doc.hardline();
         for trivium in self {
-            trivium.pretty(doc);
+            trivium.emit(doc);
         }
     }
 }
 
-impl<T: Pretty> Pretty for Annotated<T> {
-    fn pretty(&self, doc: &mut Doc) {
-        self.pre_trivia.pretty(doc);
-        self.value.pretty(doc);
-        self.trail_comment.pretty(doc);
+impl<T: Emit> Emit for Annotated<T> {
+    fn emit(&self, doc: &mut Doc) {
+        self.pre_trivia.emit(doc);
+        self.value.emit(doc);
+        self.trail_comment.emit(doc);
     }
 }
 
-impl<T: Pretty> Annotated<T> {
+impl<T: Emit> Annotated<T> {
     /// Emit `pre_trivia` and value, leaving `trail_comment` for the caller to
     /// place elsewhere (typically inside a following nested group).
-    pub(super) fn pretty_head(&self, doc: &mut Doc) {
-        self.pre_trivia.pretty(doc);
-        self.value.pretty(doc);
+    pub(super) fn emit_head(&self, doc: &mut Doc) {
+        self.pre_trivia.emit(doc);
+        self.value.emit(doc);
     }
 
     /// Emit value and `trail_comment`, leaving `pre_trivia` for the caller to
     /// place elsewhere (typically inside a preceding nested group).
-    pub(super) fn pretty_tail(&self, doc: &mut Doc) {
-        self.value.pretty(doc);
-        self.trail_comment.pretty(doc);
+    pub(super) fn emit_tail(&self, doc: &mut Doc) {
+        self.value.emit(doc);
+        self.trail_comment.emit(doc);
     }
 }
 
 impl<T> Annotated<T> {
     /// Emit `pre_trivia`, then the value via `f`, then `trail_comment`.
-    /// Used for `Annotated<T>` payloads that have no blanket `Pretty` impl.
-    pub(super) fn pretty_with(&self, doc: &mut Doc, f: impl FnOnce(&mut Doc, &T)) {
-        self.pre_trivia.pretty(doc);
+    /// Used for `Annotated<T>` payloads that have no blanket `Emit` impl.
+    pub(super) fn emit_with(&self, doc: &mut Doc, f: impl FnOnce(&mut Doc, &T)) {
+        self.pre_trivia.emit(doc);
         f(doc, &self.value);
-        self.trail_comment.pretty(doc);
+        self.trail_comment.emit(doc);
     }
 }
 
-impl<T: Pretty> Pretty for Item<T> {
-    fn pretty(&self, doc: &mut Doc) {
+impl<T: Emit> Emit for Item<T> {
+    fn emit(&self, doc: &mut Doc) {
         match self {
-            Self::Comments(trivia) => trivia.pretty(doc),
+            Self::Comments(trivia) => trivia.emit(doc),
             Self::Item(x) => {
-                doc.group(|d| x.pretty(d));
+                doc.group(|d| x.emit(d));
             }
         }
     }
 }
 
-impl Pretty for Token {
-    fn pretty(&self, doc: &mut Doc) {
+impl Emit for Token {
+    fn emit(&self, doc: &mut Doc) {
         if let Self::EnvPath(s) = self {
             doc.text(format!("<{s}>"));
             return;
@@ -118,11 +118,11 @@ impl Pretty for Token {
     }
 }
 
-impl<T: Pretty> Pretty for Trailed<T> {
-    fn pretty(&self, doc: &mut Doc) {
+impl<T: Emit> Emit for Trailed<T> {
+    fn emit(&self, doc: &mut Doc) {
         doc.group(|doc| {
-            self.value.pretty(doc);
-            self.trailing_trivia.pretty(doc);
+            self.value.emit(doc);
+            self.trailing_trivia.emit(doc);
         });
         // No trailing Hardline: reference nixfmt's `--ir` output does not emit one.
     }

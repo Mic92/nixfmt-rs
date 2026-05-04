@@ -42,7 +42,7 @@ pub use error::ParseError;
 /// Version of the `nixfmt_rs` crate (and thus the formatting rules).
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");
 
-use doc::{Pretty, RenderConfig};
+use doc::{Emit, RenderConfig};
 
 // Internal-only Result type and AST types
 pub(crate) use ast::File;
@@ -108,7 +108,7 @@ pub fn format(source: &str) -> Result<String> {
 pub fn format_with(source: &str, opts: &Options) -> Result<String> {
     let ast = parse(source)?;
     let mut doc = doc::Doc::new();
-    ast.pretty(&mut doc);
+    ast.emit(&mut doc);
     let config = RenderConfig {
         width: opts.width,
         indent_width: opts.indent,
@@ -120,7 +120,7 @@ pub fn format_with(source: &str, opts: &Options) -> Result<String> {
 #[cfg(any(test, feature = "debug-dump"))]
 pub(crate) fn ast_to_ir(ast: &File) -> doc::IR {
     let mut doc = doc::Doc::new();
-    ast.pretty(&mut doc);
+    ast.emit(&mut doc);
     doc::IR(doc.fixup())
 }
 
