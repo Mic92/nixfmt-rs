@@ -1,4 +1,4 @@
-use crate::ast::{Binder, Expression, Items, Leaf, Parameter, Trivia, TriviaPiece};
+use crate::ast::{Binder, Expression, Items, Leaf, Parameter};
 use crate::doc::{Doc, Elem, Emit, hardline, line};
 
 use super::Width;
@@ -58,16 +58,11 @@ pub(super) fn emit_let(
     in_kw: &Leaf,
     expr: &Expression,
 ) {
-    // Strip trivia/trailing from `in` and move it down to the body.
-    let mut in_kw_clean = in_kw.clone();
-    in_kw_clean.pre_trivia = Trivia::new();
-    in_kw_clean.trail_comment = None;
-
-    let mut moved_trivia_vec: Vec<TriviaPiece> = in_kw.pre_trivia.clone().into();
+    // Trivia/trailing on `in` are moved down to the body.
+    let mut moved_trivia = in_kw.pre_trivia.clone();
     if let Some(trailing) = &in_kw.trail_comment {
-        moved_trivia_vec.push(trailing.into());
+        moved_trivia.push(trailing.into());
     }
-    let moved_trivia: Trivia = moved_trivia_vec.into();
 
     // letPart = group $ pretty let_ <> hardline <> nest (renderItems hardline binders)
     doc.group(|g| {
@@ -78,7 +73,7 @@ pub(super) fn emit_let(
     doc.hardline();
     // inPart = group $ pretty in_ <> hardline <> trivia <> pretty expr
     doc.group(|g| {
-        in_kw_clean.emit(g);
+        in_kw.value.emit(g);
         g.hardline();
         moved_trivia.emit(g);
         expr.emit(g);

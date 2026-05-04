@@ -107,11 +107,7 @@ impl Emit for Vec<StringPart> {
             // interpolations, indent the continuation by the line's leading
             // whitespace so it lines up under the string content.
             [StringPart::TextPart(t), rest @ ..] => {
-                let indentation = text_width(
-                    &t.chars()
-                        .take_while(|c| c.is_whitespace())
-                        .collect::<String>(),
-                );
+                let indentation = t.chars().take_while(|c| c.is_whitespace()).count();
                 doc.text(&**t);
                 doc.offset(indentation, |d| {
                     for part in rest {
@@ -134,7 +130,7 @@ pub(super) fn emit_simple_string(doc: &mut Doc, parts: &[Vec<StringPart>]) {
         d.text("\"");
         // Literal \n avoids the indentation that newline() would inject
         let newline_doc = [Elem::Text(0, 0, TextKind::Regular, "\n".to_string())];
-        d.sep_by(&newline_doc, parts.iter().cloned());
+        d.sep_by(&newline_doc, parts);
         d.text("\"");
     });
 }
@@ -148,7 +144,7 @@ pub(super) fn emit_indented_string(doc: &mut Doc, parts: &[Vec<StringPart>]) {
             d.linebreak();
         }
         d.nested(|inner| {
-            inner.sep_by(&[newline()], parts.iter().cloned());
+            inner.sep_by(&[newline()], parts);
         });
         d.text("''");
     });

@@ -163,6 +163,12 @@ impl Emit for Doc {
     }
 }
 
+impl<T: Emit + ?Sized> Emit for &T {
+    fn emit(&self, doc: &mut Doc) {
+        (*self).emit(doc);
+    }
+}
+
 impl<T: Emit> Emit for Option<T> {
     fn emit(&self, doc: &mut Doc) {
         if let Some(x) = self {
