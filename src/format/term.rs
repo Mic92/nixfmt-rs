@@ -194,7 +194,7 @@ pub(super) fn emit_set(
     items: &Items<Binder>,
     close: &Annotated<Token>,
 ) {
-    if items.0.is_empty() && open.is_lone() && close.pre_trivia.is_empty() {
+    if items.0.is_empty() && !open.has_trivia() && close.pre_trivia.is_empty() {
         if let Some(rec) = rec {
             rec.emit(doc);
             doc.hardspace();
@@ -216,7 +216,7 @@ pub(super) fn emit_set(
     };
 
     // The different-line check is independent of `items` so an empty set that
-    // missed the `is_lone` fast path (pre-trivia on `{`) still preserves the
+    // missed the no-trivia fast path (pre-trivia on `{`) still preserves the
     // user's line break.
     let sep = if (!items.0.is_empty() && (wide == Width::Wide || starts_with_emptyline))
         || open.span.start_line() != close.span.start_line()

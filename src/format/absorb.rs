@@ -18,7 +18,7 @@ impl Term {
             } => is_absorbable_braces(open, items, close),
             Self::List { open, items, close } => is_absorbable_braces(open, items, close),
             Self::Parenthesized { open, expr, .. } => {
-                open.is_lone() && matches!(&**expr, Expression::Term(t) if t.is_absorbable())
+                !open.has_trivia() && matches!(&**expr, Expression::Term(t) if t.is_absorbable())
             }
             _ => false,
         }
@@ -192,7 +192,7 @@ impl Expression {
                 lhs: left,
                 op,
                 rhs: right,
-            } if op.is_lone()
+            } if !op.has_trivia()
                 && op.value.is_update_concat_plus()
                 && matches!(&**right, Self::Term(t) if t.is_absorbable()) =>
             {

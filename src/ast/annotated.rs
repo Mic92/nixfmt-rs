@@ -18,14 +18,10 @@ pub struct Annotated<T> {
 }
 
 impl<T> Annotated<T> {
-    /// Haskell `hasTrivia` (Types.hs): annotation carries leading or trailing trivia.
+    /// Annotation carries leading or trailing trivia (Haskell `hasTrivia` /
+    /// negation of the `LoneAnn` pattern in Types.hs).
     pub fn has_trivia(&self) -> bool {
         !self.pre_trivia.is_empty() || self.trail_comment.is_some()
-    }
-
-    /// Haskell `LoneAnn` pattern (Types.hs): annotation with no surrounding trivia.
-    pub fn is_lone(&self) -> bool {
-        !self.has_trivia()
     }
 }
 
