@@ -105,10 +105,10 @@ impl Term {
     /// classified without wrapping them in an `Expression`.
     pub fn is_simple(&self) -> bool {
         match self {
-            Self::SimpleString(s) | Self::IndentedString(s) => s.is_lone(),
-            Self::Path(p) => p.is_lone(),
+            Self::SimpleString(s) | Self::IndentedString(s) => !s.has_trivia(),
+            Self::Path(p) => !p.has_trivia(),
             Self::Token(leaf)
-                if leaf.is_lone()
+                if !leaf.has_trivia()
                     && matches!(
                         leaf.value,
                         Token::Identifier(_)
@@ -125,7 +125,7 @@ impl Term {
                 default,
             } => base.is_simple() && selectors.iter().all(Selector::is_simple) && default.is_none(),
             Self::Parenthesized { open, expr, close } => {
-                open.is_lone() && close.is_lone() && expr.is_simple()
+                !open.has_trivia() && !close.has_trivia() && expr.is_simple()
             }
             _ => false,
         }

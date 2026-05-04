@@ -94,7 +94,7 @@ fn move_param_attr_comment(attr: ParamAttr) -> ParamAttr {
             mut name,
             default,
             comma: Some(mut comma),
-        } if default.is_none() && name.trail_comment.is_some() && comma.is_lone() => {
+        } if default.is_none() && name.trail_comment.is_some() && !comma.has_trivia() => {
             comma.trail_comment = name.trail_comment.take();
             ParamAttr::Attr {
                 name,
@@ -106,7 +106,7 @@ fn move_param_attr_comment(attr: ParamAttr) -> ParamAttr {
             name,
             mut default,
             comma: Some(mut comma),
-        } if default.is_some() && comma.is_lone() => {
+        } if default.is_some() && !comma.has_trivia() => {
             if let Some(def) = default.as_mut() {
                 comma.trail_comment = take_last_trail_comment_expr(&mut def.value);
             }
@@ -199,7 +199,7 @@ fn render_param_attrs(attrs: &[ParamAttr]) -> Vec<Doc> {
                     default,
                     comma: Some(comma),
                 } = attr
-                && comma.is_lone()
+                && !comma.has_trivia()
             {
                 emit_attr(&mut rendered, name, default.as_ref(), None);
                 rendered.trailing(",");
