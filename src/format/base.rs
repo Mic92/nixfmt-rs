@@ -15,7 +15,7 @@ impl Emit for TrailingComment {
 impl Emit for TriviaPiece {
     fn emit(&self, doc: &mut Doc) {
         match self {
-            Self::EmptyLine() => {
+            Self::EmptyLine => {
                 doc.emptyline();
             }
             Self::LineComment(c) => {

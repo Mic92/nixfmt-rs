@@ -211,9 +211,7 @@ pub(super) fn emit_set(
     open.emit_head(doc);
 
     let starts_with_emptyline = match items.0.first() {
-        Some(Item::Comments(trivia)) => {
-            trivia.iter().any(|t| matches!(t, TriviaPiece::EmptyLine()))
-        }
+        Some(Item::Comments(trivia)) => trivia.iter().any(|t| matches!(t, TriviaPiece::EmptyLine)),
         _ => false,
     };
 

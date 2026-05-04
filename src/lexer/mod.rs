@@ -142,7 +142,7 @@ impl Lexer {
             // Fast path hit: only whitespace between this token and the next.
             trailing_comment = None;
             self.trivia_buffer = if newlines > 1 {
-                Trivia::one(crate::ast::TriviaPiece::EmptyLine())
+                Trivia::one(crate::ast::TriviaPiece::EmptyLine)
             } else {
                 Trivia::new()
             };

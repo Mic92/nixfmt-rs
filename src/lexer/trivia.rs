@@ -51,7 +51,7 @@ pub(super) fn convert_leading(pts: &[RawTrivia]) -> Trivia {
                 other => {
                     // Flush pending newlines first (single newlines are discarded)
                     if newline_count > 1 {
-                        acc.push(TriviaPiece::EmptyLine());
+                        acc.push(TriviaPiece::EmptyLine);
                     }
 
                     match other {
@@ -83,7 +83,7 @@ pub(super) fn convert_leading(pts: &[RawTrivia]) -> Trivia {
             });
 
     if pending_newlines > 1 {
-        result.push(TriviaPiece::EmptyLine());
+        result.push(TriviaPiece::EmptyLine);
     }
 
     result.into()
@@ -107,7 +107,7 @@ pub fn convert_trivia(pts: &[RawTrivia], next_col: usize) -> (Option<TrailingCom
             return (
                 None,
                 if *n > 1 {
-                    Trivia::one(TriviaPiece::EmptyLine())
+                    Trivia::one(TriviaPiece::EmptyLine)
                 } else {
                     Trivia::new()
                 },
