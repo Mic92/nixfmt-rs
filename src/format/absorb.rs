@@ -75,22 +75,22 @@ impl Expression {
                 scope,
                 semi,
                 body,
-            } if matches!(&**body, Self::Term(t) if t.is_absorbable()) => {
-                let Self::Term(t) = &**body else {
-                    unreachable!()
-                };
-                doc.group(|g| {
-                    g.linebreak();
-                    kw_with.emit(g);
-                    g.hardspace();
-                    g.nested(|n| {
-                        n.group(|gg| scope.emit(gg));
+            } => match &**body {
+                Self::Term(t) if t.is_absorbable() => {
+                    doc.group(|g| {
+                        g.linebreak();
+                        kw_with.emit(g);
+                        g.hardspace();
+                        g.nested(|n| {
+                            n.group(|gg| scope.emit(gg));
+                        });
+                        semi.emit(g);
+                        g.hardspace();
+                        g.priority_group(|pg| t.emit_wide(pg));
                     });
-                    semi.emit(g);
-                    g.hardspace();
-                    g.priority_group(|pg| t.emit_wide(pg));
-                });
-            }
+                }
+                _ => self.emit(doc),
+            },
             _ => self.emit(doc),
         }
     }
