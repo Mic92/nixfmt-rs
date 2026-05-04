@@ -76,8 +76,8 @@ fn fuzz_block_comment_with_cr_reparses() {
 /// A trailing `# c` on `[` is rendered on its own line, where it re-lexes as a
 /// *leading* comment on the first item. With a lone `/* lang */` annotation as
 /// the first item, pass 1 fused it with the term (`/* s */ x`) but pass 2 saw
-/// `[LineComment, LanguageAnnotation]` and split them. Also non-idempotent in
-/// upstream Haskell nixfmt 1.2.0.
+/// `[LineComment, LanguageAnnotation]` and split them. Upstream fix carried in
+/// `nix/patches/0004-*.patch`.
 #[test]
 fn fuzz_list_open_trail_comment_before_lang_annotation() {
     roundtrip("[#x\n/*s*/\"\"\n]");
@@ -89,8 +89,8 @@ fn fuzz_list_open_trail_comment_before_lang_annotation() {
 
 /// Leading blank lines on the file's first token made `Term::is_simple` return
 /// `false`, so `prettyApp` took the non-simple branch on pass 1; pass 2 (with
-/// the blanks now stripped) took the simple branch. Also non-idempotent in
-/// upstream Haskell nixfmt 1.2.0.
+/// the blanks now stripped) took the simple branch. Upstream fix carried in
+/// `nix/patches/0001-*.patch`.
 #[test]
 fn fuzz_leading_blank_lines_app_layout() {
     roundtrip("\n\nc\n\"${f\n\n}\"");
@@ -109,8 +109,8 @@ fn fuzz_leading_blank_lines_app_layout() {
 /// `prettyApp` hoisted a lone `/* lang */` annotation off the call head and
 /// emitted it before `ctx.pre`, so the annotation landed directly after the
 /// preceding operator with no space. For `/` this produced `a //* sh */ …`,
-/// which re-lexes as the `//` update operator and fails to parse. Upstream
-/// Haskell nixfmt 1.2.0 has the same bug.
+/// which re-lexes as the `//` update operator and fails to parse. Upstream fix
+/// carried in `nix/patches/0003-*.patch`.
 #[test]
 fn fuzz_lang_annotation_on_app_head_after_div() {
     roundtrip("H/\n/*h*/''''p");
@@ -132,4 +132,21 @@ fn fuzz_lang_annotation_on_app_head_after_div() {
     // delimiter that needs no space; keep that.
     roundtrip("(/* sh */ \"\" p)");
     roundtrip("/* sh */ \"\" p");
+}
+
+/// A `# c` trailing the closing `"` of a `"…"` literal that spans multiple
+/// source lines lands at the next sibling's indent column, so `convert_trivia`
+/// reattached it as leading on pass 2 but not pass 1. Upstream fix carried in
+/// `nix/patches/0002-*.patch`.
+#[test]
+fn fuzz_trailing_comment_on_multiline_simple_string() {
+    roundtrip("[\"\n\"#c\nt]");
+    roundtrip("{a=\"\n\"#c\n;b=1;}");
+    roundtrip("f \"\n\"#c\nt");
+    roundtrip("(\"\n\"#c\n)");
+    // Indented strings were already idempotent (closing `''` sits at indent
+    // col); the patch also keeps `# c` trailing here, which differs from
+    // unpatched upstream's own-line form but is the less surprising fixed
+    // point. Pinned via the reference.
+    test_format("[''\na\n''#c\nt]");
 }

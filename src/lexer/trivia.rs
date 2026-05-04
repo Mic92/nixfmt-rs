@@ -98,7 +98,16 @@ pub(super) fn convert_leading(pts: &[RawTrivia]) -> Trivia {
 /// Special handling for comment blocks:
 /// - If a trailing comment visually forms a block with the following line,
 ///   treat it as leading instead to preserve formatting intent
-pub fn convert_trivia(pts: &[RawTrivia], next_col: usize) -> (Option<TrailingComment>, Trivia) {
+///
+/// `prev_multiline`: the preceding token spans more than one source line
+/// (e.g. a `"…"` literal with embedded newlines). Suppresses the
+/// `col == next_col` reattachment heuristic, which would otherwise flip a
+/// genuinely-trailing comment to leading on the second formatting pass.
+pub fn convert_trivia(
+    pts: &[RawTrivia],
+    prev_multiline: bool,
+    next_col: usize,
+) -> (Option<TrailingComment>, Trivia) {
     // Fast path: the overwhelmingly common case between two tokens is a single
     // run of newlines (or nothing at all) with no comments.
     match pts {
@@ -135,8 +144,14 @@ pub fn convert_trivia(pts: &[RawTrivia], next_col: usize) -> (Option<TrailingCom
             ],
         ) if col1 == col2 => (None, convert_leading(pts)),
 
-        // Case 2: [ # comment ] followed by single newline, and next token is at same column
-        ([RawTrivia::LineComment { col, .. }], [RawTrivia::Newlines(1)]) if *col == next_col => {
+        // Case 2: [ # comment ] followed by single newline, and next token is at same column.
+        // Suppressed when the preceding token spans multiple lines: its closing
+        // delimiter can sit left of `next_col`, so the comment is genuinely
+        // trailing even though `col == next_col`, and reattaching it would make
+        // formatting non-idempotent.
+        ([RawTrivia::LineComment { col, .. }], [RawTrivia::Newlines(1)])
+            if !prev_multiline && *col == next_col =>
+        {
             (None, convert_leading(pts))
         }
 

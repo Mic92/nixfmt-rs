@@ -247,8 +247,7 @@ impl<T: Emit> Items<T> {
     /// comment from the opening token was just emitted: on reparse that comment
     /// becomes leading trivia merged into the same `Comments` item, which would
     /// suppress the fuse, so suppressing it up front keeps formatting
-    /// idempotent. Intentional divergence from upstream nixfmt 1.2.0, which is
-    /// non-idempotent on `[#x\n/*s*/x\n]`.
+    /// idempotent. Mirrors `nix/patches/0004-*.patch` on the reference.
     pub(super) fn emit_sep(&self, doc: &mut Doc, sep: &Elem, fuse_first: bool) {
         let mut iter = self.0.iter().peekable();
         let mut first = true;

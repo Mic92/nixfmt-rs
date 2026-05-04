@@ -52,7 +52,7 @@ pub struct Lexer {
     source: Box<str>,
     /// Byte offset of the cursor; always on a UTF-8 char boundary.
     byte_pos: usize,
-    line: usize,
+    pub(crate) line: usize,
     pub(crate) column: usize,
     /// Accumulated leading trivia for next token
     pub(crate) trivia_buffer: Trivia,
@@ -148,7 +148,8 @@ impl Lexer {
             };
         } else {
             self.parse_trivia();
-            let (tc, next) = trivia::convert_trivia(&self.trivia_scratch, self.column);
+            let (tc, next) =
+                trivia::convert_trivia(&self.trivia_scratch, end_line > start_line, self.column);
             trailing_comment = tc;
             self.trivia_buffer = next;
         }
@@ -164,16 +165,26 @@ impl Lexer {
     /// Parse a whole file (expression + final trivia)
     pub(crate) fn start_parse(&mut self) {
         self.parse_trivia();
-        self.trivia_buffer = trivia::convert_leading(&self.trivia_scratch);
+        let mut leading: Vec<_> = trivia::convert_leading(&self.trivia_scratch).into();
+        // Leading blank lines never reach the output but make `is_simple` false
+        // on the file's first term, which flips `prettyApp`'s layout between
+        // passes. Mirrors `nix/patches/0001-*.patch` on the reference.
+        let n = leading
+            .iter()
+            .take_while(|p| matches!(p, crate::ast::TriviaPiece::EmptyLine))
+            .count();
+        leading.drain(..n);
+        self.trivia_buffer = leading.into();
     }
 
     /// Parse trivia and classify it into `(trailing, next_leading)` so the
     /// parser does not need direct access to the scratch buffer.
     pub(crate) fn parse_and_convert_trivia(
         &mut self,
+        prev_multiline: bool,
     ) -> (Option<crate::ast::TrailingComment>, Trivia) {
         self.parse_trivia();
-        trivia::convert_trivia(&self.trivia_scratch, self.column)
+        trivia::convert_trivia(&self.trivia_scratch, prev_multiline, self.column)
     }
 
     /// Get current position as a zero-length span (in byte offsets)

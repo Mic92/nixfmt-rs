@@ -8,6 +8,14 @@
   git,
   nixfmt,
 }:
+let
+  # The test suite diffs against a Haskell `nixfmt` carrying our upstream
+  # idempotency patches; see ./reference-nixfmt.nix for rationale. Kept inside
+  # this derivation so `callPackage ./nix/package.nix { }` works against any
+  # nixpkgs without the caller having to know about the patch set.
+  referenceNixfmt =
+    if nixfmt == null then null else import ./reference-nixfmt.nix { inherit nixfmt; };
+in
 rustPlatform.buildRustPackage {
   pname = "nixfmt-rs";
   version = (builtins.fromTOML (builtins.readFile ../Cargo.toml)).package.version;
@@ -38,9 +46,9 @@ rustPlatform.buildRustPackage {
   # The test suite shells out to the reference Haskell `nixfmt` to compare
   # output, so it must be on PATH during checkPhase. Pass `nixfmt = null`
   # (e.g. from pkgsStatic) to skip the suite where the reference can't build.
-  doCheck = nixfmt != null;
+  doCheck = referenceNixfmt != null;
   # `git` is required by the --mergetool tests.
-  nativeCheckInputs = lib.optional (nixfmt != null) nixfmt ++ [ git ];
+  nativeCheckInputs = lib.optional (referenceNixfmt != null) referenceNixfmt ++ [ git ];
 
   postInstall = ''
     installManPage nixfmt.1
@@ -53,6 +61,8 @@ rustPlatform.buildRustPackage {
 
   doInstallCheck = true;
   nativeInstallCheckInputs = [ versionCheckHook ];
+
+  passthru = { inherit referenceNixfmt; };
 
   meta = {
     description = "Rust implementation of nixfmt with exact Haskell compatibility";

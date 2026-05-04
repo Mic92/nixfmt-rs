@@ -260,12 +260,10 @@ pub(super) fn emit_app_parts(
 ) {
     let mut comment = first_token_comment(head.unwrap_or(f));
 
-    // A lone language-annotation comment renders inline (`/* sh */ "…"`) with
-    // no leading separator, so hoisting it here would place it directly after
-    // the caller's preceding token (e.g. `a //* sh */ …`, which re-lexes as
-    // the `//` operator). Leave it on the term so `ctx.pre` lands before it.
-    // Intentional divergence from upstream nixfmt 1.2.0, which has this bug;
-    // also adds the missing space after `+`/`=` etc. in the same position.
+    // A lone /* lang */ renders inline with no leading separator; hoisting it
+    // would place it directly after the caller's preceding token (re-lexing
+    // `a /` + `/* sh */` as the `//` operator). Leave it on the term so
+    // `ctx.pre` lands first (patch 0003).
     if let [TriviaPiece::LanguageAnnotation(_)] = &*comment {
         comment = Trivia::new();
     }

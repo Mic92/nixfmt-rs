@@ -293,8 +293,11 @@ impl Parser {
     /// Parse trivia after manually consuming content (strings, paths, etc.)
     /// and return the trailing comment for the previous construct.
     /// This also stores leading trivia for the next token and advances to it.
-    fn parse_trailing_trivia_and_advance(&mut self) -> Result<Option<crate::ast::TrailingComment>> {
-        let (trail_comment, next_leading) = self.lexer.parse_and_convert_trivia();
+    fn parse_trailing_trivia_and_advance(
+        &mut self,
+        prev_multiline: bool,
+    ) -> Result<Option<crate::ast::TrailingComment>> {
+        let (trail_comment, next_leading) = self.lexer.parse_and_convert_trivia(prev_multiline);
 
         self.lexer.trivia_buffer = next_leading;
         self.current = self.lexer.lexeme()?;
@@ -309,7 +312,8 @@ impl Parser {
         let span = self.current.span;
         let pre_trivia = std::mem::take(&mut self.current.pre_trivia);
         let value = f(self)?;
-        let trail_comment = self.parse_trailing_trivia_and_advance()?;
+        let prev_multiline = self.lexer.line > span.start_line();
+        let trail_comment = self.parse_trailing_trivia_and_advance(prev_multiline)?;
         Ok(Annotated {
             pre_trivia,
             span,

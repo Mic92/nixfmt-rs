@@ -31,8 +31,10 @@
         let
           pkgs = pkgsFor.${system};
         in
-        {
+        rec {
           default = pkgs.callPackage ./nix/package.nix { };
+          # The patched Haskell reference the test suite diffs against.
+          reference-nixfmt = default.referenceNixfmt;
           wasm = pkgs.callPackage ./nix/wasm.nix { };
         }
         // pkgs.lib.optionalAttrs pkgs.stdenv.hostPlatform.isLinux {
