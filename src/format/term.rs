@@ -258,11 +258,10 @@ impl<T: Emit> Items<T> {
                     if i + 1 < items.len()
                         && let Item::Comments(trivia) = &items[i]
                         && trivia.len() == 1
-                        && let TriviaPiece::LanguageAnnotation(lang) = &trivia[0]
+                        && let ann @ TriviaPiece::LanguageAnnotation(_) = &trivia[0]
                         && let Item::Item(string_item) = &items[i + 1]
                     {
-                        TriviaPiece::LanguageAnnotation(lang.clone()).emit(doc);
-                        doc.hardspace();
+                        ann.emit(doc);
                         doc.group(|d| string_item.emit(d));
                         i += 2;
                         continue;
