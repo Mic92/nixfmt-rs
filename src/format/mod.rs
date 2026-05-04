@@ -12,7 +12,7 @@
 //! dispatchers that fan out into those submodules.
 
 use crate::ast::{Annotated, Expression, Parameter, Term, Token};
-use crate::predoc::{Doc, Pretty, line};
+use crate::doc::{Doc, Pretty, line};
 
 mod absorb;
 mod app;

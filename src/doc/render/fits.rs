@@ -2,7 +2,7 @@
 //! [`Elem`]s as if compact and report whether/how-far it fits a budget.
 
 use super::{Look, LookIter};
-use crate::predoc::{Elem, Spacing, TextKind, text_width};
+use crate::doc::{Elem, Spacing, TextKind, text_width};
 
 /// Shared engine for `fits` / `fits_width`. Mirrors `fits` in Nixfmt/Predoc.hs.
 ///

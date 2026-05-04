@@ -20,29 +20,29 @@
 #![forbid(unsafe_code)]
 
 // Internal modules - hidden from public API
+mod doc;
 mod error;
-mod predoc;
 
 // Debug-dump machinery (Haskell `Show` / pretty-simple parity). Only needed
 // by the `nixfmt` binary's --ast/--ir flags and the regression test suite.
 #[cfg(any(test, feature = "debug-dump"))]
 mod colored_writer;
 #[cfg(any(test, feature = "debug-dump"))]
-mod pretty_simple;
+mod dump;
 
 // Internal modules - not exposed as public API
 mod ast;
+mod format;
 mod lexer;
 mod normalize;
 mod parser;
-mod pretty;
 
 pub use error::ParseError;
 
 /// Version of the `nixfmt_rs` crate (and thus the formatting rules).
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");
 
-use predoc::{Pretty, RenderConfig};
+use doc::{Pretty, RenderConfig};
 
 // Internal-only Result type and AST types
 pub(crate) use ast::File;
@@ -107,7 +107,7 @@ pub fn format(source: &str) -> Result<String> {
 /// See [`parse`].
 pub fn format_with(source: &str, opts: &Options) -> Result<String> {
     let ast = parse(source)?;
-    let mut doc = predoc::Doc::new();
+    let mut doc = doc::Doc::new();
     ast.pretty(&mut doc);
     let config = RenderConfig {
         width: opts.width,
@@ -118,10 +118,10 @@ pub fn format_with(source: &str, opts: &Options) -> Result<String> {
 }
 
 #[cfg(any(test, feature = "debug-dump"))]
-pub(crate) fn ast_to_ir(ast: &File) -> predoc::IR {
-    let mut doc = predoc::Doc::new();
+pub(crate) fn ast_to_ir(ast: &File) -> doc::IR {
+    let mut doc = doc::Doc::new();
     ast.pretty(&mut doc);
-    predoc::IR(doc.fixup())
+    doc::IR(doc.fixup())
 }
 
 /// Format AST as colored debug output (for --ast mode).
@@ -131,7 +131,7 @@ pub(crate) fn ast_to_ir(ast: &File) -> predoc::IR {
 #[cfg(any(test, feature = "debug-dump"))]
 #[doc(hidden)]
 pub fn format_ast(source: &str) -> Result<String> {
-    use pretty_simple::PrettySimple;
+    use dump::PrettySimple;
     let ast = parse(source)?;
     let mut writer = colored_writer::ColoredWriter::new(source);
     ast.format(&mut writer);
@@ -145,7 +145,7 @@ pub fn format_ast(source: &str) -> Result<String> {
 #[cfg(any(test, feature = "debug-dump"))]
 #[doc(hidden)]
 pub fn format_ir(source: &str) -> Result<String> {
-    use pretty_simple::PrettySimple;
+    use dump::PrettySimple;
     let ast = parse(source)?;
     let ir = ast_to_ir(&ast);
     let mut writer = colored_writer::ColoredWriter::new(source);

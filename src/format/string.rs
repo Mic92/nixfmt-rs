@@ -1,5 +1,5 @@
 use crate::ast::{Expression, StringPart};
-use crate::predoc::{Doc, Elem, Pretty, TextKind, newline, text_width};
+use crate::doc::{Doc, Elem, Pretty, TextKind, newline, text_width};
 
 fn is_spaces(s: &str) -> bool {
     s.chars().all(char::is_whitespace)

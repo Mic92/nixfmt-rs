@@ -5,7 +5,7 @@
 
 use super::diff;
 use crate::colored_writer::ColoredWriter;
-use crate::pretty_simple::PrettySimple;
+use crate::dump::PrettySimple;
 use std::process::Command;
 
 /// Which reference-nixfmt mode to invoke and where its output lands.

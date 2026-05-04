@@ -295,7 +295,7 @@ macro_rules! format_constructor {
     ($w:expr, $name:expr, [ $($arg:expr),+ $(,)? ]) => {{
         $w.write_plain($name);
         $(
-            $crate::pretty_simple::sub_expr($w, $arg);
+            $crate::dump::sub_expr($w, $arg);
         )*
     }};
 }
@@ -309,7 +309,7 @@ macro_rules! format_constructor {
 macro_rules! format_record {
     ($w:expr, [ $(($name:expr, $value:expr)),+ $(,)? ]) => {{
         $w.newline();
-        $crate::pretty_simple::with_brackets($w, "{", "}", true, |w, brace_color| {
+        $crate::dump::with_brackets($w, "{", "}", true, |w, brace_color| {
             format_record!(@fields w, brace_color; ; $( ($name, $value) ),+);
             w.newline();
         });
@@ -320,7 +320,7 @@ macro_rules! format_record {
         $w.write_plain(" ");
         $w.write_plain($name);
         $w.write_plain(" =");
-        $crate::pretty_simple::format_delimited_value($w, $value);
+        $crate::dump::format_delimited_value($w, $value);
         $(
             format_record!(@fields $w, $brace_color; comma; ($rest_name, $rest_value));
         )*
@@ -333,7 +333,7 @@ macro_rules! format_record {
         $w.write_plain(" ");
         $w.write_plain($name);
         $w.write_plain(" =");
-        $crate::pretty_simple::format_delimited_value($w, $value);
+        $crate::dump::format_delimited_value($w, $value);
     };
 }
 

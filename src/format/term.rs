@@ -2,7 +2,7 @@ use crate::ast::{
     Annotated, Binder, Expression, Item, Items, Leaf, Selector, SimpleSelector, Term, Token,
     Trivium,
 };
-use crate::predoc::{Doc, Elem, Pretty, hardline, hardspace, line, linebreak};
+use crate::doc::{Doc, Elem, Pretty, hardline, hardspace, line, linebreak};
 
 use super::Width;
 use super::app::pretty_app;
@@ -131,7 +131,7 @@ pub(super) fn pretty_list(doc: &mut Doc, open: &Leaf, items: &Items<Term>, close
 impl Term {
     /// Like [`Pretty::pretty`] but without the extra outer group around lists.
     /// Used where the caller already provides a surrounding group.
-    pub(in crate::pretty) fn pretty_bare(&self, doc: &mut Doc) {
+    pub(in crate::format) fn pretty_bare(&self, doc: &mut Doc) {
         match self {
             Self::List { open, items, close } => pretty_list(doc, open, items, close),
             _ => self.pretty(doc),
@@ -140,7 +140,7 @@ impl Term {
 
     /// Like [`Self::pretty_bare`] but renders sets in their wide (multi-line)
     /// layout. Used when the term is being absorbed onto a preceding line.
-    pub(in crate::pretty) fn pretty_wide(&self, doc: &mut Doc) {
+    pub(in crate::format) fn pretty_wide(&self, doc: &mut Doc) {
         match self {
             Self::Set {
                 rec,
@@ -278,7 +278,7 @@ impl<T: Pretty> Items<T> {
 
 impl Expression {
     /// Render the nested document that appears between parentheses.
-    pub(in crate::pretty) fn pretty_paren_body(&self, doc: &mut Doc) {
+    pub(in crate::format) fn pretty_paren_body(&self, doc: &mut Doc) {
         match self {
             _ if self.is_absorbable() => {
                 doc.group(|inner| self.absorb(inner, Width::Regular));

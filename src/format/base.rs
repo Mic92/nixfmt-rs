@@ -2,7 +2,7 @@
 //! trivia, [`Annotated`], [`Item`], [`Trailed`] and bare [`Token`].
 
 use crate::ast::{Annotated, Item, Token, Trailed, TrailingComment, Trivia, Trivium};
-use crate::predoc::{Doc, Pretty};
+use crate::doc::{Doc, Pretty};
 
 impl Pretty for TrailingComment {
     fn pretty(&self, doc: &mut Doc) {

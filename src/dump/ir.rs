@@ -1,8 +1,8 @@
 //! `PrettySimple` implementations for IR (intermediate representation) nodes
 
 use super::{PrettySimple, Writer, format_bracket_list};
+use crate::doc::{Doc, Elem, GroupKind, IR, Spacing, TextKind};
 use crate::format_constructor;
-use crate::predoc::{Doc, Elem, GroupKind, IR, Spacing, TextKind};
 
 impl PrettySimple for Doc {
     fn format<W: Writer>(&self, w: &mut W) {
