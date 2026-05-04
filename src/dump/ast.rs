@@ -269,7 +269,7 @@ impl Dump for SimpleSelector {
 impl Dump for TriviaPiece {
     fn dump<W: Writer>(&self, w: &mut W) {
         dump_enum!(self, w, {
-            EmptyLine() => [],
+            EmptyLine => [],
             LineComment(text) => [text],
             BlockComment(is_doc, lines) => [is_doc, lines],
             LanguageAnnotation(text) => [text],
@@ -282,7 +282,7 @@ impl Dump for TriviaPiece {
         // BlockComment True ["a","b","c"] → Vec with 3 elements NOT simple → renders multiline
         match self {
             // Nullary constructor / single string arg are simple.
-            Self::EmptyLine() | Self::LineComment(_) | Self::LanguageAnnotation(_) => true,
+            Self::EmptyLine | Self::LineComment(_) | Self::LanguageAnnotation(_) => true,
             Self::BlockComment(_is_doc, lines) => lines.is_simple(),
         }
     }
@@ -291,7 +291,7 @@ impl Dump for TriviaPiece {
         // Only nullary constructors are atomic (single element in parsed form)
         // EmptyLine → Other "EmptyLine" → atomic
         // LineComment "x" → Other "LineComment " + StringLit → not atomic
-        matches!(self, Self::EmptyLine())
+        matches!(self, Self::EmptyLine)
     }
 }
 

@@ -3,7 +3,7 @@
 /// A single trivia element.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum TriviaPiece {
-    EmptyLine(),
+    EmptyLine,
     LineComment(Box<str>),
     /// `BlockComment(is_doc`, lines)
     /// `is_doc` = true for /** */ comments

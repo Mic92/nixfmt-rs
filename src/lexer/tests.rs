@@ -194,6 +194,6 @@ fn test_lexeme_preserves_trivia() {
         a_tok
             .pre_trivia
             .iter()
-            .any(|t| matches!(t, TriviaPiece::EmptyLine()))
+            .any(|t| matches!(t, TriviaPiece::EmptyLine))
     );
 }
