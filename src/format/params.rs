@@ -2,12 +2,12 @@ use crate::ast::{
     Annotated, Expression, Leaf, ParamAttr, Parameter, Selector, SimpleSelector, Term, Token,
     TrailingComment, Trivia,
 };
-use crate::doc::{Doc, Elem, Pretty, hardline, line};
+use crate::doc::{Doc, Elem, Emit, hardline, line};
 
 use super::term::empty_brackets;
 
-impl Pretty for ParamAttr {
-    fn pretty(&self, doc: &mut Doc) {
+impl Emit for ParamAttr {
+    fn emit(&self, doc: &mut Doc) {
         match self {
             Self::Attr {
                 name,
@@ -16,18 +16,18 @@ impl Pretty for ParamAttr {
             } => {
                 let has_default = default.is_some();
                 let make_pretty = |d: &mut Doc| {
-                    name.pretty(d);
+                    name.emit(d);
 
                     if let Some(def) = default.as_ref() {
                         d.hardspace();
                         d.nested(|inner| {
-                            def.question.pretty(inner);
+                            def.question.emit(inner);
                             def.value.absorb_rhs(inner);
                         });
                     }
 
                     if let Some(comma) = maybe_comma {
-                        comma.pretty(d);
+                        comma.emit(d);
                     }
                 };
 
@@ -37,7 +37,7 @@ impl Pretty for ParamAttr {
                     make_pretty(doc);
                 }
             }
-            Self::Ellipsis(ellipsis) => ellipsis.pretty(doc),
+            Self::Ellipsis(ellipsis) => ellipsis.emit(doc),
         }
     }
 }
@@ -208,21 +208,21 @@ fn render_param_attrs(attrs: &[ParamAttr]) -> Vec<Doc> {
                     default: default.clone(),
                     comma: None,
                 }
-                .pretty(&mut rendered);
+                .emit(&mut rendered);
                 rendered.trailing(",");
                 return rendered;
             }
 
-            attr.pretty(&mut rendered);
+            attr.emit(&mut rendered);
             rendered
         })
         .collect()
 }
 
-impl Pretty for Parameter {
-    fn pretty(&self, doc: &mut Doc) {
+impl Emit for Parameter {
+    fn emit(&self, doc: &mut Doc) {
         match self {
-            Self::Id(id) => id.pretty(doc),
+            Self::Id(id) => id.emit(doc),
             Self::Set { open, attrs, close } => {
                 let open = open.move_trailing_comment_up();
                 if attrs.is_empty() {
@@ -234,14 +234,14 @@ impl Pretty for Parameter {
                 let sep_doc = [sep.clone()];
 
                 doc.group(|doc| {
-                    open.pretty(doc);
+                    open.emit(doc);
                     doc.push_raw(sep.clone());
                     doc.nested(|inner| {
                         inner.sep_by(&sep_doc, render_param_attrs(attrs));
                     });
                     doc.push_raw(sep);
-                    doc.nested(|inner| close.pre_trivia.pretty(inner));
-                    close.pretty_tail(doc);
+                    doc.nested(|inner| close.pre_trivia.emit(inner));
+                    close.emit_tail(doc);
                 });
             }
             Self::Context {
@@ -249,9 +249,9 @@ impl Pretty for Parameter {
                 at,
                 rhs: right,
             } => {
-                left.pretty(doc);
-                at.pretty(doc);
-                right.pretty(doc);
+                left.emit(doc);
+                at.emit(doc);
+                right.emit(doc);
             }
         }
     }

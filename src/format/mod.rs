@@ -1,18 +1,18 @@
-//! Pretty-printing for Nix AST
+//! Formatting rules for Nix AST
 //!
 //! Implements formatting rules from nixfmt's Pretty.hs.
 //!
 //! Module layout:
-//! - [`base`]: `Pretty` impls for trivia / `Annotated` / `Item` / `Token`
+//! - [`base`]: `Emit` impls for trivia / `Annotated` / `Item` / `Token`
 //! - [`term`]: terms, selectors, binders and bracketed-container helpers
 //! - [`stmt`]: `let` / `with` / `if` / `assert` and lambda-body absorption
 //! - [`app`], [`op`], [`absorb`], [`params`], [`string`]: per-construct rules
 //!
-//! `Pretty for Term` and `Pretty for Expression` stay here as the top-level
+//! `Emit for Term` and `Emit for Expression` stay here as the top-level
 //! dispatchers that fan out into those submodules.
 
 use crate::ast::{Annotated, Expression, Parameter, Term, Token};
-use crate::doc::{Doc, Pretty, line};
+use crate::doc::{Doc, Emit, line};
 
 mod absorb;
 mod app;
@@ -23,11 +23,11 @@ mod stmt;
 mod string;
 mod term;
 
-use app::pretty_app;
-use op::pretty_operation;
-use stmt::{insert_into_app, pretty_if, pretty_let, pretty_with};
-use string::{pretty_indented_string, pretty_simple_string};
-use term::{pretty_list, pretty_paren, pretty_set};
+use app::emit_app;
+use op::emit_operation;
+use stmt::{emit_if, emit_let, emit_with, insert_into_app};
+use string::{emit_indented_string, emit_simple_string};
+use term::{emit_list, emit_paren, emit_set};
 
 /// Whether a set/absorbed term should prefer its expanded (multi-line) layout.
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -36,26 +36,26 @@ enum Width {
     Wide,
 }
 
-impl Pretty for Term {
-    fn pretty(&self, doc: &mut Doc) {
+impl Emit for Term {
+    fn emit(&self, doc: &mut Doc) {
         match self {
-            Self::Token(t) => t.pretty(doc),
+            Self::Token(t) => t.emit(doc),
             Self::SimpleString(s) => {
-                s.pretty_with(doc, |d, v| pretty_simple_string(d, v));
+                s.emit_with(doc, |d, v| emit_simple_string(d, v));
             }
             Self::IndentedString(s) => {
-                s.pretty_with(doc, |d, v| pretty_indented_string(d, v));
+                s.emit_with(doc, |d, v| emit_indented_string(d, v));
             }
-            Self::Path(p) => p.pretty_with(doc, |d, v| {
+            Self::Path(p) => p.emit_with(doc, |d, v| {
                 for part in v {
-                    part.pretty(d);
+                    part.emit(d);
                 }
             }),
             Self::Parenthesized { open, expr, close } => {
-                pretty_paren(doc, open, expr, close);
+                emit_paren(doc, open, expr, close);
             }
             Self::List { open, items, close } => {
-                doc.group(|g| pretty_list(g, open, items, close));
+                doc.group(|g| emit_list(g, open, items, close));
             }
             Self::Set {
                 rec,
@@ -63,14 +63,14 @@ impl Pretty for Term {
                 items: binders,
                 close,
             } => {
-                pretty_set(doc, Width::Regular, rec.as_ref(), open, binders, close);
+                emit_set(doc, Width::Regular, rec.as_ref(), open, binders, close);
             }
             Self::Selection {
                 base: term,
                 selectors,
                 default,
             } => {
-                term.pretty(doc);
+                term.emit(doc);
 
                 // Separator strength depends on how likely a break before the
                 // `.` chain is desirable.
@@ -97,9 +97,9 @@ impl Pretty for Term {
                 if let Some(d) = default {
                     doc.softline();
                     doc.nested(|inner| {
-                        d.or_kw.pretty(inner);
+                        d.or_kw.emit(inner);
                         inner.hardspace();
-                        d.value.pretty(inner);
+                        d.value.emit(inner);
                     });
                 }
             }
@@ -107,42 +107,42 @@ impl Pretty for Term {
     }
 }
 
-impl Pretty for Expression {
+impl Emit for Expression {
     // Single shallow match over every Expression variant.
     #[allow(clippy::too_many_lines)]
-    fn pretty(&self, doc: &mut Doc) {
+    fn emit(&self, doc: &mut Doc) {
         match self {
-            Self::Term(t) => t.pretty(doc),
+            Self::Term(t) => t.emit(doc),
             Self::Application { .. } => {
-                pretty_app(doc, false, &[], false, self);
+                emit_app(doc, false, &[], false, self);
             }
             Self::Operation {
                 lhs: left,
                 op,
                 rhs: right,
             } => {
-                pretty_operation(doc, self, left, op, right);
+                emit_operation(doc, self, left, op, right);
             }
             Self::MemberCheck {
                 lhs: expr,
                 question,
                 path: selectors,
             } => {
-                expr.pretty(doc);
+                expr.emit(doc);
                 doc.softline();
-                question.pretty(doc);
+                question.emit(doc);
                 doc.hardspace();
                 for sel in selectors {
-                    sel.pretty(doc);
+                    sel.emit(doc);
                 }
             }
             Self::Negation { minus, expr } => {
-                minus.pretty(doc);
-                expr.pretty(doc);
+                minus.emit(doc);
+                expr.emit(doc);
             }
             Self::Inversion { bang, expr } => {
-                bang.pretty(doc);
-                expr.pretty(doc);
+                bang.emit(doc);
+                expr.emit(doc);
             }
             Self::Let {
                 kw_let: let_kw,
@@ -150,7 +150,7 @@ impl Pretty for Expression {
                 kw_in: in_kw,
                 body: expr,
             } => {
-                pretty_let(doc, let_kw, binders, in_kw, expr);
+                emit_let(doc, let_kw, binders, in_kw, expr);
             }
             Self::If {
                 kw_if,
@@ -163,7 +163,7 @@ impl Pretty for Expression {
                 doc.group(|g| {
                     // Only the outermost `if` keyword has its trailing comment
                     // hoisted; nested `else if` keywords keep theirs in place.
-                    pretty_if(
+                    emit_if(
                         g,
                         line(),
                         &kw_if.move_trailing_comment_up(),
@@ -190,10 +190,10 @@ impl Pretty for Expression {
                         func: Box::new(f),
                         arg: Box::new(a),
                     };
-                    pretty_app(g, false, &[], false, &app);
-                    semicolon.pretty(g);
+                    emit_app(g, false, &[], false, &app);
+                    semicolon.emit(g);
                     g.hardline();
-                    expr.pretty(g);
+                    expr.emit(g);
                 });
             }
             Self::With {
@@ -202,7 +202,7 @@ impl Pretty for Expression {
                 semi: semicolon,
                 body: expr,
             } => {
-                pretty_with(doc, with_kw, env, semicolon, expr);
+                emit_with(doc, with_kw, env, semicolon, expr);
             }
             Self::Abstraction {
                 param: Parameter::Id(param),
@@ -211,24 +211,24 @@ impl Pretty for Expression {
             } => {
                 doc.group(|group_doc| {
                     group_doc.linebreak();
-                    param.pretty(group_doc);
-                    colon.pretty(group_doc);
+                    param.emit(group_doc);
+                    colon.emit(group_doc);
                     body.absorb_abs(group_doc, 1);
                 });
             }
             Self::Abstraction { param, colon, body } => {
-                param.pretty(doc);
-                colon.pretty(doc);
+                param.emit(doc);
+                colon.emit(doc);
                 doc.line();
                 // Haskell `Abstraction` (set-param) clause: absorbable body
                 // gets `group (prettyTermWide t)`.
                 if let Self::Term(t) = &**body
                     && t.is_absorbable()
                 {
-                    doc.group(|g| t.pretty_wide(g));
+                    doc.group(|g| t.emit_wide(g));
                     return;
                 }
-                body.pretty(doc);
+                body.emit(doc);
             }
         }
     }

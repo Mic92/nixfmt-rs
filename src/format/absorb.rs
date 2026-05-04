@@ -1,11 +1,11 @@
 use crate::ast::{
     Annotated, Binder, Expression, FirstToken, Item, Items, Parameter, Term, Token, Trivia,
 };
-use crate::doc::{Doc, Elem, Pretty, hardspace, line};
+use crate::doc::{Doc, Elem, Emit, hardspace, line};
 
 use super::Width;
-use super::app::pretty_app;
-use super::op::pretty_operation_chain;
+use super::app::emit_app;
+use super::op::emit_operation_chain;
 
 impl Term {
     /// Haskell `isAbsorbable` / `isAbsorbableTerm` (Pretty.hs).
@@ -63,12 +63,12 @@ impl Expression {
     /// Render this expression "absorbed" onto the preceding line: an
     /// absorbable term is emitted bare/wide, a `with ... ; <absorbable>` body
     /// gets the compact single-group treatment, and anything else falls back
-    /// to the regular [`Pretty`] impl.
+    /// to the regular [`Emit`] impl.
     pub(in crate::format) fn absorb(&self, doc: &mut Doc, width: Width) {
         match self {
             Self::Term(t) if t.is_absorbable() => match width {
-                Width::Wide => t.pretty_wide(doc),
-                Width::Regular => t.pretty_bare(doc),
+                Width::Wide => t.emit_wide(doc),
+                Width::Regular => t.emit_bare(doc),
             },
             Self::With {
                 kw_with,
@@ -81,17 +81,17 @@ impl Expression {
                 };
                 doc.group(|g| {
                     g.linebreak();
-                    kw_with.pretty(g);
+                    kw_with.emit(g);
                     g.hardspace();
                     g.nested(|n| {
-                        n.group(|gg| scope.pretty(gg));
+                        n.group(|gg| scope.emit(gg));
                     });
-                    semi.pretty(g);
+                    semi.emit(g);
                     g.hardspace();
-                    g.priority_group(|pg| t.pretty_wide(pg));
+                    g.priority_group(|pg| t.emit_wide(pg));
                 });
             }
-            _ => self.pretty(doc),
+            _ => self.emit(doc),
         }
     }
 }
@@ -141,7 +141,7 @@ impl Expression {
             // Not all strings are absorbable, but there is nothing to gain from
             // starting them on a new line; same for paths.
             Self::Term(Term::SimpleString(_) | Term::IndentedString(_) | Term::Path(_)) => {
-                nested_rhs(doc, hardspace(), |inner| self.pretty(inner));
+                nested_rhs(doc, hardspace(), |inner| self.emit(inner));
             }
 
             // Non-absorbable term: if multi-line, force it onto a new indented line.
@@ -149,7 +149,7 @@ impl Expression {
                 doc.nested(|d| {
                     d.group(|inner| {
                         inner.line();
-                        self.pretty(inner);
+                        self.emit(inner);
                     });
                 });
             }
@@ -157,7 +157,7 @@ impl Expression {
             // Function call: absorb if all arguments except the last fit on the line,
             // start on a new line otherwise.
             Self::Application { .. } => {
-                doc.nested(|d| pretty_app(d, false, &[line()], false, self));
+                doc.nested(|d| emit_app(d, false, &[line()], false, self));
             }
 
             // `with ...;` keeps the leading `line` inside the group so it can collapse
@@ -166,7 +166,7 @@ impl Expression {
                 doc.nested(|d| {
                     d.group(|inner| {
                         inner.line();
-                        self.pretty(inner);
+                        self.emit(inner);
                     });
                 });
             }
@@ -183,7 +183,7 @@ impl Expression {
                     ) =>
             {
                 doc.hardspace();
-                pretty_operation_chain(doc, true, self, op);
+                emit_operation_chain(doc, true, self, op);
             }
 
             // Case 2: operator has no trivia and RHS is an absorbable term → keep
@@ -202,12 +202,12 @@ impl Expression {
                 doc.nested(|d| {
                     d.group(|g| {
                         g.line();
-                        left.pretty(g);
+                        left.emit(g);
                         g.line();
                         g.transparent_group(|tg| {
-                            op.pretty(tg);
+                            op.emit(tg);
                             tg.hardspace();
-                            tg.priority_group(|pg| t.pretty_wide(pg));
+                            tg.priority_group(|pg| t.emit_wide(pg));
                         });
                     });
                 });
@@ -218,7 +218,7 @@ impl Expression {
             // - fits with a newline after `=` → do that
             // - otherwise start on a new line and expand fully
             _ => {
-                nested_rhs(doc, line(), |inner| self.pretty(inner));
+                nested_rhs(doc, line(), |inner| self.emit(inner));
             }
         }
     }
@@ -233,7 +233,7 @@ pub(super) fn absorb_paren(
 ) {
     doc.priority_group(|g| {
         g.nested(|outer| {
-            open.pretty_head(outer);
+            open.emit_head(outer);
             outer.linebreak();
             outer.group(|inner| {
                 inner.nested(|body| {
@@ -241,14 +241,14 @@ pub(super) fn absorb_paren(
                     // as a leading line comment so it indents with the
                     // expression rather than hugging the paren.
                     if let Some(tc) = &open.trail_comment {
-                        Trivia::one(tc.into()).pretty(body);
+                        Trivia::one(tc.into()).emit(body);
                     }
-                    expr.pretty(body);
-                    close.pre_trivia.pretty(body);
+                    expr.emit(body);
+                    close.pre_trivia.emit(body);
                 });
             });
             outer.linebreak();
-            close.pretty_tail(outer);
+            close.emit_tail(outer);
         });
     });
 }

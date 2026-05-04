@@ -7,7 +7,7 @@
 //! idiomatic Rust shape is a builder struct with chainable inherent methods,
 //! which is what this module now provides.
 
-use super::{Doc, Elem, GroupKind, Pretty, Spacing, TextKind};
+use super::{Doc, Elem, Emit, GroupKind, Spacing, TextKind};
 
 impl Doc {
     /// Push a text element with the given annotation, dropping empty strings.
@@ -78,7 +78,7 @@ impl Doc {
         self.nest_pair(0, level.cast_signed(), f)
     }
 
-    pub fn sep_by<P: Pretty>(
+    pub fn sep_by<P: Emit>(
         &mut self,
         separator: &[Elem],
         items: impl IntoIterator<Item = P>,
@@ -89,14 +89,14 @@ impl Doc {
                 self.0.extend_from_slice(separator);
             }
             first = false;
-            item.pretty(self);
+            item.emit(self);
         }
         self
     }
 
-    pub fn hcat<P: Pretty>(&mut self, items: impl IntoIterator<Item = P>) -> &mut Self {
+    pub fn hcat<P: Emit>(&mut self, items: impl IntoIterator<Item = P>) -> &mut Self {
         for item in items {
-            item.pretty(self);
+            item.emit(self);
         }
         self
     }
