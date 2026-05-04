@@ -1,24 +1,15 @@
 use crate::predoc::{Doc, DocE, GroupAnn, Pretty, line, unexpand_spacing_prime};
 use crate::types::{Expression, FirstToken, Item, Parameter, Term, Token, Trivia};
 
-use super::absorb::{is_absorbable_term, push_absorb_paren};
+use super::absorb::push_absorb_paren;
 use super::term::{push_pretty_term, push_pretty_term_wide, push_render_list};
-use super::util::{has_trivia, is_simple_expression, is_simple_term};
-
-const fn is_list_arg(e: &Expression) -> bool {
-    matches!(e, Expression::Term(Term::List { .. }))
-}
-
-const fn is_selection_arg(e: &Expression) -> bool {
-    matches!(e, Expression::Term(Term::Selection { .. }))
-}
 
 /// `absorbInner` from Pretty.hs: short lists of simple terms get a soft `line`
 /// separator so they may stay on one line; everything else falls back to `pretty`.
 fn push_absorb_inner(doc: &mut Doc, arg: &Expression) {
     if let Expression::Term(Term::List { open, items, close }) = arg {
         let all_simple = items.0.iter().all(|item| match item {
-            Item::Item(t) => is_simple_term(t),
+            Item::Item(t) => t.is_simple(),
             Item::Comments(_) => true,
         });
         if items.0.len() <= 6 && all_simple {
@@ -81,9 +72,9 @@ fn push_absorb_app(doc: &mut Doc, expr: &Expression, indent_function: bool, comm
     };
 
     // Two consecutive list arguments stay together: if one wraps, both wrap.
-    if is_list_arg(a)
+    if matches!(**a, Expression::Term(Term::List { .. }))
         && let Expression::Application { func: f2, arg: l1 } = &**f
-        && is_list_arg(l1)
+        && matches!(**l1, Expression::Term(Term::List { .. }))
     {
         doc.group_ann(GroupAnn::Transparent, |outer| {
             recurse_head(outer, f2);
@@ -103,7 +94,7 @@ fn push_absorb_app(doc: &mut Doc, expr: &Expression, indent_function: bool, comm
     doc.line();
     // Selections must not priority-expand: only the `.`-suffix would move,
     // which looks odd.
-    let arg_ann = if is_selection_arg(a) {
+    let arg_ann = if matches!(**a, Expression::Term(Term::Selection { .. })) {
         GroupAnn::RegularG
     } else {
         GroupAnn::Priority
@@ -123,7 +114,7 @@ fn push_priority_nest(doc: &mut Doc, f: impl FnOnce(&mut Doc)) {
 /// Render the last argument of a function call. Mirrors Haskell `absorbLast`.
 fn push_absorb_last(doc: &mut Doc, arg: &Expression) {
     if let Expression::Term(t) = arg
-        && is_absorbable_term(t)
+        && t.is_absorbable()
     {
         // Haskell: `group' Priority $ nest $ prettyTerm t`. `prettyTerm`
         // (unlike `instance Pretty Term`) does *not* wrap a `List` in an
@@ -144,10 +135,10 @@ fn push_absorb_last(doc: &mut Doc, arg: &Expression) {
             body,
         } = &**inner
             && let Expression::Term(body_term) = &**body
-            && is_absorbable_term(body_term)
-            && !has_trivia(open)
-            && !has_trivia(name)
-            && !has_trivia(colon)
+            && body_term.is_absorbable()
+            && !open.has_trivia()
+            && !name.has_trivia()
+            && !colon.has_trivia()
         {
             return push_priority_nest(doc, |n| {
                 open.pretty(n);
@@ -163,10 +154,10 @@ fn push_absorb_last(doc: &mut Doc, arg: &Expression) {
             && let Expression::Term(Term::Token(ident)) = &**f
             && matches!(ident.value, Token::Identifier(_))
             && let Expression::Term(body_term) = &**a
-            && is_absorbable_term(body_term)
-            && !has_trivia(open)
-            && !has_trivia(ident)
-            && !has_trivia(close)
+            && body_term.is_absorbable()
+            && !open.has_trivia()
+            && !ident.has_trivia()
+            && !close.has_trivia()
         {
             return push_priority_nest(doc, |n| {
                 open.pretty(n);
@@ -208,9 +199,9 @@ pub(super) fn push_pretty_app(
 
     // Two trailing list arguments are rendered as a pair of regular groups so
     // they wrap together; lists are never "simple", so renderSimple cannot apply.
-    if is_list_arg(a)
+    if matches!(**a, Expression::Term(Term::List { .. }))
         && let Expression::Application { func: f2, arg: l1 } = &**f
-        && is_list_arg(l1)
+        && matches!(**l1, Expression::Term(Term::List { .. }))
     {
         doc.group(|g| {
             g.0.extend_from_slice(pre);
@@ -239,7 +230,7 @@ pub(super) fn push_pretty_app(
     });
 
     // renderSimple
-    if is_simple_expression(expr)
+    if expr.is_simple()
         && let Some(unexpanded) = unexpand_spacing_prime(None, &rendered_f)
     {
         doc.group(|g| {

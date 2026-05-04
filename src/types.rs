@@ -237,7 +237,29 @@ pub struct Ann<T> {
     pub trail_comment: Option<TrailingComment>,
 }
 
+impl<T> Ann<T> {
+    /// Haskell `hasTrivia` (Types.hs): annotation carries leading or trailing trivia.
+    pub fn has_trivia(&self) -> bool {
+        !self.pre_trivia.is_empty() || self.trail_comment.is_some()
+    }
+
+    /// Haskell `LoneAnn` pattern (Types.hs): annotation with no surrounding trivia.
+    pub fn is_lone(&self) -> bool {
+        !self.has_trivia()
+    }
+}
+
 impl<T: Clone> Ann<T> {
+    /// Move a trailing comment on a token into its leading trivia.
+    /// Mirrors Haskell `moveTrailingCommentUp` (Pretty.hs).
+    pub fn move_trailing_comment_up(&self) -> Self {
+        let mut out = self.clone();
+        if let Some(tc) = out.trail_comment.take() {
+            out.pre_trivia.push(Trivium::from(&tc));
+        }
+        out
+    }
+
     pub fn without_trail(&self) -> Self {
         Self {
             trail_comment: None,
@@ -372,6 +394,13 @@ pub enum Item<T> {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Items<T>(pub Vec<Item<T>>);
 
+impl<T> Items<T> {
+    /// Haskell `hasOnlyComments` (Pretty.hs): non-empty `Items` containing only comment items.
+    pub fn has_only_comments(&self) -> bool {
+        !self.0.is_empty() && self.0.iter().all(|i| matches!(i, Item::Comments(_)))
+    }
+}
+
 /// A token annotated with trivia and span (Haskell: `Leaf`).
 pub type Leaf = Ann<Token>;
 
@@ -401,6 +430,13 @@ pub enum SimpleSelector {
 pub struct Selector {
     pub dot: Option<Leaf>,
     pub selector: SimpleSelector,
+}
+
+impl Selector {
+    /// Haskell `isSimpleSelector` (Pretty.hs).
+    pub const fn is_simple(&self) -> bool {
+        matches!(self.selector, SimpleSelector::ID(_))
+    }
 }
 
 /// Binder (for attribute sets and let bindings)
@@ -463,6 +499,57 @@ pub enum Term {
     },
 }
 
+impl Term {
+    /// Haskell `isSimple` (Pretty.hs), `Term` arm; split out so list items can be
+    /// classified without wrapping them in an `Expression`.
+    pub fn is_simple(&self) -> bool {
+        match self {
+            Self::SimpleString(s) | Self::IndentedString(s) => s.is_lone(),
+            Self::Path(p) => p.is_lone(),
+            Self::Token(leaf)
+                if leaf.is_lone()
+                    && matches!(
+                        leaf.value,
+                        Token::Identifier(_)
+                            | Token::Integer(_)
+                            | Token::Float(_)
+                            | Token::EnvPath(_)
+                    ) =>
+            {
+                true
+            }
+            Self::Selection {
+                base,
+                selectors,
+                default,
+            } => base.is_simple() && selectors.iter().all(Selector::is_simple) && default.is_none(),
+            Self::Parenthesized { open, expr, close } => {
+                open.is_lone() && close.is_lone() && expr.is_simple()
+            }
+            _ => false,
+        }
+    }
+}
+
+impl Expression {
+    /// Haskell `isSimple` (Pretty.hs).
+    pub fn is_simple(&self) -> bool {
+        match self {
+            Self::Term(term) => term.is_simple(),
+            Self::Application { func: f, arg: a } => {
+                // No more than two arguments.
+                if let Self::Application { func: f2, .. } = &**f
+                    && matches!(**f2, Self::Application { .. })
+                {
+                    return false;
+                }
+                f.is_simple() && a.is_simple()
+            }
+            _ => false,
+        }
+    }
+}
+
 /// `? expr` default clause on a function parameter attribute.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ParamDefault {
@@ -483,6 +570,16 @@ pub enum ParamAttr {
         comma: Option<Leaf>,
     },
     Ellipsis(Leaf),
+}
+
+impl ParamAttr {
+    pub const fn has_no_default(&self) -> bool {
+        matches!(self, Self::Attr { default, .. } if default.is_none())
+    }
+
+    pub const fn is_ellipsis(&self) -> bool {
+        matches!(self, Self::Ellipsis(_))
+    }
 }
 
 /// Lambda parameter

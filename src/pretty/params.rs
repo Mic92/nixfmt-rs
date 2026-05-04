@@ -5,7 +5,7 @@ use crate::types::{
 };
 
 use super::absorb::push_absorb_rhs;
-use super::util::{is_lone_ann, move_trailing_comment_up, push_empty_brackets};
+use super::util::push_empty_brackets;
 
 impl Pretty for ParamAttr {
     fn pretty(&self, doc: &mut Doc) {
@@ -97,7 +97,7 @@ fn move_param_attr_comment(attr: ParamAttr) -> ParamAttr {
             mut name,
             default,
             comma: Some(mut comma),
-        } if default.is_none() && name.trail_comment.is_some() && is_lone_ann(&comma) => {
+        } if default.is_none() && name.trail_comment.is_some() && comma.is_lone() => {
             comma.trail_comment = name.trail_comment.take();
             ParamAttr::Attr {
                 name,
@@ -109,7 +109,7 @@ fn move_param_attr_comment(attr: ParamAttr) -> ParamAttr {
             name,
             mut default,
             comma: Some(mut comma),
-        } if default.is_some() && is_lone_ann(&comma) => {
+        } if default.is_some() && comma.is_lone() => {
             if let Some(def) = default.as_mut() {
                 comma.trail_comment = take_last_trail_comment_expr(&mut def.value);
             }
@@ -165,31 +165,17 @@ fn move_params_comments(attrs: &[ParamAttr]) -> Vec<ParamAttr> {
     out
 }
 
-const fn param_attr_without_default(attr: &ParamAttr) -> bool {
-    matches!(attr, ParamAttr::Attr { default, .. } if default.is_none())
-}
-
-const fn param_attr_is_ellipsis(attr: &ParamAttr) -> bool {
-    matches!(attr, ParamAttr::Ellipsis(_))
-}
-
 fn parameter_separator(open: &Leaf, attrs: &[ParamAttr], close: &Leaf) -> DocE {
     if open.span.start_line() != close.span.start_line() {
         return hardline();
     }
 
     match attrs {
-        [attr] if param_attr_is_ellipsis(attr) => line(),
-        [attr] if param_attr_without_default(attr) => line(),
-        [a, b] if param_attr_without_default(a) && param_attr_is_ellipsis(b) => line(),
-        [a, b] if param_attr_without_default(a) && param_attr_without_default(b) => line(),
-        [a, b, c]
-            if param_attr_without_default(a)
-                && param_attr_without_default(b)
-                && param_attr_is_ellipsis(c) =>
-        {
-            line()
-        }
+        [attr] if attr.is_ellipsis() => line(),
+        [attr] if attr.has_no_default() => line(),
+        [a, b] if a.has_no_default() && b.is_ellipsis() => line(),
+        [a, b] if a.has_no_default() && b.has_no_default() => line(),
+        [a, b, c] if a.has_no_default() && b.has_no_default() && c.is_ellipsis() => line(),
         _ => hardline(),
     }
 }
@@ -214,7 +200,7 @@ fn render_param_attrs(attrs: &[ParamAttr]) -> Vec<Doc> {
                     default,
                     comma: Some(comma),
                 } = attr
-                && is_lone_ann(comma)
+                && comma.is_lone()
             {
                 ParamAttr::Attr {
                     name: name.clone(),
@@ -237,7 +223,7 @@ impl Pretty for Parameter {
         match self {
             Self::Id(id) => id.pretty(doc),
             Self::Set { open, attrs, close } => {
-                let open = move_trailing_comment_up(open);
+                let open = open.move_trailing_comment_up();
                 if attrs.is_empty() {
                     doc.group(|doc| push_empty_brackets(doc, &open, close));
                     return;

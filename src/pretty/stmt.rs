@@ -3,8 +3,8 @@ use crate::types::{Binder, Expression, Items, Leaf, Parameter, Trivia, Trivium};
 
 use super::term::push_pretty_items;
 
-use super::absorb::{is_absorbable_expr, push_absorb_expr};
-use super::util::{Width, move_trailing_comment_up};
+use super::absorb::push_absorb_expr;
+use super::util::Width;
 
 pub(super) fn push_absorb_abs(doc: &mut Doc, depth: usize, expr: &Expression) {
     match expr {
@@ -18,7 +18,7 @@ pub(super) fn push_absorb_abs(doc: &mut Doc, depth: usize, expr: &Expression) {
             colon.pretty(doc);
             push_absorb_abs(doc, depth + 1, body);
         }
-        _ if is_absorbable_expr(expr) => {
+        _ if expr.is_absorbable() => {
             doc.hardspace();
             doc.group_ann(GroupAnn::Priority, |priority_group| {
                 push_absorb_expr(priority_group, Width::Regular, expr);
@@ -132,7 +132,7 @@ pub(super) fn pretty_if(doc: &mut Doc, sep: DocE, expr: &Expression) {
                     n.group(|g| expr0.pretty(g));
                 });
             });
-            move_trailing_comment_up(else_kw).pretty(doc);
+            else_kw.move_trailing_comment_up().pretty(doc);
             doc.hardspace();
             pretty_if(doc, hardline(), expr1);
         }

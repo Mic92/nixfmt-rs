@@ -69,7 +69,7 @@ oracle_tests! {
 
     test_rec_set_structure => ["rec { a = 1; b = a; }"],
 
-    // is_absorbable_term path branch
+    // Term::is_absorbable path branch
     test_path_term_structure => ["./path/to/file"],
 
     test_float_token => ["3.14"],

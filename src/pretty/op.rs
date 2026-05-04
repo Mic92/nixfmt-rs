@@ -1,7 +1,6 @@
 use crate::predoc::{Doc, Pretty, line};
 use crate::types::{Expression, Leaf, Token};
 
-use super::absorb::is_absorbable_term;
 use super::app::push_pretty_app;
 use super::term::push_pretty_term_wide;
 
@@ -26,7 +25,7 @@ fn flatten_operation_chain<'a>(
 
 fn push_absorb_operation(doc: &mut Doc, expr: &Expression) {
     match expr {
-        Expression::Term(term) if is_absorbable_term(term) => {
+        Expression::Term(term) if term.is_absorbable() => {
             doc.hardspace();
             term.pretty(doc);
         }
@@ -76,7 +75,7 @@ pub(super) fn pretty_operation(
     // `//`, `++`, `+` with an absorbable RHS get a compact layout
     // (cf. the corresponding clause in `absorbRHS`).
     if let Expression::Term(t) = right
-        && is_absorbable_term(t)
+        && t.is_absorbable()
         && op.value.is_update_concat_plus()
     {
         doc.group(|inner| {
@@ -105,7 +104,7 @@ pub(super) fn push_pretty_operation(
         for (maybe_op, expr) in &parts {
             match maybe_op {
                 None => match expr {
-                    Expression::Term(term) if force_first_term_wide && is_absorbable_term(term) => {
+                    Expression::Term(term) if force_first_term_wide && term.is_absorbable() => {
                         push_pretty_term_wide(group_doc, term);
                     }
                     _ => expr.pretty(group_doc),

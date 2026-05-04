@@ -60,16 +60,6 @@ pub fn render_with_config(doc: Doc, config: &RenderConfig) -> String {
     layout_greedy(config.width, config.indent_width, doc)
 }
 
-/// Check if element is hard spacing (always rendered as-is)
-const fn is_hard_spacing(elem: &DocE) -> bool {
-    matches!(
-        elem,
-        DocE::Spacing(
-            Spacing::Hardspace | Spacing::Hardline | Spacing::Emptyline | Spacing::Newlines(_)
-        )
-    )
-}
-
 /// `simplifyGroup` (Predoc.hs): unwrap `Group ann [Group ann xs]` to `xs`.
 fn simplify_group(ann: GroupAnn, mut body: Doc) -> Doc {
     if body.len() == 1
@@ -86,21 +76,33 @@ fn simplify_group(ann: GroupAnn, mut body: Doc) -> Doc {
 fn lift_bounds(body: &[DocE]) -> (usize, usize) {
     let pre_end = body
         .iter()
-        .position(|e| !is_hard_spacing(e) && !is_comment(e))
+        .position(|e| !e.is_hard_spacing() && !e.is_comment())
         .unwrap_or(body.len());
     let post_start = body
         .iter()
-        .rposition(|e| !is_hard_spacing(e))
+        .rposition(|e| !e.is_hard_spacing())
         .map_or(0, |p| p + 1)
         .max(pre_end);
     (pre_end, post_start)
 }
 
-fn is_comment(elem: &DocE) -> bool {
-    match elem {
-        DocE::Text(_, _, TextAnn::Comment | TextAnn::TrailingComment, _) => true,
-        DocE::Group(_, inner) => inner.iter().all(|x| is_comment(x) || is_hard_spacing(x)),
-        _ => false,
+impl DocE {
+    /// Check if element is hard spacing (always rendered as-is)
+    const fn is_hard_spacing(&self) -> bool {
+        matches!(
+            self,
+            Self::Spacing(
+                Spacing::Hardspace | Spacing::Hardline | Spacing::Emptyline | Spacing::Newlines(_)
+            )
+        )
+    }
+
+    fn is_comment(&self) -> bool {
+        match self {
+            Self::Text(_, _, TextAnn::Comment | TextAnn::TrailingComment, _) => true,
+            Self::Group(_, inner) => inner.iter().all(|x| x.is_comment() || x.is_hard_spacing()),
+            _ => false,
+        }
     }
 }
 
