@@ -13,8 +13,15 @@ let
   # idempotency patches; see ./reference-nixfmt.nix for rationale. Kept inside
   # this derivation so `callPackage ./nix/package.nix { }` works against any
   # nixpkgs without the caller having to know about the patch set.
+  #
+  # GHC has no bootstrap path on riscv64, so the Haskell reference cannot be
+  # built there even though its meta.platforms claims otherwise. Fall back to
+  # `null` (skipping the parity suite) rather than failing the whole build.
   referenceNixfmt =
-    if nixfmt == null then null else import ./reference-nixfmt.nix { inherit nixfmt; };
+    if nixfmt == null || stdenv.hostPlatform.isRiscV64 then
+      null
+    else
+      import ./reference-nixfmt.nix { inherit nixfmt; };
 in
 rustPlatform.buildRustPackage {
   pname = "nixfmt-rs";

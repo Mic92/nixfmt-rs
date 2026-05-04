@@ -18,6 +18,7 @@
         "x86_64-linux"
         "aarch64-linux"
         "aarch64-darwin"
+        "riscv64-linux"
       ];
       forAllSystems = nixpkgs.lib.genAttrs systems;
       pkgsFor = forAllSystems (system: nixpkgs.legacyPackages.${system});
@@ -33,8 +34,12 @@
         in
         rec {
           default = pkgs.callPackage ./nix/package.nix { };
+        }
+        # GHC cannot bootstrap on riscv64; the Haskell reference and the
+        # rustc-wasm32 toolchain are likewise unavailable there.
+        // pkgs.lib.optionalAttrs (!pkgs.stdenv.hostPlatform.isRiscV64) {
           # The patched Haskell reference the test suite diffs against.
-          reference-nixfmt = default.referenceNixfmt;
+          reference-nixfmt = (pkgs.callPackage ./nix/package.nix { }).referenceNixfmt;
           wasm = pkgs.callPackage ./nix/wasm.nix { };
         }
         // pkgs.lib.optionalAttrs pkgs.stdenv.hostPlatform.isLinux {
