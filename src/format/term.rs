@@ -53,7 +53,7 @@ impl Emit for Binder {
                     let sep_doc = [sep.clone()];
                     let finish_inherit = |nested: &mut Doc| {
                         if !ids.is_empty() {
-                            nested.sep_by(&sep_doc, ids.iter().cloned());
+                            nested.sep_by(&sep_doc, ids);
                         }
                         nested.push_raw(nosep.clone());
                         semicolon.emit(nested);
@@ -87,7 +87,7 @@ impl Emit for Binder {
                 // for short plain-id keys the extra line buys almost nothing.
                 let simple_lhs = selectors.len() <= 4 && selectors.iter().all(Selector::is_simple);
                 doc.group(|d| {
-                    d.hcat(selectors.iter().cloned());
+                    d.hcat(selectors);
                     d.nested(|inner| {
                         inner.hardspace();
                         assign.emit(inner);

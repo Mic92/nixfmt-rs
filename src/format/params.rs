@@ -1,10 +1,31 @@
 use crate::ast::{
-    Annotated, Expression, Leaf, ParamAttr, Parameter, Selector, SimpleSelector, Term, Token,
-    TrailingComment, Trivia,
+    Annotated, Expression, Leaf, ParamAttr, ParamDefault, Parameter, Selector, SimpleSelector,
+    Term, Token, TrailingComment, Trivia,
 };
 use crate::doc::{Doc, Elem, Emit, hardline, line};
 
 use super::term::empty_brackets;
+
+/// Emit `name ? default ,`. Split out so [`render_param_attrs`] can suppress
+/// the trailing comma on the last attr without rebuilding a `ParamAttr`.
+fn emit_attr(doc: &mut Doc, name: &Leaf, default: Option<&ParamDefault>, comma: Option<&Leaf>) {
+    let make_pretty = |d: &mut Doc| {
+        name.emit(d);
+        if let Some(def) = default {
+            d.hardspace();
+            d.nested(|inner| {
+                def.question.emit(inner);
+                def.value.absorb_rhs(inner);
+            });
+        }
+        comma.emit(d);
+    };
+    if default.is_some() {
+        doc.group(make_pretty);
+    } else {
+        make_pretty(doc);
+    }
+}
 
 impl Emit for ParamAttr {
     fn emit(&self, doc: &mut Doc) {
@@ -12,31 +33,8 @@ impl Emit for ParamAttr {
             Self::Attr {
                 name,
                 default,
-                comma: maybe_comma,
-            } => {
-                let has_default = default.is_some();
-                let make_pretty = |d: &mut Doc| {
-                    name.emit(d);
-
-                    if let Some(def) = default.as_ref() {
-                        d.hardspace();
-                        d.nested(|inner| {
-                            def.question.emit(inner);
-                            def.value.absorb_rhs(inner);
-                        });
-                    }
-
-                    if let Some(comma) = maybe_comma {
-                        comma.emit(d);
-                    }
-                };
-
-                if has_default {
-                    doc.group(make_pretty);
-                } else {
-                    make_pretty(doc);
-                }
-            }
+                comma,
+            } => emit_attr(doc, name, default.as_ref(), comma.as_ref()),
             Self::Ellipsis(ellipsis) => ellipsis.emit(doc),
         }
     }
@@ -203,12 +201,7 @@ fn render_param_attrs(attrs: &[ParamAttr]) -> Vec<Doc> {
                 } = attr
                 && comma.is_lone()
             {
-                ParamAttr::Attr {
-                    name: name.clone(),
-                    default: default.clone(),
-                    comma: None,
-                }
-                .emit(&mut rendered);
+                emit_attr(&mut rendered, name, default.as_ref(), None);
                 rendered.trailing(",");
                 return rendered;
             }

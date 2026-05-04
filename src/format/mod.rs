@@ -92,7 +92,7 @@ impl Emit for Term {
                     }
                 }
 
-                doc.hcat(selectors.iter().cloned());
+                doc.hcat(selectors);
 
                 if let Some(d) = default {
                     doc.softline();
