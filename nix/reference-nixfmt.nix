@@ -13,5 +13,6 @@ nixfmt.overrideAttrs (old: {
     ./patches/0002-Lexer-keep-a-comment-trailing-after-a-multi-line-tok.patch
     ./patches/0003-Pretty-do-not-hoist-a-lone-language-annotation-off-a.patch
     ./patches/0004-Pretty-suppress-language-annotation-fuse-after-an-op.patch
+    ./patches/0005-Pretty-ignore-trivia-in-isAbsorbable-for-Parenthesiz.patch
   ];
 })

@@ -1,0 +1,35 @@
+From 8d913a2108bbe79c754a8e6b94e9ad9b1f3a3b3a Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?J=C3=B6rg=20Thalheim?= <joerg@thalheim.io>
+Date: Mon, 4 May 2026 10:08:16 +0200
+Subject: [PATCH 5/5] Pretty: ignore ( trivia in isAbsorbable for Parenthesized
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+prettyTerm hoists ( trivia before the paren, so it never affects
+whether the body absorbs; the LoneAnn guard made the predicate flip
+between passes once that hoist had happened.
+
+Signed-off-by: Jörg Thalheim <joerg@thalheim.io>
+---
+ src/Nixfmt/Pretty.hs | 4 +++-
+ 1 file changed, 3 insertions(+), 1 deletion(-)
+
+diff --git a/src/Nixfmt/Pretty.hs b/src/Nixfmt/Pretty.hs
+index 0bb52e5..3c47e26 100644
+--- a/src/Nixfmt/Pretty.hs
++++ b/src/Nixfmt/Pretty.hs
+@@ -627,7 +627,9 @@ isAbsorbable (List paropen items _)
+   | hasTrivia paropen || hasOnlyComments items = True
+ isAbsorbable (Set _ paropen items _)
+   | hasTrivia paropen || hasOnlyComments items = True
+-isAbsorbable (Parenthesized (LoneAnn _) (Term t) _) = isAbsorbable t
++-- `(` trivia is hoisted before the paren and never affects whether the body
++-- absorbs; matching only `LoneAnn` here flipped this between passes.
++isAbsorbable (Parenthesized _ (Term t) _) = isAbsorbable t
+ isAbsorbable _ = False
+ 
+ isAbsorbableTerm :: Term -> Bool
+-- 
+2.53.0
+

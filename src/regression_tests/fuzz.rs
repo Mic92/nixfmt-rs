@@ -150,3 +150,17 @@ fn fuzz_trailing_comment_on_multiline_simple_string() {
     // point. Pinned via the reference.
     test_format("[''\na\n''#c\nt]");
 }
+
+/// `is_absorbable` for `Parenthesized` checked `!open.has_trivia()`, so a
+/// trailing `# c` on `(` (hoisted before the paren on pass 1, re-lexed as the
+/// body's leading trivia on pass 2) flipped the decision between passes.
+/// Upstream fix carried in `nix/patches/0005-*.patch`.
+#[test]
+fn fuzz_paren_open_trail_comment_absorbable() {
+    roundtrip("{o=(# c\n''\"\n'');}");
+    roundtrip("{o=( # c\n[a\nb]);}");
+    roundtrip("{o=( # c\n{a=1;\nb=2;});}");
+    roundtrip("f (# c\n[a\nb])");
+    // Non-absorbable body: was already idempotent.
+    test_format("(# c\nx)");
+}
