@@ -117,7 +117,7 @@ impl Dump for Expression {
             Self::Operation { lhs, op, rhs } => {
                 format_constructor!(w, "Operation", [&**lhs, op, &**rhs]);
             }
-            Self::MemberCheck {
+            Self::HasAttr {
                 lhs,
                 question,
                 path,
@@ -127,7 +127,7 @@ impl Dump for Expression {
             Self::Negation { minus, expr } => {
                 format_constructor!(w, "Negation", [minus, &**expr]);
             }
-            Self::Inversion { bang, expr } => {
+            Self::Not { bang, expr } => {
                 format_constructor!(w, "Inversion", [bang, &**expr]);
             }
         }

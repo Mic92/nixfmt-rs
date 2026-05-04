@@ -58,7 +58,7 @@ impl Parser {
         let expr = if matches!(self.current.value, Token::Question) {
             let question = self.take_and_advance()?;
             let selectors = self.parse_selector_path()?;
-            Expression::MemberCheck {
+            Expression::HasAttr {
                 lhs: Box::new(expr),
                 question,
                 path: selectors,

@@ -123,7 +123,7 @@ impl Emit for Expression {
             } => {
                 emit_operation(doc, self, left, op, right);
             }
-            Self::MemberCheck {
+            Self::HasAttr {
                 lhs: expr,
                 question,
                 path: selectors,
@@ -140,7 +140,7 @@ impl Emit for Expression {
                 minus.emit(doc);
                 expr.emit(doc);
             }
-            Self::Inversion { bang, expr } => {
+            Self::Not { bang, expr } => {
                 bang.emit(doc);
                 expr.emit(doc);
             }

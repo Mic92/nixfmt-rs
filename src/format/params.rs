@@ -81,9 +81,9 @@ fn take_last_trail_comment_expr(expr: &mut Expression) -> Option<TrailingComment
         | Expression::Apply { arg: body, .. }
         | Expression::Operation { rhs: body, .. }
         | Expression::Negation { expr: body, .. }
-        | Expression::Inversion { expr: body, .. } => take_last_trail_comment_expr(body),
+        | Expression::Not { expr: body, .. } => take_last_trail_comment_expr(body),
         // `parse_selector_path` always pushes at least one selector.
-        Expression::MemberCheck { path, .. } => sel(path.last_mut().expect("≥1 selector")),
+        Expression::HasAttr { path, .. } => sel(path.last_mut().expect("≥1 selector")),
     }
 }
 

@@ -21,7 +21,7 @@ impl Parser {
             Token::Not => {
                 let op = self.take_and_advance()?;
                 let inner = self.parse_application()?;
-                return Ok(Expression::Inversion {
+                return Ok(Expression::Not {
                     bang: op,
                     expr: Box::new(inner),
                 });
@@ -46,7 +46,7 @@ impl Parser {
         if matches!(self.current.value, Token::Question) {
             let question = self.take_and_advance()?;
             let selectors = self.parse_selector_path()?;
-            expr = Expression::MemberCheck {
+            expr = Expression::HasAttr {
                 lhs: Box::new(expr),
                 question,
                 path: selectors,

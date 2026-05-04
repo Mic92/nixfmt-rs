@@ -102,7 +102,7 @@ oracle_tests! {
 
     regression_emptyline_pretrivia_inline => ["\n\nlet x = 1; in x"],
 
-    // `?` binds tighter than `!`: Inversion(MemberCheck(a)...).
+    // `?` binds tighter than `!`: Not(HasAttr(a)...).
     regression_not_member_check => ["!a ? b"],
 
     // `->` binds looser than `||`: (a || b) -> c.

@@ -233,7 +233,7 @@ pub enum Expression {
         rhs: Box<Self>,
     },
     /// `lhs ? path`
-    MemberCheck {
+    HasAttr {
         lhs: Box<Self>,
         question: Leaf,
         path: Vec<Selector>,
@@ -244,7 +244,7 @@ pub enum Expression {
         expr: Box<Self>,
     },
     /// `! expr` (boolean inversion)
-    Inversion {
+    Not {
         bang: Leaf,
         expr: Box<Self>,
     },
@@ -298,9 +298,9 @@ first_token_impl! { Expression;
     | Self::Assert { kw_assert: kw, .. }
     | Self::If { kw_if: kw, .. }
     | Self::Negation { minus: kw, .. }
-    | Self::Inversion { bang: kw, .. } => leaf kw,
+    | Self::Not { bang: kw, .. } => leaf kw,
     Self::Lambda { param, .. } => recurse param,
     Self::Apply { func: g, .. }
     | Self::Operation { lhs: g, .. }
-    | Self::MemberCheck { lhs: g, .. } => recurse g,
+    | Self::HasAttr { lhs: g, .. } => recurse g,
 }
