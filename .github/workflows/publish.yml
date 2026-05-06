@@ -48,7 +48,7 @@ jobs:
       - uses: actions/checkout@v6
       - uses: NixOS/nix-installer-action@main
       - run: nix build -L .#wasm
-      - uses: actions/setup-node@v5
+      - uses: actions/setup-node@v6
         with:
           node-version: 24
           registry-url: https://registry.npmjs.org
