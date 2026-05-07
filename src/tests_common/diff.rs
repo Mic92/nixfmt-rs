@@ -32,7 +32,7 @@ const RESET: &str = "\x1b[0m";
 const DIM: &str = "\x1b[2m";
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub enum DiffResult<T> {
+enum DiffResult<T> {
     /// Item only in left (removed)
     Left(T),
     /// Item in both (unchanged)
@@ -86,7 +86,7 @@ fn backtrack<T: Clone + PartialEq>(
 }
 
 /// Compare two slices and return a vector of diff results
-pub fn slice<T: Clone + PartialEq>(left: &[T], right: &[T]) -> Vec<DiffResult<T>> {
+fn slice<T: Clone + PartialEq>(left: &[T], right: &[T]) -> Vec<DiffResult<T>> {
     let table = lcs_table(left, right);
     let mut result = Vec::new();
     backtrack(left, right, &table, left.len(), right.len(), &mut result);
@@ -94,7 +94,7 @@ pub fn slice<T: Clone + PartialEq>(left: &[T], right: &[T]) -> Vec<DiffResult<T>
 }
 
 /// Compare two strings line-by-line
-pub fn lines<'a>(left: &'a str, right: &'a str) -> Vec<DiffResult<&'a str>> {
+fn lines<'a>(left: &'a str, right: &'a str) -> Vec<DiffResult<&'a str>> {
     let left_lines: Vec<&str> = left.lines().collect();
     let right_lines: Vec<&str> = right.lines().collect();
     slice(&left_lines, &right_lines)
@@ -125,10 +125,7 @@ pub fn render(a: &str, b: &str, opts: DiffOpts) -> String {
                 if !matches!(r, DiffResult::Both(..)) {
                     let lo = i.saturating_sub(ctx);
                     let hi = (i + ctx + 1).min(results.len());
-                    #[allow(clippy::needless_range_loop)]
-                    for k in lo..hi {
-                        keep[k] = true;
-                    }
+                    keep[lo..hi].fill(true);
                 }
             }
             keep
