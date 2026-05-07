@@ -4,8 +4,7 @@
   programs = {
     nixfmt = {
       enable = true;
-      # Dogfood: format this repo with the binary built from this repo.
-      package = pkgs.callPackage ./package.nix { };
+      package = pkgs.nixfmt-rs;
     };
     rustfmt.enable = true;
   };
