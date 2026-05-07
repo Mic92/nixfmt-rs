@@ -1,4 +1,4 @@
-//! AST formatting smoke tests - compare our output with `nixfmt --ast`.
+//! AST formatting smoke tests — snapshot the `--ast` dump.
 //!
 //! One minimal test per top-level `Expression`/`Term` variant (plus the
 //! `TriviaPiece` shapes and `Binder`/`Parameter` smoke) so a regression in any
@@ -6,7 +6,6 @@
 //! `regression_tests/`.
 
 use crate::oracle_tests;
-use crate::tests_common::test_ast_format;
 
 oracle_tests! {
     test_ast_format;

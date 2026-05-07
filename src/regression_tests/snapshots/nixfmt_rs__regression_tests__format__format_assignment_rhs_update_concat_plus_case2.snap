@@ -1,0 +1,10 @@
+---
+source: src/regression_tests/format.rs
+description: "{ x = a // { y = 1;\n z = 2;\n}; }"
+---
+{
+  x = a // {
+    y = 1;
+    z = 2;
+  };
+}

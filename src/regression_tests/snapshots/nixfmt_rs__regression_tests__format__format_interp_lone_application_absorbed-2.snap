@@ -1,0 +1,10 @@
+---
+source: src/regression_tests/format.rs
+description: "''\n  ${lib.optionalString a b ''\n    one\n    two\n  ''}\n''"
+---
+''
+  ${lib.optionalString a b ''
+    one
+    two
+  ''}
+''

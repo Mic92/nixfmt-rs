@@ -11,8 +11,13 @@ doc layout helpers). Add here when testing a single function in isolation.
 
 - `parser.rs` — inputs the parser used to reject or mis-parse.
 - `ir.rs` — IR-construction regressions (pretty tree shape).
-- `format.rs` — minimal end-to-end `format(input) == expected` reproducers,
-  one per upstream-`nixfmt` divergence found in the wild (nixpkgs sweep).
+- `format.rs` — minimal end-to-end reproducers, one per upstream-`nixfmt`
+  divergence found in the wild (nixpkgs sweep).
+
+Expected output is committed as `insta` snapshots under
+`src/**/snapshots/`. After an intentional change run
+`cargo insta review` (or `cargo insta accept`) to refresh them; CI rejects
+stale `*.snap.new` files.
 
 Each case should be the *smallest* input that triggers the bug, with a doc
 comment naming the Haskell function it mirrors. If the case is a minimisation

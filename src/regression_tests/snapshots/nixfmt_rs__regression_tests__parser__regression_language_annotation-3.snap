@@ -1,0 +1,15 @@
+---
+source: src/regression_tests/parser.rs
+description: "/* python */ '' ''"
+---
+Term
+    [0;95;1m([0m SimpleString
+        [0;96;1m([0m Ann
+            [0;93;1m{[0m preTrivia = fromList
+                [0;35m[[0m LanguageAnnotation [0;97;1m"[0m[0;94;1mpython[0m[0;97;1m"[0m [0;35m][0m
+            [0;93;1m,[0m sourceLine = Pos [0;92;1m1[0m
+            [0;93;1m,[0m value = [0;35m[[0m [0;36m[[0m[0;36m][0m [0;35m][0m
+            [0;93;1m,[0m trailComment = Nothing
+            [0;93;1m}[0m
+        [0;96;1m)[0m
+    [0;95;1m)[0m

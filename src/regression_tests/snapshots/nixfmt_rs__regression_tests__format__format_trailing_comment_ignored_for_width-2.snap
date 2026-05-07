@@ -1,0 +1,7 @@
+---
+source: src/regression_tests/format.rs
+description: "{\n  x = a != null; # a trailing comment that is quite a bit longer than the binding itself but still irrelevant\n}\n"
+---
+{
+  x = a != null; # a trailing comment that is quite a bit longer than the binding itself but still irrelevant
+}

@@ -1,0 +1,5 @@
+---
+source: src/regression_tests/format.rs
+description: "{ x = a.b or [ ] ++ [ y ]; }"
+---
+{ x = a.b or [ ] ++ [ y ]; }

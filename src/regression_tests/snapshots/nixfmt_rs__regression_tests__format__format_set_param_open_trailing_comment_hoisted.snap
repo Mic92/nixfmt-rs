@@ -1,0 +1,6 @@
+---
+source: src/regression_tests/format.rs
+description: "{ /*c*/ a, b, }: x"
+---
+# c
+{ a, b }: x

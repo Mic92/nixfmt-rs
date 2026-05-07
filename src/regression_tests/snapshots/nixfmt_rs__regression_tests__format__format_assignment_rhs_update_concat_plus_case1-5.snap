@@ -1,0 +1,5 @@
+---
+source: src/regression_tests/format.rs
+description: "{ x = lib.optionals a [ p ] ++ lib.optionals b [ q ]; }"
+---
+{ x = lib.optionals a [ p ] ++ lib.optionals b [ q ]; }

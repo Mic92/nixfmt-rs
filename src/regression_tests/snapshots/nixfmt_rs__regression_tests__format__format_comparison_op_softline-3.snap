@@ -1,0 +1,12 @@
+---
+source: src/regression_tests/format.rs
+description: a == b
+---
+[0;95;1m[[0m Group RegularG
+    [0;96;1m[[0m Text [0;92;1m0[0m [0;92;1m0[0m RegularT [0;97;1m"[0m[0;94;1ma[0m[0;97;1m"[0m
+    [0;96;1m,[0m Spacing Softspace
+    [0;96;1m,[0m Text [0;92;1m0[0m [0;92;1m0[0m RegularT [0;97;1m"[0m[0;94;1m==[0m[0;97;1m"[0m
+    [0;96;1m,[0m Spacing Hardspace
+    [0;96;1m,[0m Text [0;92;1m0[0m [0;92;1m0[0m RegularT [0;97;1m"[0m[0;94;1mb[0m[0;97;1m"[0m
+    [0;96;1m][0m
+[0;95;1m][0m

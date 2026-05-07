@@ -1,0 +1,10 @@
+---
+source: src/regression_tests/format.rs
+description: "{ b # a\n? # a\nnull\n,}: b"
+---
+{
+  b  # a
+    ?  # a
+      null,
+}:
+b

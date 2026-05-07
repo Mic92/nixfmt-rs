@@ -1,7 +1,7 @@
 //! Consolidated regression tests
 
 use crate::oracle_tests;
-use crate::tests_common::{assert_parse_error_contains, assert_parse_rejected, test_ast_format};
+use crate::tests_common::{assert_parse_error_contains, assert_parse_rejected};
 
 oracle_tests! {
     test_ast_format;

@@ -1,19 +1,19 @@
 //! Formatted-output regression tests
 //!
-//! Minimal reproducers for divergences between our final formatted output and
-//! the reference `nixfmt` (v1.2.0), discovered by the `diff_sweep` example
-//! over `nixpkgs/pkgs/`. Each test names the corresponding Haskell
-//! function in `Nixfmt.Pretty` / `Nixfmt.Predoc`.
+//! Minimal reproducers for divergences from the reference `nixfmt` (v1.2.0)
+//! discovered by the `diff_sweep` example over `nixpkgs/pkgs/`. Expected
+//! output is committed as `insta` snapshots; each test names the
+//! corresponding Haskell function in `Nixfmt.Pretty` / `Nixfmt.Predoc`.
 
-use crate::tests_common::{test_format, test_ir_format};
+use crate::{test_format, test_ir_format};
 
 /// Layout: `Trailing` text must be dropped when a group is rendered compact.
 /// Haskell: `Nixfmt.Predoc.fits` skips `Text Trailing`.
 /// Fixture: fast reproducer for `tests/fixtures/nixfmt/diff/lambda/`.
 #[test]
 fn format_trailing_comma_compact_param_set() {
-    test_format("{ a, b }: a");
-    test_format("{\n  a,\n  b,\n}: a");
+    test_format!("{ a, b }: a");
+    test_format!("{\n  a,\n  b,\n}: a");
 }
 
 /// `moveTrailingCommentUp` must be applied to the opening `{` of a
@@ -22,9 +22,9 @@ fn format_trailing_comma_compact_param_set() {
 /// `instance Pretty Parameter`.
 #[test]
 fn format_set_param_open_trailing_comment_hoisted() {
-    test_format("{ /*c*/ a, b, }: x");
-    test_format("{ /*c*/ }: x");
-    test_ir_format("{ /*c*/ a, b, }: x");
+    test_format!("{ /*c*/ a, b, }: x");
+    test_format!("{ /*c*/ }: x");
+    test_ir_format!("{ /*c*/ a, b, }: x");
 }
 
 /// Trailing comments must not count toward line width in `fits`; the
@@ -34,18 +34,18 @@ fn format_set_param_open_trailing_comment_hoisted() {
 #[test]
 fn format_trailing_comment_ignored_for_width() {
     // From nixpkgs melpa.nix: well under 100 columns, must not wrap.
-    test_format("{\n  unstableVersionInNixFormat = parsed != null; # heuristics\n}\n");
+    test_format!("{\n  unstableVersionInNixFormat = parsed != null; # heuristics\n}\n");
     // Short binding + long trailing comment: still must not wrap.
-    test_format(concat!(
+    test_format!(concat!(
         "{\n  x = a != null; ",
         "# a trailing comment that is quite a bit longer than the binding itself but still irrelevant\n",
         "}\n",
     ));
     // List element on its own line: `ni` must reflect the indent step so
     // `fits` does not inject a second space before the comment.
-    test_format("[\n  a # c\n  b\n]\n");
+    test_format!("[\n  a # c\n  b\n]\n");
     // Non-comment part alone exceeds 100 cols → must wrap regardless of comment.
-    test_format(concat!(
+    test_format!(concat!(
         "{\n  someVeryVeryVeryVeryVeryVeryVeryVeryVeryVeryVeryVeryVeryLongName = ",
         "aaaaaaaa != bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb; # c\n}\n",
     ));
@@ -56,16 +56,16 @@ fn format_trailing_comment_ignored_for_width() {
 /// Haskell: `Nixfmt.Predoc.goOne` `TrailingComment` guard.
 #[test]
 fn format_trailing_comment_shift_for_idempotency() {
-    test_format("{ a # b\n= 1; }");
-    test_format("[ # c\n1\n]");
-    test_format("{ b # a\n? # a\nnull\n,}: b");
+    test_format!("{ a # b\n= 1; }");
+    test_format!("[ # c\n1\n]");
+    test_format!("{ b # a\n? # a\nnull\n,}: b");
 }
 
 /// `f (x: { ... })` should absorb the parenthesised abstraction onto the
 /// function line. Haskell: `Nixfmt.Pretty.absorbLast` / `isAbsorbableExpr`.
 #[test]
 fn format_paren_abstraction_absorbed_as_last_arg() {
-    test_ir_format("f (finalAttrs: {\n  x = 1;\n  y = 2;\n})");
+    test_ir_format!("f (finalAttrs: {\n  x = 1;\n  y = 2;\n})");
 }
 
 /// A lambda chain whose body is a non-absorbable application must stay on
@@ -76,11 +76,11 @@ fn format_paren_abstraction_absorbed_as_last_arg() {
 #[test]
 fn format_lambda_chain_stays_one_line_when_fits() {
     // Reduced from nixpkgs `lib-override-helper.nix`.
-    test_format(
+    test_format!(
         "{\n  addPackageRequires =\n    pkg: packageRequires: addPackageRequiresWhen pkg packageRequires (finalAttrs: previousAttrs: true);\n}",
     );
     // Reduced from `cask/package.nix`: single-param lambda with string body.
-    test_format(
+    test_format!(
         "{\n  formatLoadPath =\n    loadPathItem: \"-L ${\n      if builtins.isString loadPathItem then loadPathItem else \"${loadPathItem}/share/emacs/site-lisp\"\n    }\";\n}",
     );
 }
@@ -89,7 +89,7 @@ fn format_lambda_chain_stays_one_line_when_fits() {
 /// expanded body. Haskell: `Nixfmt.Pretty.absorbAbs`.
 #[test]
 fn format_nested_lambda_body_absorbed() {
-    test_ir_format("final: prev: {\n  a = 1;\n  b = 2;\n}");
+    test_ir_format!("final: prev: {\n  a = 1;\n  b = 2;\n}");
 }
 
 /// `with X;` followed by an attrset should keep the `{` on the same line,
@@ -98,8 +98,8 @@ fn format_nested_lambda_body_absorbed() {
 /// Fixture: fast reproducer for `tests/fixtures/nixfmt/diff/with/`.
 #[test]
 fn format_with_body_absorbed() {
-    test_ir_format("self: with self; {\n  a = 1;\n  b = 2;\n}");
-    test_ir_format("{\n  meta = with lib; {\n    license = mit;\n  };\n}");
+    test_ir_format!("self: with self; {\n  a = 1;\n  b = 2;\n}");
+    test_ir_format!("{\n  meta = with lib; {\n    license = mit;\n  };\n}");
 }
 
 /// `x = f \"a\" ''..'';` should keep the application on the `=` line when the
@@ -107,7 +107,7 @@ fn format_with_body_absorbed() {
 /// Haskell: `Nixfmt.Pretty.absorbRHS` (Application case).
 #[test]
 fn format_assignment_rhs_app_with_string_last_arg() {
-    test_ir_format("{\n  w = writeShellScript \"n\" ''\n    echo a\n    echo b\n  '';\n}");
+    test_ir_format!("{\n  w = writeShellScript \"n\" ''\n    echo a\n    echo b\n  '';\n}");
 }
 
 /// Chained `if ... else if ...` must always be expanded onto multiple lines.
@@ -115,7 +115,7 @@ fn format_assignment_rhs_app_with_string_last_arg() {
 /// Fixture: fast reproducer for `tests/fixtures/nixfmt/diff/if_else/`.
 #[test]
 fn format_if_elseif_chain_forced_multiline() {
-    test_ir_format("{ x = if a then \"x\" else if b then \"y\" else \"z\"; }");
+    test_ir_format!("{ x = if a then \"x\" else if b then \"y\" else \"z\"; }");
 }
 
 /// Multi-argument application that expands should keep the first argument on
@@ -123,7 +123,7 @@ fn format_if_elseif_chain_forced_multiline() {
 /// Haskell: `Nixfmt.Pretty.prettyApp`.
 #[test]
 fn format_multi_arg_application_continuation_indent() {
-    test_ir_format("runCommand \"n\"\n  {\n    a = 1;\n  }\n  ''\n    echo a\n  ''");
+    test_ir_format!("runCommand \"n\"\n  {\n    a = 1;\n  }\n  ''\n    echo a\n  ''");
 }
 
 /// A line comment before the last argument forces expansion; the comment and
@@ -132,8 +132,8 @@ fn format_multi_arg_application_continuation_indent() {
 /// argument's pre-trivia inside the same `nest` as the function chain).
 #[test]
 fn format_app_comment_before_last_arg_indent() {
-    test_format("(map toString\n  # comment\n  (builtins.filter f version))");
-    test_format(
+    test_format!("(map toString\n  # comment\n  (builtins.filter f version))");
+    test_format!(
         "{\n  v = lib.concat \".\" (\n    map toString\n      # comment\n      (builtins.filter f version)\n  );\n}",
     );
 }
@@ -144,14 +144,14 @@ fn format_app_comment_before_last_arg_indent() {
 /// Fixture: fast reproducer for `tests/fixtures/nixfmt/diff/operation/`.
 #[test]
 fn format_assignment_rhs_update_concat_plus_case1() {
-    test_format("{ meta = oldAttrs.meta // { description = \"x\"; }; }");
-    test_ir_format("{ meta = oldAttrs.meta // { description = \"x\"; }; }");
-    test_format("{ x = a.b or [ ] ++ [ y ]; }");
-    test_ir_format("{ x = a.b or [ ] ++ [ y ]; }");
-    test_format("{ x = lib.optionals a [ p ] ++ lib.optionals b [ q ]; }");
+    test_format!("{ meta = oldAttrs.meta // { description = \"x\"; }; }");
+    test_ir_format!("{ meta = oldAttrs.meta // { description = \"x\"; }; }");
+    test_format!("{ x = a.b or [ ] ++ [ y ]; }");
+    test_ir_format!("{ x = a.b or [ ] ++ [ y ]; }");
+    test_format!("{ x = lib.optionals a [ p ] ++ lib.optionals b [ q ]; }");
     // Leading trivia on the LHS term disables Case 1 and falls through to Case 2.
-    test_ir_format("{ x = /* c */ [ a ] ++ [ b ]; }");
-    test_ir_format("{ x = [ a ] ++ [ b ] ++ [ c ]; }");
+    test_ir_format!("{ x = /* c */ [ a ] ++ [ b ]; }");
+    test_ir_format!("{ x = [ a ] ++ [ b ] ++ [ c ]; }");
 }
 
 /// `//` with an absorbable RHS term and a non-absorbable LHS keeps `// {` on
@@ -160,8 +160,8 @@ fn format_assignment_rhs_update_concat_plus_case1() {
 /// Fixture: fast reproducer for `tests/fixtures/nixfmt/diff/attr_set/`.
 #[test]
 fn format_assignment_rhs_update_concat_plus_case2() {
-    test_format("{ x = a // { y = 1;\n z = 2;\n}; }");
-    test_ir_format("{ x = a // { y = 1;\n z = 2;\n}; }");
+    test_format!("{ x = a // { y = 1;\n z = 2;\n}; }");
+    test_ir_format!("{ x = a // { y = 1;\n z = 2;\n}; }");
 }
 
 /// Layout: when the priority-expansion of one argument fails because the
@@ -172,9 +172,9 @@ fn format_assignment_rhs_update_concat_plus_case2() {
 #[test]
 fn format_app_multi_absorbable_args_indent() {
     // sddm/default.nix: `runCommand "name" { ... } ''script''`
-    test_format("runCommand \"n\"\n  {\n    a = 1;\n  }\n  ''\n    echo a\n  ''");
+    test_format!("runCommand \"n\"\n  {\n    a = 1;\n  }\n  ''\n    echo a\n  ''");
     // android-studio/common.nix: app + attrset arg + parenthesised last arg
-    test_format("f\n  {\n    a = 1;\n  }\n  (\n    b: c\n  )");
+    test_format!("f\n  {\n    a = 1;\n  }\n  (\n    b: c\n  )");
 }
 
 /// Layout: with the application nested inside a binding, the `{` must stay on
@@ -183,7 +183,7 @@ fn format_app_multi_absorbable_args_indent() {
 #[test]
 fn format_app_set_absorb_in_binding() {
     // wrapper.nix style: `x = mk { ... } ''..'';`
-    test_format("{\n  x = mk {\n    a = 1;\n  } ''\n    echo a\n  '';\n}");
+    test_format!("{\n  x = mk {\n    a = 1;\n  } ''\n    echo a\n  '';\n}");
 }
 
 /// A lone interpolation on an indented-string line whose body is a function
@@ -193,20 +193,20 @@ fn format_app_set_absorb_in_binding() {
 #[test]
 fn format_interp_lone_application_absorbed() {
     // 7zip-zstd: non-simple application (parenthesised arg / >2 args).
-    test_format("''\n  ${lib.optionalString (!isWindows) ''\n    one\n    two\n  ''}\n''");
-    test_format("''\n  ${lib.optionalString a b ''\n    one\n    two\n  ''}\n''");
+    test_format!("''\n  ${lib.optionalString (!isWindows) ''\n    one\n    two\n  ''}\n''");
+    test_format!("''\n  ${lib.optionalString a b ''\n    one\n    two\n  ''}\n''");
     // emacs wrapper: simple application; IR must place `${` inside the group
     // and nest the call body one level deeper.
-    test_ir_format("''\n  ${lib.optionalString cond ''\n    one\n    two\n  ''}\n''");
+    test_ir_format!("''\n  ${lib.optionalString cond ''\n    one\n    two\n  ''}\n''");
     // With leading whitespace and a wide body that overflows the budget.
-    test_format(concat!(
+    test_format!(concat!(
         "''\n  x\n    ${lib.optionalString cond ''\n",
         "      linkPath one two three four five six seven eight nine ten eleven twelve thirteen fourteen\n",
         "    ''}\n''",
     ));
     // vscodeWithConfiguration: application whose middle arg is a parenthesised
     // abstraction that itself wraps; `${` must still hug the call head.
-    test_format(concat!(
+    test_format!(concat!(
         "''\n  ${lib.concatMapStringsSep \"n\" (\n",
         "    e: \"ln -sfn ${e}/share/vscode/extensions/aaaa/bbb/ccc/dddd\"\n",
         "  ) nixExtsDrvs}\n''",
@@ -220,11 +220,11 @@ fn format_interp_lone_application_absorbed() {
 #[test]
 fn format_interp_inline_short_forced_compact() {
     // ms-vscode.cpptools: `${lib.makeBinPath [ gdb ]}` after a long line.
-    test_format(concat!(
+    test_format!(concat!(
         "''\n  wrap a/very/long/share/vscode/extensions/ms-vscode.cpptools/debug/bin/OpenDebugAD7 ",
         "--prefix PATH : ${lib.makeBinPath [ gdb ]}\n''",
     ));
-    test_ir_format("''\n  prefix ${lib.makeBinPath [ gdb ]} suffix\n''");
+    test_ir_format!("''\n  prefix ${lib.makeBinPath [ gdb ]} suffix\n''");
 }
 
 /// Non-chainable comparison operators (`<`, `>`, `<=`, `>=`, `==`, `!=`) use
@@ -235,16 +235,16 @@ fn format_interp_inline_short_forced_compact() {
 #[test]
 fn format_comparison_op_softline() {
     // fetchgithub: multi-line application LHS, short identifier RHS.
-    test_format(concat!(
+    test_format!(concat!(
         "{\n  x =\n    f (\n      a:\n      if cond ",
         "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa then\n",
         "        a\n      else\n        b\n    ) y != y;\n}",
     ));
     // nixops: comment as preTrivia on the RHS must not be nested under the op.
-    test_format("{\n  x =\n    a ==\n    # note\n    b.c (d: e);\n}");
-    test_ir_format("a == b");
+    test_format!("{\n  x =\n    a ==\n    # note\n    b.c (d: e);\n}");
+    test_ir_format!("a == b");
     // dev-shell-tools: LHS is `//` chain, RHS is an attrset.
-    test_format("a // { b = 1; } == { c = 1; }");
+    test_format!("a // { b = 1; } == { c = 1; }");
 }
 
 /// A binding whose LHS is long or uses a non-ID selector (string /
@@ -253,12 +253,12 @@ fn format_comparison_op_softline() {
 /// Haskell: `Nixfmt.Pretty.instance Pretty Binder` `Assignment` `rhs` guard.
 #[test]
 fn format_assignment_non_simple_selector_breaks_rhs() {
-    test_format(concat!(
+    test_format!(concat!(
         "{\n  \"PKG_CONFIG_GIMP_${pkgConfigMajorVersion}_0_GIMPLIBDIR\" = ",
         "\"${placeholder \"out\"}/${gimp.targetLibDir}\";\n}",
     ));
     // >4 selectors also triggers the break even when each is a plain id.
-    test_format(concat!(
+    test_format!(concat!(
         "{\n  a.b.c.d.e = \"",
         "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\";\n}",
     ));
@@ -268,9 +268,9 @@ fn format_assignment_non_simple_selector_breaks_rhs() {
 /// Haskell: `Nixfmt.Parser.file` attaches trailing trivia to `Trailed`.
 #[test]
 fn format_trailing_file_trivia_preserved() {
-    test_format("{ a = 1; }\n# trailing\n");
-    test_format("1\n/* block */\n");
-    test_ir_format("{ a = 1; }\n# trailing\n");
+    test_format!("{ a = 1; }\n# trailing\n");
+    test_format!("1\n/* block */\n");
+    test_ir_format!("{ a = 1; }\n# trailing\n");
 }
 
 /// A comment between the interpolation body and `}` must be preserved as the
@@ -278,8 +278,8 @@ fn format_trailing_file_trivia_preserved() {
 /// Haskell: `Nixfmt.Parser.interpolation` (`whole expression`).
 #[test]
 fn format_interp_trailing_trivia_preserved() {
-    test_format("''\n  ${ f a b\n  # c\n  }\n''");
-    test_format("\"${ x\n# c\n}\"");
+    test_format!("''\n  ${ f a b\n  # c\n  }\n''");
+    test_format!("\"${ x\n# c\n}\"");
 }
 
 /// A comment between `${` and the interpolation body must be preserved as
@@ -287,12 +287,12 @@ fn format_interp_trailing_trivia_preserved() {
 /// Haskell: `Nixfmt.Lexer.lexeme` (no special-cased trailing slot for `${`).
 #[test]
 fn format_interp_leading_trivia_preserved() {
-    test_format("''\n  ${ # leading\n  x }\n''");
-    test_format("\"${ /* c */ x}\"");
+    test_format!("''\n  ${ # leading\n  x }\n''");
+    test_format!("\"${ /* c */ x}\"");
     // Selector interpolations go through `lexeme()` for `${`, so the comment
     // is first classified as its `trail_comment` and must be re-queued.
-    test_format("{ ${ # c\nx } = 1; }");
-    test_format("a.${ # c\nx }");
+    test_format!("{ ${ # c\nx } = 1; }");
+    test_format!("a.${ # c\nx }");
 }
 
 /// Layout width must count Unicode scalars, not UTF-8 bytes, so multi-byte
@@ -301,7 +301,7 @@ fn format_interp_leading_trivia_preserved() {
 /// Reproduces: nixpkgs `pkgs/stdenv/generic/check-meta.nix`.
 #[test]
 fn format_text_width_counts_chars_not_bytes() {
-    test_format(
+    test_format!(
         "{\n  getName =\n    attrs: attrs.name or \"${attrs.pname or \"\u{ab}name-missing\u{bb}\"}-${attrs.version or \"\u{ab}version-missing\u{bb}\"}\";\n}\n",
     );
 }
@@ -312,7 +312,7 @@ fn format_text_width_counts_chars_not_bytes() {
 /// Reproduces: nixpkgs `nixos/modules/system/service/systemd/user.nix`.
 #[test]
 fn format_empty_set_with_pretrivia_keeps_linebreak() {
-    test_format("# c\n{\n}\n");
+    test_format!("# c\n{\n}\n");
 }
 
 /// `Vec<StringPart>::pretty` second `[Interpolation(_)]` arm: an `''…''` line
@@ -320,6 +320,6 @@ fn format_empty_set_with_pretrivia_keeps_linebreak() {
 /// before `}`). The first arm only matches when that trivia is empty.
 #[test]
 fn format_indented_string_lone_interpolation_with_trailing_trivia() {
-    test_format("''\n${x\n# c\n}\n''\n");
-    test_format("''\n  ${ x\n  # multi\n  # line\n  }\n''\n");
+    test_format!("''\n${x\n# c\n}\n''\n");
+    test_format!("''\n  ${ x\n  # multi\n  # line\n  }\n''\n");
 }

@@ -9,3 +9,4 @@ __pycache__/
 /test_debug.sh
 /test_render.nix
 /mutants.out*
+*.snap.new

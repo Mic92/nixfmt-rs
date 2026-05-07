@@ -1,0 +1,5 @@
+---
+source: src/regression_tests/fuzz.rs
+description: 1..x
+---
+1..x

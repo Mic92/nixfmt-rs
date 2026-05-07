@@ -1,0 +1,40 @@
+---
+source: src/ir_format_tests.rs
+description: "(map toString\n  # comment\n  (builtins.filter f version))"
+---
+[0;95;1m[[0m Group RegularG
+    [0;96;1m[[0m Text [0;92;1m0[0m [0;92;1m0[0m RegularT [0;97;1m"[0m[0;94;1m([0m[0;97;1m"[0m
+    [0;96;1m,[0m Group RegularG
+        [0;93;1m[[0m Group Transparent
+            [0;35m[[0m Group Transparent
+                [0;36m[[0m Group RegularG
+                    [0;33m[[0m Spacing Break
+                    [0;33m,[0m Text [0;92;1m2[0m [0;92;1m0[0m RegularT [0;97;1m"[0m[0;94;1mmap[0m[0;97;1m"[0m
+                    [0;33m][0m
+                [0;36m][0m
+            [0;35m,[0m Spacing Space
+            [0;35m,[0m Group Priority
+                [0;36m[[0m Text [0;92;1m2[0m [0;92;1m0[0m RegularT [0;97;1m"[0m[0;94;1mtoString[0m[0;97;1m"[0m [0;36m][0m
+            [0;35m][0m
+        [0;93;1m,[0m Spacing Hardline
+        [0;93;1m,[0m Text [0;92;1m2[0m [0;92;1m0[0m Comment [0;97;1m"[0m[0;94;1m# comment[0m[0;97;1m"[0m
+        [0;93;1m,[0m Spacing Hardline
+        [0;93;1m,[0m Group Priority
+            [0;35m[[0m Text [0;92;1m2[0m [0;92;1m0[0m RegularT [0;97;1m"[0m[0;94;1m([0m[0;97;1m"[0m
+            [0;35m,[0m Spacing Break
+            [0;35m,[0m Group RegularG
+                [0;36m[[0m Text [0;92;1m3[0m [0;92;1m0[0m RegularT [0;97;1m"[0m[0;94;1mbuiltins.filter[0m[0;97;1m"[0m
+                [0;36m,[0m Spacing Hardspace
+                [0;36m,[0m Text [0;92;1m4[0m [0;92;1m0[0m RegularT [0;97;1m"[0m[0;94;1mf[0m[0;97;1m"[0m
+                [0;36m,[0m Spacing Hardspace
+                [0;36m,[0m Group RegularG
+                    [0;33m[[0m Text [0;92;1m4[0m [0;92;1m0[0m RegularT [0;97;1m"[0m[0;94;1mversion[0m[0;97;1m"[0m [0;33m][0m
+                [0;36m][0m
+            [0;35m,[0m Spacing Break
+            [0;35m,[0m Text [0;92;1m2[0m [0;92;1m0[0m RegularT [0;97;1m"[0m[0;94;1m)[0m[0;97;1m"[0m
+            [0;35m][0m
+        [0;93;1m,[0m Spacing Break
+        [0;93;1m][0m
+    [0;96;1m,[0m Text [0;92;1m0[0m [0;92;1m0[0m RegularT [0;97;1m"[0m[0;94;1m)[0m[0;97;1m"[0m
+    [0;96;1m][0m
+[0;95;1m][0m

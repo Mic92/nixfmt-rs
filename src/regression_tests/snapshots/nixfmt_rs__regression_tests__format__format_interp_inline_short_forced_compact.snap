@@ -1,0 +1,7 @@
+---
+source: src/regression_tests/format.rs
+description: "''\n  wrap a/very/long/share/vscode/extensions/ms-vscode.cpptools/debug/bin/OpenDebugAD7 --prefix PATH : ${lib.makeBinPath [ gdb ]}\n''"
+---
+''
+  wrap a/very/long/share/vscode/extensions/ms-vscode.cpptools/debug/bin/OpenDebugAD7 --prefix PATH : ${lib.makeBinPath [ gdb ]}
+''

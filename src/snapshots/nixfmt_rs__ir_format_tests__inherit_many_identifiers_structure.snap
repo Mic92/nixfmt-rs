@@ -1,0 +1,30 @@
+---
+source: src/ir_format_tests.rs
+description: let inherit foo bar baz qux; in foo
+---
+[0;95;1m[[0m Group RegularG
+    [0;96;1m[[0m Group RegularG
+        [0;93;1m[[0m Text [0;92;1m0[0m [0;92;1m0[0m RegularT [0;97;1m"[0m[0;94;1mlet[0m[0;97;1m"[0m
+        [0;93;1m,[0m Spacing Hardline
+        [0;93;1m,[0m Group RegularG
+            [0;35m[[0m Text [0;92;1m1[0m [0;92;1m0[0m RegularT [0;97;1m"[0m[0;94;1minherit[0m[0;97;1m"[0m
+            [0;35m,[0m Spacing Hardline
+            [0;35m,[0m Text [0;92;1m2[0m [0;92;1m0[0m RegularT [0;97;1m"[0m[0;94;1mfoo[0m[0;97;1m"[0m
+            [0;35m,[0m Spacing Hardline
+            [0;35m,[0m Text [0;92;1m2[0m [0;92;1m0[0m RegularT [0;97;1m"[0m[0;94;1mbar[0m[0;97;1m"[0m
+            [0;35m,[0m Spacing Hardline
+            [0;35m,[0m Text [0;92;1m2[0m [0;92;1m0[0m RegularT [0;97;1m"[0m[0;94;1mbaz[0m[0;97;1m"[0m
+            [0;35m,[0m Spacing Hardline
+            [0;35m,[0m Text [0;92;1m2[0m [0;92;1m0[0m RegularT [0;97;1m"[0m[0;94;1mqux[0m[0;97;1m"[0m
+            [0;35m,[0m Spacing Hardline
+            [0;35m,[0m Text [0;92;1m2[0m [0;92;1m0[0m RegularT [0;97;1m"[0m[0;94;1m;[0m[0;97;1m"[0m
+            [0;35m][0m
+        [0;93;1m][0m
+    [0;96;1m,[0m Spacing Hardline
+    [0;96;1m,[0m Group RegularG
+        [0;93;1m[[0m Text [0;92;1m0[0m [0;92;1m0[0m RegularT [0;97;1m"[0m[0;94;1min[0m[0;97;1m"[0m
+        [0;93;1m,[0m Spacing Hardline
+        [0;93;1m,[0m Text [0;92;1m0[0m [0;92;1m0[0m RegularT [0;97;1m"[0m[0;94;1mfoo[0m[0;97;1m"[0m
+        [0;93;1m][0m
+    [0;96;1m][0m
+[0;95;1m][0m

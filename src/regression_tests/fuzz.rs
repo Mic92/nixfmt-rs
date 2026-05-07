@@ -3,7 +3,7 @@
 //! Each case is a minimised crash/divergence; the assertions encode the
 //! invariant that was violated.
 
-use crate::tests_common::test_format;
+use crate::test_format;
 use crate::{format, parse_normalized};
 
 fn roundtrip(input: &str) {
@@ -33,8 +33,8 @@ fn fuzz_integer_selection_relex_as_float() {
     roundtrip("1\n.a");
     assert_eq!(format("1 .a").unwrap(), "1 .a\n");
     // Floats need no protective space; guard the fix against over-application.
-    test_format("1.5.x");
-    test_format("1..x");
+    test_format!("1.5.x");
+    test_format!("1..x");
 }
 
 /// `''\` followed by a newline must not swallow the newline into the text
@@ -56,8 +56,8 @@ fn fuzz_indented_string_blank_line_indent() {
 /// (Nix evaluation semantics); only shorter blank lines are cleared.
 #[test]
 fn fuzz_indented_string_blank_line_preserves_excess() {
-    test_format("''\n   \n  b''");
-    test_format("''\n  \nb''");
+    test_format!("''\n   \n  b''");
+    test_format!("''\n  \nb''");
 }
 
 /// `/* ... */` containing a bare `\r` (no `\n`) was treated as single-line and
@@ -148,7 +148,7 @@ fn fuzz_trailing_comment_on_multiline_simple_string() {
     // col); the patch also keeps `# c` trailing here, which differs from
     // unpatched upstream's own-line form but is the less surprising fixed
     // point. Pinned via the reference.
-    test_format("[''\na\n''#c\nt]");
+    test_format!("[''\na\n''#c\nt]");
 }
 
 /// `is_absorbable` for `Parenthesized` checked `!open.has_trivia()`, so a
@@ -162,7 +162,7 @@ fn fuzz_paren_open_trail_comment_absorbable() {
     roundtrip("{o=( # c\n{a=1;\nb=2;});}");
     roundtrip("f (# c\n[a\nb])");
     // Non-absorbable body: was already idempotent.
-    test_format("(# c\nx)");
+    test_format!("(# c\nx)");
 }
 
 /// A `# c` trailing `in` is moved onto its own line on pass 1, where it becomes

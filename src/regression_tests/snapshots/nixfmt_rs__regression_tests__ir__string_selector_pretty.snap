@@ -1,0 +1,10 @@
+---
+source: src/regression_tests/ir.rs
+description: "x.\"hello\""
+---
+[0;95;1m[[0m Group RegularG
+    [0;96;1m[[0m Text [0;92;1m0[0m [0;92;1m0[0m RegularT [0;97;1m"[0m[0;94;1mx.[0m[0;97;1m"[0m
+    [0;96;1m,[0m Group RegularG
+        [0;93;1m[[0m Text [0;92;1m0[0m [0;92;1m0[0m RegularT [0;97;1m"[0m[0;94;1m"hello"[0m[0;97;1m"[0m [0;93;1m][0m
+    [0;96;1m][0m
+[0;95;1m][0m

@@ -1,0 +1,14 @@
+---
+source: src/regression_tests/format.rs
+description: "{\n  x =\n    f (\n      a:\n      if cond aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa then\n        a\n      else\n        b\n    ) y != y;\n}"
+---
+{
+  x =
+    f (
+      a:
+      if cond aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa then
+        a
+      else
+        b
+    ) y != y;
+}

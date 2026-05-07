@@ -1,0 +1,10 @@
+---
+source: src/regression_tests/format.rs
+description: "''\n  x\n    ${lib.optionalString cond ''\n      linkPath one two three four five six seven eight nine ten eleven twelve thirteen fourteen\n    ''}\n''"
+---
+''
+  x
+    ${lib.optionalString cond ''
+      linkPath one two three four five six seven eight nine ten eleven twelve thirteen fourteen
+    ''}
+''

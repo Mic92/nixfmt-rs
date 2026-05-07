@@ -1,0 +1,11 @@
+---
+source: src/regression_tests/format.rs
+description: "''\n  ${ x\n  # multi\n  # line\n  }\n''\n"
+---
+''
+  ${
+    x
+    # multi
+    # line
+  }
+''

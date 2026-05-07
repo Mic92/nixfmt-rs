@@ -1,0 +1,8 @@
+---
+source: src/regression_tests/format.rs
+description: "{\n  getName =\n    attrs: attrs.name or \"${attrs.pname or \"«name-missing»\"}-${attrs.version or \"«version-missing»\"}\";\n}\n"
+---
+{
+  getName =
+    attrs: attrs.name or "${attrs.pname or "«name-missing»"}-${attrs.version or "«version-missing»"}";
+}

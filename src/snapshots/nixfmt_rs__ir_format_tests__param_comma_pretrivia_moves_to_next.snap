@@ -1,0 +1,22 @@
+---
+source: src/ir_format_tests.rs
+description: "{ a\n# comment\n, b }: a"
+---
+[0;95;1m[[0m Group RegularG
+    [0;96;1m[[0m Group RegularG
+        [0;93;1m[[0m Text [0;92;1m0[0m [0;92;1m0[0m RegularT [0;97;1m"[0m[0;94;1m{[0m[0;97;1m"[0m
+        [0;93;1m,[0m Spacing Hardline
+        [0;93;1m,[0m Text [0;92;1m1[0m [0;92;1m0[0m RegularT [0;97;1m"[0m[0;94;1ma,[0m[0;97;1m"[0m
+        [0;93;1m,[0m Spacing Hardline
+        [0;93;1m,[0m Text [0;92;1m1[0m [0;92;1m0[0m Comment [0;97;1m"[0m[0;94;1m# comment[0m[0;97;1m"[0m
+        [0;93;1m,[0m Spacing Hardline
+        [0;93;1m,[0m Text [0;92;1m1[0m [0;92;1m0[0m RegularT [0;97;1m"[0m[0;94;1mb[0m[0;97;1m"[0m
+        [0;93;1m,[0m Text [0;92;1m1[0m [0;92;1m0[0m Trailing [0;97;1m"[0m[0;94;1m,[0m[0;97;1m"[0m
+        [0;93;1m,[0m Spacing Hardline
+        [0;93;1m,[0m Text [0;92;1m0[0m [0;92;1m0[0m RegularT [0;97;1m"[0m[0;94;1m}[0m[0;97;1m"[0m
+        [0;93;1m][0m
+    [0;96;1m,[0m Text [0;92;1m0[0m [0;92;1m0[0m RegularT [0;97;1m"[0m[0;94;1m:[0m[0;97;1m"[0m
+    [0;96;1m,[0m Spacing Space
+    [0;96;1m,[0m Text [0;92;1m0[0m [0;92;1m0[0m RegularT [0;97;1m"[0m[0;94;1ma[0m[0;97;1m"[0m
+    [0;96;1m][0m
+[0;95;1m][0m

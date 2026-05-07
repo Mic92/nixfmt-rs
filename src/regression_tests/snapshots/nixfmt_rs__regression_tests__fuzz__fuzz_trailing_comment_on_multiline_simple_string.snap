@@ -1,0 +1,10 @@
+---
+source: src/regression_tests/fuzz.rs
+description: "[''\na\n''#c\nt]"
+---
+[
+  ''
+    a
+  '' # c
+  t
+]

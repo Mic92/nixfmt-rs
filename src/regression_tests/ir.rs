@@ -1,9 +1,9 @@
 //! IR regression tests
 //!
-//! Tests for IR formatting differences between nixfmt-rs and reference nixfmt
+//! Snapshots of the `--ir` dump for cases that previously diverged from the
+//! reference.
 
 use crate::oracle_tests;
-use crate::tests_common::test_ir_format;
 
 oracle_tests! {
     test_ir_format;

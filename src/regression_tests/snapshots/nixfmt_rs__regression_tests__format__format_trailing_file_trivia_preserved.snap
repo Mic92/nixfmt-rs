@@ -1,0 +1,8 @@
+---
+source: src/regression_tests/format.rs
+description: "{ a = 1; }\n# trailing\n"
+---
+{
+  a = 1;
+}
+# trailing

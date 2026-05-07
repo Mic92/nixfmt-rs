@@ -1,0 +1,22 @@
+---
+source: src/ir_format_tests.rs
+description: "{ start = \"\n  ${pkgs.foo}/bin/run\n\"; }"
+---
+[0;95;1m[[0m Group RegularG
+    [0;96;1m[[0m Text [0;92;1m0[0m [0;92;1m0[0m RegularT [0;97;1m"[0m[0;94;1m{[0m[0;97;1m"[0m
+    [0;96;1m,[0m Spacing Hardline
+    [0;96;1m,[0m Group RegularG
+        [0;93;1m[[0m Text [0;92;1m1[0m [0;92;1m0[0m RegularT [0;97;1m"[0m[0;94;1mstart[0m[0;97;1m"[0m
+        [0;93;1m,[0m Spacing Hardspace
+        [0;93;1m,[0m Text [0;92;1m2[0m [0;92;1m0[0m RegularT [0;97;1m"[0m[0;94;1m=[0m[0;97;1m"[0m
+        [0;93;1m,[0m Spacing Hardspace
+        [0;93;1m,[0m Group RegularG
+            [0;35m[[0m Text [0;92;1m3[0m [0;92;1m0[0m RegularT [0;97;1m"[0m[0;94;1m"
+              ${pkgs.foo}/bin/run
+            "[0m[0;97;1m"[0m [0;35m][0m
+        [0;93;1m,[0m Text [0;92;1m1[0m [0;92;1m0[0m RegularT [0;97;1m"[0m[0;94;1m;[0m[0;97;1m"[0m
+        [0;93;1m][0m
+    [0;96;1m,[0m Spacing Hardline
+    [0;96;1m,[0m Text [0;92;1m0[0m [0;92;1m0[0m RegularT [0;97;1m"[0m[0;94;1m}[0m[0;97;1m"[0m
+    [0;96;1m][0m
+[0;95;1m][0m

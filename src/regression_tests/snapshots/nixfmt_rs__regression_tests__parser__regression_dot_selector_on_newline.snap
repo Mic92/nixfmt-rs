@@ -1,0 +1,93 @@
+---
+source: src/regression_tests/parser.rs
+description: "{\n  armv6l-linux = ./foo.nix;\n}\n.${system}"
+---
+Term
+    [0;95;1m([0m Selection
+        [0;96;1m([0m Set Nothing
+            [0;93;1m([0m Ann
+                [0;35m{[0m preTrivia = fromList [0;36m[[0m[0;36m][0m
+                [0;35m,[0m sourceLine = Pos [0;92;1m1[0m
+                [0;35m,[0m value = TBraceOpen
+                [0;35m,[0m trailComment = Nothing
+                [0;35m}[0m
+            [0;93;1m)[0m
+            [0;93;1m[[0m Item
+                [0;35m([0m Assignment
+                    [0;36m[[0m Selector Nothing
+                        [0;33m([0m IDSelector
+                            [0;35;1m([0m Ann
+                                [0;36;1m{[0m preTrivia = fromList [0;33;1m[[0m[0;33;1m][0m
+                                [0;36;1m,[0m sourceLine = Pos [0;92;1m2[0m
+                                [0;36;1m,[0m value = Identifier [0;97;1m"[0m[0;94;1marmv6l-linux[0m[0;97;1m"[0m
+                                [0;36;1m,[0m trailComment = Nothing
+                                [0;36;1m}[0m
+                            [0;35;1m)[0m
+                        [0;33m)[0m
+                    [0;36m][0m
+                    [0;36m([0m Ann
+                        [0;33m{[0m preTrivia = fromList [0;35;1m[[0m[0;35;1m][0m
+                        [0;33m,[0m sourceLine = Pos [0;92;1m2[0m
+                        [0;33m,[0m value = TAssign
+                        [0;33m,[0m trailComment = Nothing
+                        [0;33m}[0m
+                    [0;36m)[0m
+                    [0;36m([0m Term
+                        [0;33m([0m Path
+                            [0;35;1m([0m Ann
+                                [0;36;1m{[0m preTrivia = fromList [0;33;1m[[0m[0;33;1m][0m
+                                [0;36;1m,[0m sourceLine = Pos [0;92;1m2[0m
+                                [0;36;1m,[0m value =
+                                    [0;33;1m[[0m TextPart [0;97;1m"[0m[0;94;1m./foo.nix[0m[0;97;1m"[0m [0;33;1m][0m
+                                [0;36;1m,[0m trailComment = Nothing
+                                [0;36;1m}[0m
+                            [0;35;1m)[0m
+                        [0;33m)[0m
+                    [0;36m)[0m
+                    [0;36m([0m Ann
+                        [0;33m{[0m preTrivia = fromList [0;35;1m[[0m[0;35;1m][0m
+                        [0;33m,[0m sourceLine = Pos [0;92;1m2[0m
+                        [0;33m,[0m value = TSemicolon
+                        [0;33m,[0m trailComment = Nothing
+                        [0;33m}[0m
+                    [0;36m)[0m
+                [0;35m)[0m
+            [0;93;1m][0m
+            [0;93;1m([0m Ann
+                [0;35m{[0m preTrivia = fromList [0;36m[[0m[0;36m][0m
+                [0;35m,[0m sourceLine = Pos [0;92;1m3[0m
+                [0;35m,[0m value = TBraceClose
+                [0;35m,[0m trailComment = Nothing
+                [0;35m}[0m
+            [0;93;1m)[0m
+        [0;96;1m)[0m
+        [0;96;1m[[0m Selector
+            [0;93;1m([0m Just
+                [0;35m([0m Ann
+                    [0;36m{[0m preTrivia = fromList [0;33m[[0m[0;33m][0m
+                    [0;36m,[0m sourceLine = Pos [0;92;1m4[0m
+                    [0;36m,[0m value = TDot
+                    [0;36m,[0m trailComment = Nothing
+                    [0;36m}[0m
+                [0;35m)[0m
+            [0;93;1m)[0m
+            [0;93;1m([0m InterpolSelector
+                [0;35m([0m Ann
+                    [0;36m{[0m preTrivia = fromList [0;33m[[0m[0;33m][0m
+                    [0;36m,[0m sourceLine = Pos [0;92;1m4[0m
+                    [0;36m,[0m value = Interpolation Term
+                        [0;33m([0m Token
+                            [0;35;1m([0m Ann
+                                [0;36;1m{[0m preTrivia = fromList [0;33;1m[[0m[0;33;1m][0m
+                                [0;36;1m,[0m sourceLine = Pos [0;92;1m4[0m
+                                [0;36;1m,[0m value = Identifier [0;97;1m"[0m[0;94;1msystem[0m[0;97;1m"[0m
+                                [0;36;1m,[0m trailComment = Nothing
+                                [0;36;1m}[0m
+                            [0;35;1m)[0m
+                        [0;33m)[0m
+                    [0;36m,[0m trailComment = Nothing
+                    [0;36m}[0m
+                [0;35m)[0m
+            [0;93;1m)[0m
+        [0;96;1m][0m Nothing
+    [0;95;1m)[0m

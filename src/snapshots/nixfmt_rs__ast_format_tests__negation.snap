@@ -1,0 +1,23 @@
+---
+source: src/ast_format_tests.rs
+description: "-5"
+---
+Negation
+    [0;95;1m([0m Ann
+        [0;96;1m{[0m preTrivia = fromList [0;93;1m[[0m[0;93;1m][0m
+        [0;96;1m,[0m sourceLine = Pos [0;92;1m1[0m
+        [0;96;1m,[0m value = TMinus
+        [0;96;1m,[0m trailComment = Nothing
+        [0;96;1m}[0m
+    [0;95;1m)[0m
+    [0;95;1m([0m Term
+        [0;96;1m([0m Token
+            [0;93;1m([0m Ann
+                [0;35m{[0m preTrivia = fromList [0;36m[[0m[0;36m][0m
+                [0;35m,[0m sourceLine = Pos [0;92;1m1[0m
+                [0;35m,[0m value = Integer [0;97;1m"[0m[0;94;1m5[0m[0;97;1m"[0m
+                [0;35m,[0m trailComment = Nothing
+                [0;35m}[0m
+            [0;93;1m)[0m
+        [0;96;1m)[0m
+    [0;95;1m)[0m

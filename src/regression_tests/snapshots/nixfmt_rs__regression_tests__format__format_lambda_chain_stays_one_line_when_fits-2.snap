@@ -1,0 +1,11 @@
+---
+source: src/regression_tests/format.rs
+description: "{\n  formatLoadPath =\n    loadPathItem: \"-L ${\n      if builtins.isString loadPathItem then loadPathItem else \"${loadPathItem}/share/emacs/site-lisp\"\n    }\";\n}"
+---
+{
+  formatLoadPath =
+    loadPathItem:
+    "-L ${
+      if builtins.isString loadPathItem then loadPathItem else "${loadPathItem}/share/emacs/site-lisp"
+    }";
+}

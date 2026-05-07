@@ -1,0 +1,76 @@
+---
+source: src/regression_tests/parser.rs
+description: "[\n  \"simple\" # comment after simple string\n  ''\n    indented\n  '' # comment after indented string\n  ./path # comment after path\n  \"end\"\n]"
+---
+Term
+    [0;95;1m([0m List
+        [0;96;1m([0m Ann
+            [0;93;1m{[0m preTrivia = fromList [0;35m[[0m[0;35m][0m
+            [0;93;1m,[0m sourceLine = Pos [0;92;1m1[0m
+            [0;93;1m,[0m value = TBrackOpen
+            [0;93;1m,[0m trailComment = Nothing
+            [0;93;1m}[0m
+        [0;96;1m)[0m
+        [0;96;1m[[0m Item
+            [0;93;1m([0m SimpleString
+                [0;35m([0m Ann
+                    [0;36m{[0m preTrivia = fromList [0;33m[[0m[0;33m][0m
+                    [0;36m,[0m sourceLine = Pos [0;92;1m2[0m
+                    [0;36m,[0m value =
+                        [0;33m[[0m
+                            [0;35;1m[[0m TextPart [0;97;1m"[0m[0;94;1msimple[0m[0;97;1m"[0m [0;35;1m][0m
+                        [0;33m][0m
+                    [0;36m,[0m trailComment = Just
+                        [0;33m([0m TrailingComment [0;97;1m"[0m[0;94;1mcomment after simple string[0m[0;97;1m"[0m [0;33m)[0m
+                    [0;36m}[0m
+                [0;35m)[0m
+            [0;93;1m)[0m
+        [0;96;1m,[0m Item
+            [0;93;1m([0m IndentedString
+                [0;35m([0m Ann
+                    [0;36m{[0m preTrivia = fromList [0;33m[[0m[0;33m][0m
+                    [0;36m,[0m sourceLine = Pos [0;92;1m3[0m
+                    [0;36m,[0m value =
+                        [0;33m[[0m
+                            [0;35;1m[[0m TextPart [0;97;1m"[0m[0;94;1mindented[0m[0;97;1m"[0m [0;35;1m][0m
+                        [0;33m,[0m [0;35;1m[[0m[0;35;1m][0m
+                        [0;33m][0m
+                    [0;36m,[0m trailComment = Just
+                        [0;33m([0m TrailingComment [0;97;1m"[0m[0;94;1mcomment after indented string[0m[0;97;1m"[0m [0;33m)[0m
+                    [0;36m}[0m
+                [0;35m)[0m
+            [0;93;1m)[0m
+        [0;96;1m,[0m Item
+            [0;93;1m([0m Path
+                [0;35m([0m Ann
+                    [0;36m{[0m preTrivia = fromList [0;33m[[0m[0;33m][0m
+                    [0;36m,[0m sourceLine = Pos [0;92;1m6[0m
+                    [0;36m,[0m value =
+                        [0;33m[[0m TextPart [0;97;1m"[0m[0;94;1m./path[0m[0;97;1m"[0m [0;33m][0m
+                    [0;36m,[0m trailComment = Just
+                        [0;33m([0m TrailingComment [0;97;1m"[0m[0;94;1mcomment after path[0m[0;97;1m"[0m [0;33m)[0m
+                    [0;36m}[0m
+                [0;35m)[0m
+            [0;93;1m)[0m
+        [0;96;1m,[0m Item
+            [0;93;1m([0m SimpleString
+                [0;35m([0m Ann
+                    [0;36m{[0m preTrivia = fromList [0;33m[[0m[0;33m][0m
+                    [0;36m,[0m sourceLine = Pos [0;92;1m7[0m
+                    [0;36m,[0m value =
+                        [0;33m[[0m
+                            [0;35;1m[[0m TextPart [0;97;1m"[0m[0;94;1mend[0m[0;97;1m"[0m [0;35;1m][0m
+                        [0;33m][0m
+                    [0;36m,[0m trailComment = Nothing
+                    [0;36m}[0m
+                [0;35m)[0m
+            [0;93;1m)[0m
+        [0;96;1m][0m
+        [0;96;1m([0m Ann
+            [0;93;1m{[0m preTrivia = fromList [0;35m[[0m[0;35m][0m
+            [0;93;1m,[0m sourceLine = Pos [0;92;1m8[0m
+            [0;93;1m,[0m value = TBrackClose
+            [0;93;1m,[0m trailComment = Nothing
+            [0;93;1m}[0m
+        [0;96;1m)[0m
+    [0;95;1m)[0m

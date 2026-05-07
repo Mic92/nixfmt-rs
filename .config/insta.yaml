@@ -1,0 +1,6 @@
+test:
+  auto_review: false
+behavior:
+  # `cargo insta test --unreferenced=reject` in CI catches stale snapshots;
+  # default `auto` would silently delete them locally.
+  unreferenced: reject

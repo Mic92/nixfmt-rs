@@ -1,0 +1,48 @@
+---
+source: src/ast_format_tests.rs
+description: "{inherit a;}"
+---
+Term
+    [0;95;1m([0m Set Nothing
+        [0;96;1m([0m Ann
+            [0;93;1m{[0m preTrivia = fromList [0;35m[[0m[0;35m][0m
+            [0;93;1m,[0m sourceLine = Pos [0;92;1m1[0m
+            [0;93;1m,[0m value = TBraceOpen
+            [0;93;1m,[0m trailComment = Nothing
+            [0;93;1m}[0m
+        [0;96;1m)[0m
+        [0;96;1m[[0m Item
+            [0;93;1m([0m Inherit
+                [0;35m([0m Ann
+                    [0;36m{[0m preTrivia = fromList [0;33m[[0m[0;33m][0m
+                    [0;36m,[0m sourceLine = Pos [0;92;1m1[0m
+                    [0;36m,[0m value = KInherit
+                    [0;36m,[0m trailComment = Nothing
+                    [0;36m}[0m
+                [0;35m)[0m Nothing
+                [0;35m[[0m IDSelector
+                    [0;36m([0m Ann
+                        [0;33m{[0m preTrivia = fromList [0;35;1m[[0m[0;35;1m][0m
+                        [0;33m,[0m sourceLine = Pos [0;92;1m1[0m
+                        [0;33m,[0m value = Identifier [0;97;1m"[0m[0;94;1ma[0m[0;97;1m"[0m
+                        [0;33m,[0m trailComment = Nothing
+                        [0;33m}[0m
+                    [0;36m)[0m
+                [0;35m][0m
+                [0;35m([0m Ann
+                    [0;36m{[0m preTrivia = fromList [0;33m[[0m[0;33m][0m
+                    [0;36m,[0m sourceLine = Pos [0;92;1m1[0m
+                    [0;36m,[0m value = TSemicolon
+                    [0;36m,[0m trailComment = Nothing
+                    [0;36m}[0m
+                [0;35m)[0m
+            [0;93;1m)[0m
+        [0;96;1m][0m
+        [0;96;1m([0m Ann
+            [0;93;1m{[0m preTrivia = fromList [0;35m[[0m[0;35m][0m
+            [0;93;1m,[0m sourceLine = Pos [0;92;1m1[0m
+            [0;93;1m,[0m value = TBraceClose
+            [0;93;1m,[0m trailComment = Nothing
+            [0;93;1m}[0m
+        [0;96;1m)[0m
+    [0;95;1m)[0m

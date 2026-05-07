@@ -1,0 +1,15 @@
+---
+source: src/ast_format_tests.rs
+description: "# comment\n42"
+---
+Term
+    [0;95;1m([0m Token
+        [0;96;1m([0m Ann
+            [0;93;1m{[0m preTrivia = fromList
+                [0;35m[[0m LineComment [0;97;1m"[0m[0;94;1m comment[0m[0;97;1m"[0m [0;35m][0m
+            [0;93;1m,[0m sourceLine = Pos [0;92;1m2[0m
+            [0;93;1m,[0m value = Integer [0;97;1m"[0m[0;94;1m42[0m[0;97;1m"[0m
+            [0;93;1m,[0m trailComment = Nothing
+            [0;93;1m}[0m
+        [0;96;1m)[0m
+    [0;95;1m)[0m
