@@ -5,6 +5,8 @@ use std::fmt;
 
 mod context;
 mod format;
+#[cfg(test)]
+mod tests;
 
 pub use context::ErrorContext;
 pub use format::render;

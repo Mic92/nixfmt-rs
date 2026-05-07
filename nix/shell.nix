@@ -4,6 +4,7 @@
   rustc,
   clippy,
   cargo-tarpaulin,
+  cargo-mutants,
   rust-analyzer,
   rustfmt,
   callPackage,
@@ -19,6 +20,7 @@ mkShell {
     rustc
     clippy
     cargo-tarpaulin
+    cargo-mutants
     rust-analyzer
     rustfmt
     # Patched reference for the parity test suite; see ./reference-nixfmt.nix.

@@ -224,3 +224,76 @@ impl Doc {
         Some(Self(result))
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::Spacing::{
+        Break, Emptyline, Hardline, Hardspace, Newlines, Softbreak, Softspace, Space,
+    };
+    use super::{Doc, Elem, Spacing, TextKind};
+
+    /// `merge` must be commutative; check both orders in one go.
+    #[track_caller]
+    fn merge_both(a: Spacing, b: Spacing, want: Spacing) {
+        assert_eq!(a.merge(b), want, "{a:?}.merge({b:?})");
+        assert_eq!(b.merge(a), want, "{b:?}.merge({a:?})");
+    }
+
+    #[test]
+    fn merge_softbreak_hardspace_is_softspace() {
+        merge_both(Softbreak, Hardspace, Softspace);
+    }
+
+    #[test]
+    fn merge_break_hardspace_is_space() {
+        merge_both(Break, Hardspace, Space);
+        merge_both(Break, Softspace, Space);
+    }
+
+    #[test]
+    fn merge_newlines_adds_counts() {
+        merge_both(Newlines(2), Newlines(3), Newlines(5));
+    }
+
+    #[test]
+    fn merge_emptyline_newlines_adds_two() {
+        merge_both(Emptyline, Newlines(3), Newlines(5));
+    }
+
+    #[test]
+    fn merge_hardspace_newlines_keeps_count() {
+        // Hardspace contributes no extra line break, unlike the catch-all arm.
+        merge_both(Hardspace, Newlines(3), Newlines(3));
+    }
+
+    #[test]
+    fn merge_other_newlines_adds_one() {
+        merge_both(Hardline, Newlines(3), Newlines(4));
+        merge_both(Break, Newlines(1), Newlines(2));
+    }
+
+    #[test]
+    fn merge_fallthrough_takes_stronger() {
+        merge_both(Softbreak, Softbreak, Softbreak);
+        merge_both(Hardspace, Hardline, Hardline);
+    }
+
+    fn text(s: &str) -> Elem {
+        Elem::Text(0, 0, TextKind::Regular, s.into())
+    }
+
+    #[test]
+    fn try_compact_respects_width_limit() {
+        let doc = Doc(vec![text("abcde"), Elem::Spacing(Space), text("fgh")]);
+        // 5 + 1 + 3 = 9 columns.
+        assert!(doc.try_compact(Some(9)).is_some());
+        assert!(doc.try_compact(Some(8)).is_none(), "must reject overflow");
+        assert!(doc.try_compact(None).is_some());
+    }
+
+    #[test]
+    fn try_compact_rejects_hard_breaks() {
+        let doc = Doc(vec![text("a"), Elem::Spacing(Hardline), text("b")]);
+        assert!(doc.try_compact(None).is_none());
+    }
+}
