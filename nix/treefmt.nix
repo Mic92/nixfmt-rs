@@ -4,7 +4,11 @@
   programs = {
     nixfmt = {
       enable = true;
-      package = pkgs.nixfmt-rs;
+      # TODO: drop the override once nixpkgs' nixfmt-rs no longer pulls the
+      # Haskell reference into checkPhase (breaks eval on riscv64).
+      package = (pkgs.nixfmt-rs.override { nixfmt = null; }).overrideAttrs {
+        doCheck = false;
+      };
     };
     rustfmt.enable = true;
   };

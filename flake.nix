@@ -35,20 +35,13 @@
         rec {
           default = pkgs.callPackage ./nix/package.nix { };
         }
-        # GHC cannot bootstrap on riscv64; the Haskell reference and the
-        # rustc-wasm32 toolchain are likewise unavailable there.
+        # The rustc-wasm32 toolchain is unavailable on riscv64.
         // pkgs.lib.optionalAttrs (!pkgs.stdenv.hostPlatform.isRiscV64) {
-          # The patched Haskell reference the test suite diffs against.
-          reference-nixfmt = (pkgs.callPackage ./nix/package.nix { }).referenceNixfmt;
           wasm = pkgs.callPackage ./nix/wasm.nix { };
         }
         // pkgs.lib.optionalAttrs pkgs.stdenv.hostPlatform.isLinux {
           # Fully static musl binary for release artifacts.
-          static = pkgs.pkgsStatic.callPackage ./nix/package.nix {
-            # The reference Haskell nixfmt does not build under pkgsStatic;
-            # parity is already covered by the dynamic build's checkPhase.
-            nixfmt = null;
-          };
+          static = pkgs.pkgsStatic.callPackage ./nix/package.nix { };
         }
       );
 
