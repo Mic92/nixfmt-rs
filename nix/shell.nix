@@ -5,15 +5,12 @@
   clippy,
   cargo-tarpaulin,
   cargo-mutants,
+  cargo-insta,
   rust-analyzer,
   rustfmt,
-  callPackage,
   hyperfine,
   rsync,
 }:
-let
-  nixfmt-rs = callPackage ./package.nix { };
-in
 mkShell {
   packages = [
     cargo
@@ -21,10 +18,9 @@ mkShell {
     clippy
     cargo-tarpaulin
     cargo-mutants
+    cargo-insta
     rust-analyzer
     rustfmt
-    # Patched reference for the parity test suite; see ./reference-nixfmt.nix.
-    nixfmt-rs.referenceNixfmt
     # scripts/bench.sh
     hyperfine
     rsync

@@ -6,23 +6,7 @@
   installShellFiles,
   versionCheckHook,
   git,
-  nixfmt,
 }:
-let
-  # The test suite diffs against a Haskell `nixfmt` carrying our upstream
-  # idempotency patches; see ./reference-nixfmt.nix for rationale. Kept inside
-  # this derivation so `callPackage ./nix/package.nix { }` works against any
-  # nixpkgs without the caller having to know about the patch set.
-  #
-  # GHC has no bootstrap path on riscv64, so the Haskell reference cannot be
-  # built there even though its meta.platforms claims otherwise. Fall back to
-  # `null` (skipping the parity suite) rather than failing the whole build.
-  referenceNixfmt =
-    if nixfmt == null || stdenv.hostPlatform.isRiscV64 then
-      null
-    else
-      import ./reference-nixfmt.nix { inherit nixfmt; };
-in
 rustPlatform.buildRustPackage {
   pname = "nixfmt-rs";
   version = (builtins.fromTOML (builtins.readFile ../Cargo.toml)).package.version;
@@ -50,12 +34,8 @@ rustPlatform.buildRustPackage {
     scdoc < docs/nixfmt.1.scd > nixfmt.1
   '';
 
-  # The test suite shells out to the reference Haskell `nixfmt` to compare
-  # output, so it must be on PATH during checkPhase. Pass `nixfmt = null`
-  # (e.g. from pkgsStatic) to skip the suite where the reference can't build.
-  doCheck = referenceNixfmt != null;
   # `git` is required by the --mergetool tests.
-  nativeCheckInputs = lib.optional (referenceNixfmt != null) referenceNixfmt ++ [ git ];
+  nativeCheckInputs = [ git ];
 
   postInstall = ''
     installManPage nixfmt.1
@@ -68,8 +48,6 @@ rustPlatform.buildRustPackage {
 
   doInstallCheck = true;
   nativeInstallCheckInputs = [ versionCheckHook ];
-
-  passthru = { inherit referenceNixfmt; };
 
   meta = {
     description = "Rust implementation of nixfmt with exact Haskell compatibility";
