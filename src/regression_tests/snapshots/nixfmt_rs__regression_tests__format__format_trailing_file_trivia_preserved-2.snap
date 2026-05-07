@@ -1,0 +1,6 @@
+---
+source: src/regression_tests/format.rs
+description: "1\n/* block */\n"
+---
+1
+# block

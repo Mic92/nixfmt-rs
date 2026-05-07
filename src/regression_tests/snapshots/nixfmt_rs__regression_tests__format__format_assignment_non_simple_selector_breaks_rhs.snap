@@ -1,0 +1,8 @@
+---
+source: src/regression_tests/format.rs
+description: "{\n  \"PKG_CONFIG_GIMP_${pkgConfigMajorVersion}_0_GIMPLIBDIR\" = \"${placeholder \"out\"}/${gimp.targetLibDir}\";\n}"
+---
+{
+  "PKG_CONFIG_GIMP_${pkgConfigMajorVersion}_0_GIMPLIBDIR" =
+    "${placeholder "out"}/${gimp.targetLibDir}";
+}

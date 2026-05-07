@@ -1,0 +1,14 @@
+---
+source: src/regression_tests/format.rs
+description: "{\n  x = mk {\n    a = 1;\n  } ''\n    echo a\n  '';\n}"
+---
+{
+  x =
+    mk
+      {
+        a = 1;
+      }
+      ''
+        echo a
+      '';
+}

@@ -1,0 +1,39 @@
+---
+source: src/regression_tests/parser.rs
+description: "x.\"y\""
+---
+Term
+    [0;95;1m([0m Selection
+        [0;96;1m([0m Token
+            [0;93;1m([0m Ann
+                [0;35m{[0m preTrivia = fromList [0;36m[[0m[0;36m][0m
+                [0;35m,[0m sourceLine = Pos [0;92;1m1[0m
+                [0;35m,[0m value = Identifier [0;97;1m"[0m[0;94;1mx[0m[0;97;1m"[0m
+                [0;35m,[0m trailComment = Nothing
+                [0;35m}[0m
+            [0;93;1m)[0m
+        [0;96;1m)[0m
+        [0;96;1m[[0m Selector
+            [0;93;1m([0m Just
+                [0;35m([0m Ann
+                    [0;36m{[0m preTrivia = fromList [0;33m[[0m[0;33m][0m
+                    [0;36m,[0m sourceLine = Pos [0;92;1m1[0m
+                    [0;36m,[0m value = TDot
+                    [0;36m,[0m trailComment = Nothing
+                    [0;36m}[0m
+                [0;35m)[0m
+            [0;93;1m)[0m
+            [0;93;1m([0m StringSelector
+                [0;35m([0m Ann
+                    [0;36m{[0m preTrivia = fromList [0;33m[[0m[0;33m][0m
+                    [0;36m,[0m sourceLine = Pos [0;92;1m1[0m
+                    [0;36m,[0m value =
+                        [0;33m[[0m
+                            [0;35;1m[[0m TextPart [0;97;1m"[0m[0;94;1my[0m[0;97;1m"[0m [0;35;1m][0m
+                        [0;33m][0m
+                    [0;36m,[0m trailComment = Nothing
+                    [0;36m}[0m
+                [0;35m)[0m
+            [0;93;1m)[0m
+        [0;96;1m][0m Nothing
+    [0;95;1m)[0m

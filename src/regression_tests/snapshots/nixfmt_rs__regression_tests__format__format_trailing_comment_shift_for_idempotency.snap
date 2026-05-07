@@ -1,0 +1,8 @@
+---
+source: src/regression_tests/format.rs
+description: "{ a # b\n= 1; }"
+---
+{
+  a  # b
+    = 1;
+}

@@ -1,0 +1,9 @@
+---
+source: src/regression_tests/format.rs
+description: "{\n  a,\n  b,\n}: a"
+---
+{
+  a,
+  b,
+}:
+a

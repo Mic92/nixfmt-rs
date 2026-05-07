@@ -1,0 +1,18 @@
+---
+source: src/regression_tests/ir.rs
+description: "f [ a ]"
+---
+[0;95;1m[[0m Group RegularG
+    [0;96;1m[[0m Group Transparent
+        [0;93;1m[[0m Text [0;92;1m0[0m [0;92;1m0[0m RegularT [0;97;1m"[0m[0;94;1mf[0m[0;97;1m"[0m [0;93;1m][0m
+    [0;96;1m,[0m Spacing Space
+    [0;96;1m,[0m Group Priority
+        [0;93;1m[[0m Text [0;92;1m1[0m [0;92;1m0[0m RegularT [0;97;1m"[0m[0;94;1m[[0m[0;97;1m"[0m
+        [0;93;1m,[0m Spacing Space
+        [0;93;1m,[0m Group RegularG
+            [0;35m[[0m Text [0;92;1m2[0m [0;92;1m0[0m RegularT [0;97;1m"[0m[0;94;1ma[0m[0;97;1m"[0m [0;35m][0m
+        [0;93;1m,[0m Spacing Space
+        [0;93;1m,[0m Text [0;92;1m1[0m [0;92;1m0[0m RegularT [0;97;1m"[0m[0;94;1m][0m[0;97;1m"[0m
+        [0;93;1m][0m
+    [0;96;1m][0m
+[0;95;1m][0m

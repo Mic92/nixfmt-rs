@@ -1,0 +1,7 @@
+---
+source: src/ir_format_tests.rs
+description: "\"prefix ${expr} suffix\""
+---
+[0;95;1m[[0m Group RegularG
+    [0;96;1m[[0m Text [0;92;1m0[0m [0;92;1m0[0m RegularT [0;97;1m"[0m[0;94;1m"prefix ${expr} suffix"[0m[0;97;1m"[0m [0;96;1m][0m
+[0;95;1m][0m

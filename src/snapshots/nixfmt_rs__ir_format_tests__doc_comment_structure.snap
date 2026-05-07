@@ -1,0 +1,14 @@
+---
+source: src/ir_format_tests.rs
+description: "/** doc comment */\nx"
+---
+[0;95;1m[[0m Spacing Hardline
+[0;95;1m,[0m Text [0;92;1m0[0m [0;92;1m0[0m Comment [0;97;1m"[0m[0;94;1m/**[0m[0;97;1m"[0m
+[0;95;1m,[0m Spacing Hardline
+[0;95;1m,[0m Text [0;92;1m0[0m [0;92;1m2[0m Comment [0;97;1m"[0m[0;94;1mdoc comment[0m[0;97;1m"[0m
+[0;95;1m,[0m Spacing Hardline
+[0;95;1m,[0m Text [0;92;1m0[0m [0;92;1m0[0m Comment [0;97;1m"[0m[0;94;1m*/[0m[0;97;1m"[0m
+[0;95;1m,[0m Spacing Hardline
+[0;95;1m,[0m Group RegularG
+    [0;96;1m[[0m Text [0;92;1m0[0m [0;92;1m0[0m RegularT [0;97;1m"[0m[0;94;1mx[0m[0;97;1m"[0m [0;96;1m][0m
+[0;95;1m][0m

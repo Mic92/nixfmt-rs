@@ -1,0 +1,35 @@
+---
+source: src/regression_tests/ir.rs
+description: if c then a else if d then e else f
+---
+[0;95;1m[[0m Group RegularG
+    [0;96;1m[[0m Group RegularG
+        [0;93;1m[[0m Text [0;92;1m0[0m [0;92;1m0[0m RegularT [0;97;1m"[0m[0;94;1mif[0m[0;97;1m"[0m
+        [0;93;1m,[0m Spacing Space
+        [0;93;1m,[0m Text [0;92;1m1[0m [0;92;1m0[0m RegularT [0;97;1m"[0m[0;94;1mc[0m[0;97;1m"[0m
+        [0;93;1m,[0m Spacing Space
+        [0;93;1m,[0m Text [0;92;1m0[0m [0;92;1m0[0m RegularT [0;97;1m"[0m[0;94;1mthen[0m[0;97;1m"[0m
+        [0;93;1m][0m
+    [0;96;1m,[0m Spacing Space
+    [0;96;1m,[0m Group RegularG
+        [0;93;1m[[0m Text [0;92;1m1[0m [0;92;1m0[0m RegularT [0;97;1m"[0m[0;94;1ma[0m[0;97;1m"[0m [0;93;1m][0m
+    [0;96;1m,[0m Spacing Space
+    [0;96;1m,[0m Text [0;92;1m0[0m [0;92;1m0[0m RegularT [0;97;1m"[0m[0;94;1melse[0m[0;97;1m"[0m
+    [0;96;1m,[0m Spacing Hardspace
+    [0;96;1m,[0m Group RegularG
+        [0;93;1m[[0m Text [0;92;1m0[0m [0;92;1m0[0m RegularT [0;97;1m"[0m[0;94;1mif[0m[0;97;1m"[0m
+        [0;93;1m,[0m Spacing Space
+        [0;93;1m,[0m Text [0;92;1m1[0m [0;92;1m0[0m RegularT [0;97;1m"[0m[0;94;1md[0m[0;97;1m"[0m
+        [0;93;1m,[0m Spacing Space
+        [0;93;1m,[0m Text [0;92;1m0[0m [0;92;1m0[0m RegularT [0;97;1m"[0m[0;94;1mthen[0m[0;97;1m"[0m
+        [0;93;1m][0m
+    [0;96;1m,[0m Spacing Hardline
+    [0;96;1m,[0m Group RegularG
+        [0;93;1m[[0m Text [0;92;1m1[0m [0;92;1m0[0m RegularT [0;97;1m"[0m[0;94;1me[0m[0;97;1m"[0m [0;93;1m][0m
+    [0;96;1m,[0m Spacing Hardline
+    [0;96;1m,[0m Text [0;92;1m0[0m [0;92;1m0[0m RegularT [0;97;1m"[0m[0;94;1melse[0m[0;97;1m"[0m
+    [0;96;1m,[0m Spacing Space
+    [0;96;1m,[0m Group RegularG
+        [0;93;1m[[0m Text [0;92;1m1[0m [0;92;1m0[0m RegularT [0;97;1m"[0m[0;94;1mf[0m[0;97;1m"[0m [0;93;1m][0m
+    [0;96;1m][0m
+[0;95;1m][0m

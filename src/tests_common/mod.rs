@@ -3,17 +3,17 @@
 mod ast_format;
 pub mod diff;
 
-pub use ast_format::{test_ast_format, test_format, test_ir_format};
+pub use ast_format::{ast_dump, fmt_output, ir_dump};
 
-/// Declare a batch of `#[test]` functions that each call `$helper`.
+/// Declare a batch of `#[test]` functions that each call `$helper!`.
 ///
-/// Used to collapse the repetitive four-line
-/// `#[test] fn name() { test_X_format("..."); }` wrappers in the oracle/
-/// regression test suites while keeping one test name per case.
+/// `$helper` is one of the snapshot macros from `ast_format` (`test_format`,
+/// `test_ast_format`, `test_ir_format`); the bang is added here so callers
+/// keep the `name => ["input", ...]` table shape.
 #[macro_export]
 macro_rules! oracle_tests {
-    ($helper:path; $( $(#[$m:meta])* $name:ident => [ $($input:expr),+ $(,)? ] ),* $(,)?) => {
-        $( $(#[$m])* #[test] fn $name() { $( $helper($input); )+ } )*
+    ($helper:ident; $( $(#[$m:meta])* $name:ident => [ $($input:expr),+ $(,)? ] ),* $(,)?) => {
+        $( $(#[$m])* #[test] fn $name() { $( $crate::$helper!($input); )+ } )*
     };
 }
 

@@ -1,0 +1,8 @@
+---
+source: src/regression_tests/format.rs
+description: "{\n  someVeryVeryVeryVeryVeryVeryVeryVeryVeryVeryVeryVeryVeryLongName = aaaaaaaa != bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb; # c\n}\n"
+---
+{
+  someVeryVeryVeryVeryVeryVeryVeryVeryVeryVeryVeryVeryVeryLongName =
+    aaaaaaaa != bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb; # c
+}

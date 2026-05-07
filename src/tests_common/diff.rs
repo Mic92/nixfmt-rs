@@ -167,33 +167,6 @@ pub fn render(a: &str, b: &str, opts: DiffOpts) -> String {
     out
 }
 
-/// Print a colored diff to stderr
-///
-/// # Example
-///
-/// ```rust
-/// let expected = "let x = 1;\nlet y = 2;";
-/// let actual = "let x = 1;\nlet z = 3;";
-/// print_colored_diff(expected, actual);
-/// // Output (with colors):
-/// //   let x = 1;
-/// // - let y = 2;
-/// // + let z = 3;
-/// ```
-pub fn print_colored_diff(expected: &str, actual: &str) {
-    eprint!(
-        "{}",
-        render(
-            expected,
-            actual,
-            DiffOpts {
-                context: None,
-                color: true,
-            },
-        )
-    );
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;

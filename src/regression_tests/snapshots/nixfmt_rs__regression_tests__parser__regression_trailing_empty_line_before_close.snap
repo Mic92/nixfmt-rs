@@ -1,0 +1,72 @@
+---
+source: src/regression_tests/parser.rs
+description: "let {\n  x = 1;\n  \n}\n"
+---
+Term
+    [0;95;1m([0m Set
+        [0;96;1m([0m Just
+            [0;93;1m([0m Ann
+                [0;35m{[0m preTrivia = fromList [0;36m[[0m[0;36m][0m
+                [0;35m,[0m sourceLine = Pos [0;92;1m1[0m
+                [0;35m,[0m value = KLet
+                [0;35m,[0m trailComment = Nothing
+                [0;35m}[0m
+            [0;93;1m)[0m
+        [0;96;1m)[0m
+        [0;96;1m([0m Ann
+            [0;93;1m{[0m preTrivia = fromList [0;35m[[0m[0;35m][0m
+            [0;93;1m,[0m sourceLine = Pos [0;92;1m1[0m
+            [0;93;1m,[0m value = TBraceOpen
+            [0;93;1m,[0m trailComment = Nothing
+            [0;93;1m}[0m
+        [0;96;1m)[0m
+        [0;96;1m[[0m Item
+            [0;93;1m([0m Assignment
+                [0;35m[[0m Selector Nothing
+                    [0;36m([0m IDSelector
+                        [0;33m([0m Ann
+                            [0;35;1m{[0m preTrivia = fromList [0;36;1m[[0m[0;36;1m][0m
+                            [0;35;1m,[0m sourceLine = Pos [0;92;1m2[0m
+                            [0;35;1m,[0m value = Identifier [0;97;1m"[0m[0;94;1mx[0m[0;97;1m"[0m
+                            [0;35;1m,[0m trailComment = Nothing
+                            [0;35;1m}[0m
+                        [0;33m)[0m
+                    [0;36m)[0m
+                [0;35m][0m
+                [0;35m([0m Ann
+                    [0;36m{[0m preTrivia = fromList [0;33m[[0m[0;33m][0m
+                    [0;36m,[0m sourceLine = Pos [0;92;1m2[0m
+                    [0;36m,[0m value = TAssign
+                    [0;36m,[0m trailComment = Nothing
+                    [0;36m}[0m
+                [0;35m)[0m
+                [0;35m([0m Term
+                    [0;36m([0m Token
+                        [0;33m([0m Ann
+                            [0;35;1m{[0m preTrivia = fromList [0;36;1m[[0m[0;36;1m][0m
+                            [0;35;1m,[0m sourceLine = Pos [0;92;1m2[0m
+                            [0;35;1m,[0m value = Integer [0;97;1m"[0m[0;94;1m1[0m[0;97;1m"[0m
+                            [0;35;1m,[0m trailComment = Nothing
+                            [0;35;1m}[0m
+                        [0;33m)[0m
+                    [0;36m)[0m
+                [0;35m)[0m
+                [0;35m([0m Ann
+                    [0;36m{[0m preTrivia = fromList [0;33m[[0m[0;33m][0m
+                    [0;36m,[0m sourceLine = Pos [0;92;1m2[0m
+                    [0;36m,[0m value = TSemicolon
+                    [0;36m,[0m trailComment = Nothing
+                    [0;36m}[0m
+                [0;35m)[0m
+            [0;93;1m)[0m
+        [0;96;1m,[0m Comments
+            [0;93;1m([0m fromList [0;35m[[0m EmptyLine [0;35m][0m [0;93;1m)[0m
+        [0;96;1m][0m
+        [0;96;1m([0m Ann
+            [0;93;1m{[0m preTrivia = fromList [0;35m[[0m[0;35m][0m
+            [0;93;1m,[0m sourceLine = Pos [0;92;1m4[0m
+            [0;93;1m,[0m value = TBraceClose
+            [0;93;1m,[0m trailComment = Nothing
+            [0;93;1m}[0m
+        [0;96;1m)[0m
+    [0;95;1m)[0m

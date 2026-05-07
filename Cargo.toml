@@ -53,6 +53,7 @@ mimalloc = { version = "0.1", default-features = false, optional = true }
 
 [dev-dependencies]
 tempfile = "3"
+insta = { version = "1", features = ["glob"] }
 
 [[bench]]
 name = "parser_benchmark"

@@ -1,0 +1,8 @@
+---
+source: src/regression_tests/format.rs
+description: "{\n  addPackageRequires =\n    pkg: packageRequires: addPackageRequiresWhen pkg packageRequires (finalAttrs: previousAttrs: true);\n}"
+---
+{
+  addPackageRequires =
+    pkg: packageRequires: addPackageRequiresWhen pkg packageRequires (finalAttrs: previousAttrs: true);
+}

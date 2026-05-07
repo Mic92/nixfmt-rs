@@ -1,10 +1,6 @@
-//! IR formatting regression tests
-//!
-//! These tests compare our IR output with the reference nixfmt implementation
-//! to ensure we match the expected pretty-printing structure.
+//! IR formatting smoke tests — snapshot the `--ir` dump.
 
 use crate::oracle_tests;
-use crate::tests_common::test_ir_format;
 
 oracle_tests! {
     test_ir_format;

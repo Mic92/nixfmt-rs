@@ -1,0 +1,10 @@
+---
+source: src/regression_tests/format.rs
+description: "''\n  ${ f a b\n  # c\n  }\n''"
+---
+''
+  ${
+    f a b
+    # c
+  }
+''

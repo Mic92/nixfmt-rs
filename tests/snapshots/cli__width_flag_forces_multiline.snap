@@ -1,0 +1,10 @@
+---
+source: tests/cli.rs
+expression: narrow_s
+---
+{
+  aaaaaaaa =
+    1;
+  bbbbbbbb =
+    2;
+}

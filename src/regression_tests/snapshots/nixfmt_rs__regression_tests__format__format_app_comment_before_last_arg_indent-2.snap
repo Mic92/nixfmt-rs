@@ -1,0 +1,11 @@
+---
+source: src/regression_tests/format.rs
+description: "{\n  v = lib.concat \".\" (\n    map toString\n      # comment\n      (builtins.filter f version)\n  );\n}"
+---
+{
+  v = lib.concat "." (
+    map toString
+      # comment
+      (builtins.filter f version)
+  );
+}

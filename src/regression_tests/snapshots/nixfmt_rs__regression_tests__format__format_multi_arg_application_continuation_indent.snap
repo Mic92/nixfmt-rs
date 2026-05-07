@@ -1,0 +1,46 @@
+---
+source: src/regression_tests/format.rs
+description: "runCommand \"n\"\n  {\n    a = 1;\n  }\n  ''\n    echo a\n  ''"
+---
+[0;95;1m[[0m Group RegularG
+    [0;96;1m[[0m Group Transparent
+        [0;93;1m[[0m Group Transparent
+            [0;35m[[0m Group Transparent
+                [0;36m[[0m Text [0;92;1m0[0m [0;92;1m0[0m RegularT [0;97;1m"[0m[0;94;1mrunCommand[0m[0;97;1m"[0m [0;36m][0m
+            [0;35m,[0m Spacing Space
+            [0;35m,[0m Group Priority
+                [0;36m[[0m Group RegularG
+                    [0;33m[[0m Text [0;92;1m1[0m [0;92;1m0[0m RegularT [0;97;1m"[0m[0;94;1m"n"[0m[0;97;1m"[0m [0;33m][0m
+                [0;36m][0m
+            [0;35m][0m
+        [0;93;1m,[0m Spacing Space
+        [0;93;1m,[0m Group Priority
+            [0;35m[[0m Text [0;92;1m1[0m [0;92;1m0[0m RegularT [0;97;1m"[0m[0;94;1m{[0m[0;97;1m"[0m
+            [0;35m,[0m Spacing Hardline
+            [0;35m,[0m Group RegularG
+                [0;36m[[0m Text [0;92;1m2[0m [0;92;1m0[0m RegularT [0;97;1m"[0m[0;94;1ma[0m[0;97;1m"[0m
+                [0;36m,[0m Spacing Hardspace
+                [0;36m,[0m Text [0;92;1m3[0m [0;92;1m0[0m RegularT [0;97;1m"[0m[0;94;1m=[0m[0;97;1m"[0m
+                [0;36m,[0m Group RegularG
+                    [0;33m[[0m Spacing Space
+                    [0;33m,[0m Text [0;92;1m4[0m [0;92;1m0[0m RegularT [0;97;1m"[0m[0;94;1m1[0m[0;97;1m"[0m
+                    [0;33m][0m
+                [0;36m,[0m Text [0;92;1m2[0m [0;92;1m0[0m RegularT [0;97;1m"[0m[0;94;1m;[0m[0;97;1m"[0m
+                [0;36m][0m
+            [0;35m,[0m Spacing Hardline
+            [0;35m,[0m Text [0;92;1m1[0m [0;92;1m0[0m RegularT [0;97;1m"[0m[0;94;1m}[0m[0;97;1m"[0m
+            [0;35m][0m
+        [0;93;1m][0m
+    [0;96;1m,[0m Spacing Space
+    [0;96;1m,[0m Group Priority
+        [0;93;1m[[0m Group RegularG
+            [0;35m[[0m Text [0;92;1m1[0m [0;92;1m0[0m RegularT [0;97;1m"[0m[0;94;1m''[0m[0;97;1m"[0m
+            [0;35m,[0m Spacing Break
+            [0;35m,[0m Text [0;92;1m2[0m [0;92;1m0[0m RegularT [0;97;1m"[0m[0;94;1mecho a[0m[0;97;1m"[0m
+            [0;35m,[0m Spacing
+                [0;36m([0m Newlines [0;92;1m1[0m [0;36m)[0m
+            [0;35m,[0m Text [0;92;1m1[0m [0;92;1m0[0m RegularT [0;97;1m"[0m[0;94;1m''[0m[0;97;1m"[0m
+            [0;35m][0m
+        [0;93;1m][0m
+    [0;96;1m][0m
+[0;95;1m][0m

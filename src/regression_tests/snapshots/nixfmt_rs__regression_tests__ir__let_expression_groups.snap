@@ -1,0 +1,65 @@
+---
+source: src/regression_tests/ir.rs
+description: "{ pinnedJson ? ./pinned.json, }: let pinned = (builtins.fromJSON (builtins.readFile pinnedJson)).pins; in pinned"
+---
+[0;95;1m[[0m Group RegularG
+    [0;96;1m[[0m Group RegularG
+        [0;93;1m[[0m Text [0;92;1m0[0m [0;92;1m0[0m RegularT [0;97;1m"[0m[0;94;1m{[0m[0;97;1m"[0m
+        [0;93;1m,[0m Spacing Hardline
+        [0;93;1m,[0m Group RegularG
+            [0;35m[[0m Text [0;92;1m1[0m [0;92;1m0[0m RegularT [0;97;1m"[0m[0;94;1mpinnedJson[0m[0;97;1m"[0m
+            [0;35m,[0m Spacing Hardspace
+            [0;35m,[0m Text [0;92;1m2[0m [0;92;1m0[0m RegularT [0;97;1m"[0m[0;94;1m?[0m[0;97;1m"[0m
+            [0;35m,[0m Spacing Hardspace
+            [0;35m,[0m Group RegularG
+                [0;36m[[0m Text [0;92;1m3[0m [0;92;1m0[0m RegularT [0;97;1m"[0m[0;94;1m./pinned.json[0m[0;97;1m"[0m [0;36m][0m
+            [0;35m][0m
+        [0;93;1m,[0m Text [0;92;1m1[0m [0;92;1m0[0m Trailing [0;97;1m"[0m[0;94;1m,[0m[0;97;1m"[0m
+        [0;93;1m,[0m Spacing Hardline
+        [0;93;1m,[0m Text [0;92;1m0[0m [0;92;1m0[0m RegularT [0;97;1m"[0m[0;94;1m}[0m[0;97;1m"[0m
+        [0;93;1m][0m
+    [0;96;1m,[0m Text [0;92;1m0[0m [0;92;1m0[0m RegularT [0;97;1m"[0m[0;94;1m:[0m[0;97;1m"[0m
+    [0;96;1m,[0m Spacing Space
+    [0;96;1m,[0m Group RegularG
+        [0;93;1m[[0m Text [0;92;1m0[0m [0;92;1m0[0m RegularT [0;97;1m"[0m[0;94;1mlet[0m[0;97;1m"[0m
+        [0;93;1m,[0m Spacing Hardline
+        [0;93;1m,[0m Group RegularG
+            [0;35m[[0m Text [0;92;1m1[0m [0;92;1m0[0m RegularT [0;97;1m"[0m[0;94;1mpinned[0m[0;97;1m"[0m
+            [0;35m,[0m Spacing Hardspace
+            [0;35m,[0m Text [0;92;1m2[0m [0;92;1m0[0m RegularT [0;97;1m"[0m[0;94;1m=[0m[0;97;1m"[0m
+            [0;35m,[0m Group RegularG
+                [0;36m[[0m Spacing Space
+                [0;36m,[0m Group RegularG
+                    [0;33m[[0m Text [0;92;1m3[0m [0;92;1m0[0m RegularT [0;97;1m"[0m[0;94;1m([0m[0;97;1m"[0m
+                    [0;33m,[0m Group RegularG
+                        [0;35;1m[[0m Text [0;92;1m5[0m [0;92;1m0[0m RegularT [0;97;1m"[0m[0;94;1mbuiltins.fromJSON[0m[0;97;1m"[0m
+                        [0;35;1m,[0m Spacing Hardspace
+                        [0;35;1m,[0m Group Priority
+                            [0;36;1m[[0m Text [0;92;1m5[0m [0;92;1m0[0m RegularT [0;97;1m"[0m[0;94;1m([0m[0;97;1m"[0m
+                            [0;36;1m,[0m Spacing Break
+                            [0;36;1m,[0m Group RegularG
+                                [0;33;1m[[0m Text [0;92;1m6[0m [0;92;1m0[0m RegularT [0;97;1m"[0m[0;94;1mbuiltins.readFile[0m[0;97;1m"[0m
+                                [0;33;1m,[0m Spacing Hardspace
+                                [0;33;1m,[0m Group RegularG
+                                    [0;95m[[0m Text [0;92;1m7[0m [0;92;1m0[0m RegularT [0;97;1m"[0m[0;94;1mpinnedJson[0m[0;97;1m"[0m [0;95m][0m
+                                [0;33;1m][0m
+                            [0;36;1m,[0m Spacing Break
+                            [0;36;1m,[0m Text [0;92;1m5[0m [0;92;1m0[0m RegularT [0;97;1m"[0m[0;94;1m)[0m[0;97;1m"[0m
+                            [0;36;1m][0m
+                        [0;35;1m][0m
+                    [0;33m,[0m Text [0;92;1m3[0m [0;92;1m0[0m RegularT [0;97;1m"[0m[0;94;1m)[0m[0;97;1m"[0m
+                    [0;33m][0m
+                [0;36m,[0m Spacing Softbreak
+                [0;36m,[0m Text [0;92;1m3[0m [0;92;1m0[0m RegularT [0;97;1m"[0m[0;94;1m.pins[0m[0;97;1m"[0m
+                [0;36m][0m
+            [0;35m,[0m Text [0;92;1m1[0m [0;92;1m0[0m RegularT [0;97;1m"[0m[0;94;1m;[0m[0;97;1m"[0m
+            [0;35m][0m
+        [0;93;1m][0m
+    [0;96;1m,[0m Spacing Hardline
+    [0;96;1m,[0m Group RegularG
+        [0;93;1m[[0m Text [0;92;1m0[0m [0;92;1m0[0m RegularT [0;97;1m"[0m[0;94;1min[0m[0;97;1m"[0m
+        [0;93;1m,[0m Spacing Hardline
+        [0;93;1m,[0m Text [0;92;1m0[0m [0;92;1m0[0m RegularT [0;97;1m"[0m[0;94;1mpinned[0m[0;97;1m"[0m
+        [0;93;1m][0m
+    [0;96;1m][0m
+[0;95;1m][0m
