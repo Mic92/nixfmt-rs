@@ -286,7 +286,9 @@ fn regression_or_operator_deprecated_syntax() {
     // In `[ (x: x) or ]`, the `or` is actually the binary `or` operator,
     // not a standalone identifier. Nix parses this as [(x: x) or <lookup-or>].
     // This is deprecated/ambiguous syntax that Nix accepts with warnings.
-    // TODO: we currently parse this as 2 list items instead of 1.
+    // Known limitation: we parse this as 2 list items instead of 1; the
+    // formatted output is still semantically valid, so only acceptance is
+    // asserted here.
     assert!(
         crate::parse("let or = 1; in [ (x: x) or ]").is_ok(),
         "we currently accept this but parse it incorrectly"
