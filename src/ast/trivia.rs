@@ -9,6 +9,10 @@ pub enum TriviaPiece {
     /// `is_doc` = true for /** */ comments
     BlockComment(bool, Box<[Box<str>]>),
     LanguageAnnotation(Box<str>),
+    /// Format directive: `/*nixfmt:disable*/` (true) or `/*nixfmt:enable*/` (false).
+    /// Recognized as a distinct variant so they are never lifted or converted
+    /// to trailing comments.
+    FormatDirective(bool),
 }
 
 /// Wrapper around a list of trivia items (comments/whitespace).

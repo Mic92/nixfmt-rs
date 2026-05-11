@@ -24,6 +24,8 @@ pub enum RawTrivia {
     BlockComment(bool, Vec<String>),
     /// Language annotation like /* lua */
     LanguageAnnotation(String),
+    /// Format directive: `/*nixfmt:disable*/` (true) or `/*nixfmt:enable*/` (false)
+    FormatDirective(bool),
 }
 
 /// Cursor-only snapshot of the lexer (no heap state).
@@ -271,9 +273,9 @@ impl Lexer {
                     self.trivia_scratch.push(c);
                 }
                 Some('/') if self.at("/*") => {
-                    // try_parse_language_annotation already restores state on
-                    // failure, so no outer save/restore is needed here.
-                    if let Some(lang_annot) = self.try_parse_language_annotation() {
+                    if let Some(directive) = self.try_parse_format_directive() {
+                        self.trivia_scratch.push(directive);
+                    } else if let Some(lang_annot) = self.try_parse_language_annotation() {
                         self.trivia_scratch.push(lang_annot);
                     } else {
                         let c = self.parse_block_comment();
