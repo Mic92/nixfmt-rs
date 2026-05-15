@@ -111,6 +111,10 @@ struct Renderer {
     target_width: usize,
     /// Indent width in spaces.
     indent_width: usize,
+    /// Byte offsets in `out` where a `/*nixfmt:disable*/` or
+    /// `/*nixfmt:enable*/` directive was emitted, with the directive kind.
+    /// Converted to line indices once layout is complete.
+    directives: Vec<(usize, bool)>,
 }
 
 /// Snapshot of the mutable parts of `Renderer` for trial-and-rollback in
@@ -119,9 +123,14 @@ struct Checkpoint {
     out_len: usize,
     col: usize,
     indents: Vec<IndentEntry>,
+    directives_len: usize,
 }
 
-pub(super) fn layout_greedy(target_width: usize, indent_width: usize, doc: Doc) -> String {
+pub(super) fn layout_greedy(
+    target_width: usize,
+    indent_width: usize,
+    doc: Doc,
+) -> (String, Vec<(usize, bool)>) {
     let doc = vec![Elem::Group(GroupKind::Regular, doc.fixup())];
 
     let mut renderer = Renderer {
@@ -130,6 +139,7 @@ pub(super) fn layout_greedy(target_width: usize, indent_width: usize, doc: Doc) 
         indents: vec![IndentEntry { indent: 0, nest: 0 }],
         target_width,
         indent_width,
+        directives: Vec::new(),
     };
     renderer.render_doc(&doc, &[]);
 
@@ -141,7 +151,21 @@ pub(super) fn layout_greedy(target_width: usize, indent_width: usize, doc: Doc) 
         result.drain(..start);
     }
     result.push('\n');
-    result
+
+    // Convert byte offsets (relative to the untrimmed buffer) to 0-based line
+    // indices in the final, trimmed output.
+    let bytes = result.as_bytes();
+    let directives = renderer
+        .directives
+        .iter()
+        .map(|&(offset, is_disable)| {
+            let offset = offset - start;
+            let line = memchr::memchr_iter(b'\n', &bytes[..offset]).count();
+            (line, is_disable)
+        })
+        .collect();
+
+    (result, directives)
 }
 
 impl Renderer {
@@ -150,6 +174,7 @@ impl Renderer {
             out_len: self.out.len(),
             col: self.col,
             indents: self.indents.clone(),
+            directives_len: self.directives.len(),
         }
     }
 
@@ -157,6 +182,7 @@ impl Renderer {
         self.out.truncate(checkpoint.out_len);
         self.col = checkpoint.col;
         self.indents.clone_from(&checkpoint.indents);
+        self.directives.truncate(checkpoint.directives_len);
     }
 
     /// Nesting level of the current line (top of the indent stack).
@@ -199,6 +225,14 @@ impl Renderer {
                 self.col += 1 + text_width(t);
                 self.out.push(' ');
                 self.out.push_str(t);
+            }
+
+            Elem::Text(nest, offset, TextKind::FormatDirective(is_disable), t) => {
+                self.render_text(*nest, *offset, t);
+                // `render_text` writes any pending indentation before the text
+                // itself, so the directive is the trailing `t.len()` bytes.
+                self.directives
+                    .push((self.out.len() - t.len(), *is_disable));
             }
 
             Elem::Text(nest, offset, _ann, t) => self.render_text(*nest, *offset, t),

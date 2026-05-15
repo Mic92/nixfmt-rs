@@ -27,6 +27,18 @@ impl Doc {
         self.text_with(TextKind::Comment, s)
     }
 
+    /// Emit a `/*nixfmt:disable*/` / `/*nixfmt:enable*/` directive.
+    /// Tagged with [`TextKind::FormatDirective`] so the renderer can report
+    /// its output position to [`crate::postprocess`].
+    pub fn format_directive(&mut self, is_disable: bool) -> &mut Self {
+        let s = if is_disable {
+            "/*nixfmt:disable*/"
+        } else {
+            "/*nixfmt:enable*/"
+        };
+        self.text_with(TextKind::FormatDirective(is_disable), s)
+    }
+
     pub fn trailing_comment(&mut self, s: impl Into<String>) -> &mut Self {
         self.text_with(TextKind::TrailingComment, s)
     }

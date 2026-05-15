@@ -85,6 +85,11 @@ pub enum TextKind {
     TrailingComment,
     /// Trailing text (only rendered in expanded groups)
     Trailing,
+    /// `/*nixfmt:disable*/` (true) / `/*nixfmt:enable*/` (false) directive.
+    /// Behaves like [`TextKind::Comment`] for layout, but the renderer also
+    /// records its output line so [`crate::postprocess`] can splice without
+    /// re-scanning the rendered text.
+    FormatDirective(bool),
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

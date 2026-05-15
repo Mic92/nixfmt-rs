@@ -45,6 +45,7 @@ pub struct LexerState {
     trivia_buffer: Trivia,
     recent_newlines: usize,
     recent_hspace: usize,
+    directives_len: usize,
 }
 
 pub struct Lexer {
@@ -67,6 +68,14 @@ pub struct Lexer {
     /// Scratch buffer reused by `parse_trivia` so the per-token trivia list
     /// does not allocate on every call.
     trivia_scratch: Vec<RawTrivia>,
+    /// `directives.len()` at the moment `trivia_start` was recorded, so
+    /// `rewind_trivia` can drop directives parsed in the rewound run.
+    trivia_start_directives: usize,
+    /// Source-order list of `/*nixfmt:disable*/` / `/*nixfmt:enable*/`
+    /// directives encountered while lexing, as `(0-based line, is_disable)`.
+    /// Used by [`crate::postprocess`] to splice unformatted regions without
+    /// re-implementing a lexer over the raw text.
+    directives: Vec<(usize, bool)>,
 }
 
 impl Lexer {
@@ -81,7 +90,14 @@ impl Lexer {
             recent_hspace: 0,
             trivia_start: None,
             trivia_scratch: Vec::new(),
+            trivia_start_directives: 0,
+            directives: Vec::new(),
         }
+    }
+
+    /// Format directives seen so far, as `(0-based line, is_disable)`.
+    pub(crate) fn format_directives(&self) -> &[(usize, bool)] {
+        &self.directives
     }
 
     /// Save current state for backtracking
@@ -93,6 +109,7 @@ impl Lexer {
             trivia_buffer: self.trivia_buffer.clone(),
             recent_newlines: self.recent_newlines,
             recent_hspace: self.recent_hspace,
+            directives_len: self.directives.len(),
         }
     }
 
@@ -104,6 +121,7 @@ impl Lexer {
         self.trivia_buffer = state.trivia_buffer;
         self.recent_newlines = state.recent_newlines;
         self.recent_hspace = state.recent_hspace;
+        self.directives.truncate(state.directives_len);
     }
 
     /// Parse a lexeme (token with trivia annotations)
@@ -233,6 +251,7 @@ impl Lexer {
             }
         }
         self.trivia_start = Some(self.mark());
+        self.trivia_start_directives = self.directives.len();
         if newlines > 0 {
             self.line = line;
             self.column = last_hspace;
@@ -249,6 +268,7 @@ impl Lexer {
     fn parse_trivia(&mut self) {
         // Save position before parsing trivia, so we can rewind if needed
         self.trivia_start = Some(self.mark());
+        self.trivia_start_directives = self.directives.len();
 
         self.trivia_scratch.clear();
         self.recent_newlines = 0;
@@ -328,6 +348,7 @@ impl Lexer {
     pub(crate) fn rewind_trivia(&mut self) {
         if let Some(mark) = self.trivia_start {
             self.reset(mark);
+            self.directives.truncate(self.trivia_start_directives);
         }
 
         self.recent_hspace = 0;

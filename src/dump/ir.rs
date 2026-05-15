@@ -77,6 +77,8 @@ impl Dump for TextKind {
             Self::Comment => "Comment",
             Self::TrailingComment => "TrailingComment",
             Self::Trailing => "Trailing",
+            Self::FormatDirective(true) => "FormatDirective(disable)",
+            Self::FormatDirective(false) => "FormatDirective(enable)",
         });
     }
 

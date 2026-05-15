@@ -19,7 +19,12 @@ impl Elem {
 
     fn is_comment(&self) -> bool {
         match self {
-            Self::Text(_, _, TextKind::Comment | TextKind::TrailingComment, _) => true,
+            Self::Text(
+                _,
+                _,
+                TextKind::Comment | TextKind::TrailingComment | TextKind::FormatDirective(_),
+                _,
+            ) => true,
             Self::Group(_, inner) => inner.iter().all(|x| x.is_comment() || x.is_hard_spacing()),
             _ => false,
         }

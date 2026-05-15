@@ -65,6 +65,13 @@ impl<'a> Iterator for LookIter<'a> {
 
 impl Doc {
     pub fn render(self, config: &RenderConfig) -> String {
+        self.render_with_directives(config).0
+    }
+
+    /// Render and also report the `(0-based line, is_disable)` positions of any
+    /// `/*nixfmt:disable*/` / `/*nixfmt:enable*/` directives in the output, so
+    /// [`crate::postprocess`] can splice without re-scanning the text.
+    pub fn render_with_directives(self, config: &RenderConfig) -> (String, Vec<(usize, bool)>) {
         layout::layout_greedy(config.width, config.indent_width, self)
     }
 

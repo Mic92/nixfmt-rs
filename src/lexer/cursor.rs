@@ -120,6 +120,16 @@ impl Lexer {
         &self.source[start..end]
     }
 
+    /// `true` if everything before the cursor on the current line is
+    /// horizontal whitespace (or the cursor is at the start of the file).
+    pub(super) fn line_start_is_blank(&self) -> bool {
+        let bytes = &self.source.as_bytes()[..self.byte_pos];
+        let line_start = memchr::memrchr2(b'\n', b'\r', bytes).map_or(0, |i| i + 1);
+        bytes[line_start..]
+            .iter()
+            .all(|b| matches!(b, b' ' | b'\t'))
+    }
+
     /// Run `f`; on `None`, rewind cursor (`byte_pos/line/column`) only.
     /// Does NOT restore `trivia_buffer`/`recent_*` — callers must not mutate
     /// those inside `f`.

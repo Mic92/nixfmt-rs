@@ -16,7 +16,14 @@ impl Lexer {
     /// Fails (without consuming) unless the rest of the line is whitespace,
     /// since directives must appear on their own line. Haskell `formatDirective`.
     pub(super) fn try_parse_format_directive(&mut self) -> Option<RawTrivia> {
-        self.try_with_cursor(|this| {
+        // Lexer line numbers are 1-based; record 0-based for splicing.
+        let line = self.line - 1;
+        // Only directives on their own line (only whitespace before them) take
+        // effect; directives in trailing position are demoted to ordinary
+        // comments by `convert_trailing` and never appear as directives in the
+        // formatted output, so they must not be recorded.
+        let own_line = self.line_start_is_blank();
+        let parsed = self.try_with_cursor(|this| {
             if !this.eat_str("/*nixfmt:") {
                 return None;
             }
@@ -34,7 +41,13 @@ impl Lexer {
                 .bytes()
                 .all(|b| matches!(b, b' ' | b'\t'))
                 .then_some(RawTrivia::FormatDirective(is_disable))
-        })
+        });
+        if let Some(RawTrivia::FormatDirective(is_disable)) = parsed
+            && own_line
+        {
+            self.directives.push((line, is_disable));
+        }
+        parsed
     }
 
     /// Parse a line comment starting with '#'

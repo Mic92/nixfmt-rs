@@ -38,11 +38,8 @@ impl Emit for TriviaPiece {
             Self::LanguageAnnotation(lang) => {
                 doc.comment(format!("/* {lang} */")).hardspace();
             }
-            Self::FormatDirective(true) => {
-                doc.comment("/*nixfmt:disable*/").hardline();
-            }
-            Self::FormatDirective(false) => {
-                doc.comment("/*nixfmt:enable*/").hardline();
+            Self::FormatDirective(is_disable) => {
+                doc.format_directive(*is_disable).hardline();
             }
         }
     }

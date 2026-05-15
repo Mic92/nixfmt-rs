@@ -51,6 +51,13 @@ impl Parser {
         Ok(Self { lexer, current })
     }
 
+    /// Format directives encountered while parsing, as `(0-based line,
+    /// is_disable)`. Only directives in code position on their own line are
+    /// included; directives inside string content are never seen by the lexer.
+    pub(crate) fn format_directives(&self) -> &[(usize, bool)] {
+        self.lexer.format_directives()
+    }
+
     /// Parse a complete Nix file
     pub(crate) fn parse_file(&mut self) -> Result<File> {
         let expr = self.parse_expression()?;

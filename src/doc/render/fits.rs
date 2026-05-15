@@ -96,7 +96,7 @@ fn fits_impl<const WRITE: bool>(
                     fail!();
                 }
             }
-            Some(Elem::Text(_, _, TextKind::Comment, t)) => {
+            Some(Elem::Text(_, _, TextKind::Comment | TextKind::FormatDirective(_), t)) => {
                 if WRITE {
                     out.push_str(t);
                 }
@@ -163,7 +163,12 @@ pub(super) fn first_line_width(chain: Look<'_>) -> usize {
         }
         match elem {
             None => return width,
-            Some(Elem::Text(_, _, TextKind::Comment | TextKind::TrailingComment, _)) => {}
+            Some(Elem::Text(
+                _,
+                _,
+                TextKind::Comment | TextKind::TrailingComment | TextKind::FormatDirective(_),
+                _,
+            )) => {}
             Some(Elem::Text(_, _, _, t)) => width += text_width(t),
             Some(Elem::Spacing(_) | Elem::Group(_, _) | Elem::Nest(..)) => unreachable!(),
         }

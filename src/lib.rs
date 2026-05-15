@@ -107,15 +107,25 @@ pub fn format(source: &str) -> Result<String> {
 /// # Errors
 /// See [`parse`].
 pub fn format_with(source: &str, opts: &Options) -> Result<String> {
-    let ast = parse(source)?;
+    let mut parser = parser::Parser::new(source)?;
+    let ast = parser.parse_file()?;
     let mut doc = doc::Doc::new();
     ast.emit(&mut doc);
     let config = RenderConfig {
         width: opts.width,
         indent_width: opts.indent,
     };
-    let formatted = doc.render(&config);
-    Ok(postprocess::apply_directives(source, &formatted))
+    let original_directives = parser.format_directives();
+    if original_directives.is_empty() {
+        return Ok(doc.render(&config));
+    }
+    let (formatted, formatted_directives) = doc.render_with_directives(&config);
+    Ok(postprocess::apply_directives(
+        source,
+        original_directives,
+        &formatted,
+        &formatted_directives,
+    ))
 }
 
 #[cfg(any(test, feature = "debug-dump"))]
