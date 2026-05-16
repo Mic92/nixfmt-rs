@@ -85,30 +85,6 @@ echo '{a=1;}' | nixfmt --ast
 echo '{a=1;}' | nixfmt --ir
 ```
 
-### Disabling formatting for a region
-
-Wrap a region in `/*nixfmt:disable*/` and `/*nixfmt:enable*/` to keep it
-verbatim, e.g. for hand-aligned tables:
-
-```nix
-{
-  formatted = 1;
-
-  /*nixfmt:disable*/
-  aligned    =    1;
-  table      =    2;
-  here       =    3;
-  /*nixfmt:enable*/
-
-  alsoFormatted = 2;
-}
-```
-
-Each directive must be on its own line (only whitespace around it). An
-unclosed `/*nixfmt:disable*/` extends to the end of the file. Directives
-inside string literals are ignored; directives inside `${}` interpolations
-are honored, since interpolations contain real Nix code.
-
 ## treefmt
 
 The binary is a drop-in for `nixfmt`, so with [treefmt-nix] just override the

@@ -12,31 +12,6 @@
 use super::{Lexer, RawTrivia};
 
 impl Lexer {
-    /// Try to parse `/*nixfmt:disable*/` or `/*nixfmt:enable*/`.
-    /// Fails (without consuming) unless the rest of the line is whitespace,
-    /// since directives must appear on their own line. Haskell `formatDirective`.
-    pub(super) fn try_parse_format_directive(&mut self) -> Option<RawTrivia> {
-        self.try_with_cursor(|this| {
-            if !this.eat_str("/*nixfmt:") {
-                return None;
-            }
-            let is_disable = if this.eat_str("disable") {
-                true
-            } else if this.eat_str("enable") {
-                false
-            } else {
-                return None;
-            };
-            if !this.eat_str("*/") {
-                return None;
-            }
-            this.peek_to_eol()
-                .bytes()
-                .all(|b| matches!(b, b' ' | b'\t'))
-                .then_some(RawTrivia::FormatDirective(is_disable))
-        })
-    }
-
     /// Parse a line comment starting with '#'
     pub(super) fn parse_line_comment(&mut self) -> RawTrivia {
         let col = self.column;

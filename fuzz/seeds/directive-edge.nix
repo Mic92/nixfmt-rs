@@ -1,2 +1,0 @@
-/*nixfmt:disable*/
-1

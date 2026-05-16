@@ -36,7 +36,6 @@ mod format;
 mod lexer;
 mod normalize;
 mod parser;
-mod postprocess;
 
 pub use error::ParseError;
 
@@ -114,8 +113,8 @@ pub fn format_with(source: &str, opts: &Options) -> Result<String> {
         width: opts.width,
         indent_width: opts.indent,
     };
-    let formatted = doc.render(&config);
-    Ok(postprocess::apply_directives(source, &formatted))
+    let output = doc.render(&config);
+    Ok(output)
 }
 
 #[cfg(any(test, feature = "debug-dump"))]

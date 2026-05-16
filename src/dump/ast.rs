@@ -274,26 +274,25 @@ impl Dump for TriviaPiece {
             LineComment(text) => [text],
             BlockComment(is_doc, lines) => [is_doc, lines],
             LanguageAnnotation(text) => [text],
-            FormatDirective(is_disable) => [is_disable],
         });
     }
 
     fn is_simple(&self) -> bool {
+        // In Haskell: constructor applications with simple args can be simple
+        // BlockComment True ["doc"] → all arguments simple → renders inline
+        // BlockComment True ["a","b","c"] → Vec with 3 elements NOT simple → renders multiline
         match self {
-            Self::EmptyLine
-            | Self::LineComment(_)
-            | Self::LanguageAnnotation(_)
-            | Self::FormatDirective(_) => true,
+            // Nullary constructor / single string arg are simple.
+            Self::EmptyLine | Self::LineComment(_) | Self::LanguageAnnotation(_) => true,
             Self::BlockComment(_is_doc, lines) => lines.is_simple(),
         }
     }
 
     fn is_atomic(&self) -> bool {
-        // Atomic = parses to a single token in pretty-simple's grammar.
-        // EmptyLine          → Other "EmptyLine"           → 1 atom
-        // FormatDirective b  → Other "FormatDirective True" → 1 atom (Bool is not a quoted/numeric atom)
-        // LineComment "x"    → Other + StringLit            → 2 atoms
-        matches!(self, Self::EmptyLine | Self::FormatDirective(_))
+        // Only nullary constructors are atomic (single element in parsed form)
+        // EmptyLine → Other "EmptyLine" → atomic
+        // LineComment "x" → Other "LineComment " + StringLit → not atomic
+        matches!(self, Self::EmptyLine)
     }
 }
 

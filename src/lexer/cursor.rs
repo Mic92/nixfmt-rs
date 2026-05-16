@@ -96,30 +96,6 @@ impl Lexer {
         self.column = mark.column;
     }
 
-    /// Consume `s` if it matches at the current position, advancing the cursor.
-    /// All characters in `s` must be ASCII (single-byte).
-    #[inline]
-    pub(super) fn eat_str(&mut self, s: &str) -> bool {
-        if self.at(s) {
-            // All directive strings are pure ASCII, so byte len == char count.
-            self.byte_pos += s.len();
-            self.column += s.len();
-            true
-        } else {
-            false
-        }
-    }
-
-    /// Return the remaining text on the current line without consuming it.
-    #[inline]
-    pub(super) fn peek_to_eol(&self) -> &str {
-        let bytes = self.source.as_bytes();
-        let start = self.byte_pos;
-        let end =
-            memchr::memchr2(b'\n', b'\r', &bytes[start..]).map_or(bytes.len(), |off| start + off);
-        &self.source[start..end]
-    }
-
     /// Run `f`; on `None`, rewind cursor (`byte_pos/line/column`) only.
     /// Does NOT restore `trivia_buffer`/`recent_*` — callers must not mutate
     /// those inside `f`.
