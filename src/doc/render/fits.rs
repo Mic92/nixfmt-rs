@@ -115,6 +115,9 @@ fn fits_impl<const WRITE: bool>(
                 width += text_width(t);
             }
             Some(Elem::Text(_, _, TextKind::Trailing, _)) => {}
+            // Directive markers always sit between hard line breaks; they
+            // can never appear on a compact line.
+            Some(Elem::Text(_, _, TextKind::Directive(_), _)) => fail!(),
             Some(Elem::Spacing(_) | Elem::Group(_, _) | Elem::Nest(..)) => unreachable!(),
         }
     }
@@ -163,7 +166,12 @@ pub(super) fn first_line_width(chain: Look<'_>) -> usize {
         }
         match elem {
             None => return width,
-            Some(Elem::Text(_, _, TextKind::Comment | TextKind::TrailingComment, _)) => {}
+            Some(Elem::Text(
+                _,
+                _,
+                TextKind::Comment | TextKind::TrailingComment | TextKind::Directive(_),
+                _,
+            )) => {}
             Some(Elem::Text(_, _, _, t)) => width += text_width(t),
             Some(Elem::Spacing(_) | Elem::Group(_, _) | Elem::Nest(..)) => unreachable!(),
         }

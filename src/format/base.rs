@@ -38,6 +38,9 @@ impl Emit for TriviaPiece {
             Self::LanguageAnnotation(lang) => {
                 doc.comment(format!("/* {lang} */")).hardspace();
             }
+            Self::Directive(d) => {
+                doc.directive(*d).hardline();
+            }
         }
     }
 }

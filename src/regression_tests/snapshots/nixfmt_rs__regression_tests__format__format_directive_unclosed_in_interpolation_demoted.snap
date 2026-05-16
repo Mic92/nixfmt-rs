@@ -1,0 +1,12 @@
+---
+source: src/regression_tests/format.rs
+description: "{\nx =''/n\"${\n/*nixfmt:disable*/\n   2\n}\";\nv  '';\n}\n"
+---
+{
+  x = ''
+    /n"${
+      /*nixfmt:disable*/
+      2
+    }";
+    v  '';
+}
