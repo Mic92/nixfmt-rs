@@ -1,0 +1,7 @@
+---
+source: src/regression_tests/format.rs
+description: "z{\n/*nixfmt:disable*/\n}c"
+---
+z {
+/*nixfmt:disable*/
+}c

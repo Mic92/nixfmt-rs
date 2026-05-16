@@ -75,6 +75,9 @@ pub(super) fn convert_leading(pts: &[RawTrivia]) -> Trivia {
                                 text.clone().into_boxed_str(),
                             ));
                         }
+                        RawTrivia::Directive(d) => {
+                            acc.push(TriviaPiece::Directive(*d));
+                        }
                         RawTrivia::Newlines(_) => unreachable!(),
                     }
 

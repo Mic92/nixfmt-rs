@@ -323,3 +323,60 @@ fn format_indented_string_lone_interpolation_with_trailing_trivia() {
     test_format!("''\n${x\n# c\n}\n''\n");
     test_format!("''\n  ${ x\n  # multi\n  # line\n  }\n''\n");
 }
+
+/// `/*nixfmt:disable*/`…`/*nixfmt:enable*/` keeps the region byte-for-byte;
+/// the parser still tokenises it, the renderer just splices the original
+/// source over the formatted output.
+/// Fixture: `tests/fixtures/nixfmt/diff/directive_*`.
+#[test]
+fn format_directive_disabled_region_verbatim() {
+    test_format!(
+        "{\n  a   =   1;\n/*nixfmt:disable*/\n  b    =    2;\n/*nixfmt:enable*/\n  c   =   3;\n}\n"
+    );
+}
+
+/// Mid-line directive is not on its own line, so it parses as a regular block
+/// comment and demotes to `# nixfmt:disable`.
+#[test]
+fn format_directive_mid_line_demotes_to_line_comment() {
+    test_format!("{\n  a = 1; /*nixfmt:disable*/\n  b   =   2;\n}\n");
+}
+
+/// Lone `/*nixfmt:enable*/` passes through unchanged so re-formatting is
+/// idempotent.
+#[test]
+fn format_directive_lone_enable_passes_through() {
+    test_format!("{\n  a   =   1;\n/*nixfmt:enable*/\n  b   =   2;\n}\n");
+}
+
+/// Unclosed disable swallows the closing `}`. Still parses (the region is
+/// tokenised normally); only the output is verbatim.
+#[test]
+fn format_directive_region_crosses_brace() {
+    test_format!("{\n  foo   =   1;\n/*nixfmt:disable*/\n  bar    =    2;\n}\n");
+}
+
+/// `/*nixfmt:enable*/` inside a string literal in the disabled region must
+/// not close it; the parser never runs the trivia path in string bodies.
+#[test]
+fn format_directive_enable_in_string_does_not_close() {
+    test_format!(
+        "{\n/*nixfmt:disable*/\n  a = ''\n/*nixfmt:enable*/\n  '';\n/*nixfmt:enable*/\n  b   =   1;\n}\n"
+    );
+}
+
+/// Unclosed disable inside a `${}` would partially overlap the `''…''` body
+/// and make its indent stripping drift by `indent_width` per pass; such a
+/// directive is demoted to a plain comment. Found by `fuzz_idempotent`.
+#[test]
+fn format_directive_unclosed_in_interpolation_demoted() {
+    test_format!("{\nx =''/n\"${\n/*nixfmt:disable*/\n   2\n}\";\nv  '';\n}\n");
+}
+
+/// Suppression must hold across `try_render_group`'s `fits` write path and
+/// the directive cursor must roll back on a failed priority-group attempt.
+/// Found by `fuzz_idempotent`.
+#[test]
+fn format_directive_in_priority_group_post_segment() {
+    test_format!("z{\n/*nixfmt:disable*/\n}c");
+}

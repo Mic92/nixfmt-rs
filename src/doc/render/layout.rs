@@ -5,12 +5,16 @@
 use super::Look;
 use super::fits::{first_line_fits, first_line_width, fits, next_indent};
 use crate::doc::{Doc, Elem, GroupKind, Spacing, TextKind, text_width};
+use crate::lexer::DirectiveAction;
 
 pub struct RenderConfig {
     /// Maximum line width (default: 100)
     pub width: usize,
     /// Indentation width in spaces (default: 2)
     pub indent_width: usize,
+    /// One action per `/*nixfmt:*/` marker in document order, from
+    /// [`crate::lexer::Lexer::take_directive_regions`].
+    pub directive_actions: Vec<DirectiveAction>,
 }
 
 /// Manually force a group to compact layout (does not recurse into inner groups)
@@ -111,6 +115,11 @@ struct Renderer {
     target_width: usize,
     /// Indent width in spaces.
     indent_width: usize,
+    directive_actions: Vec<DirectiveAction>,
+    directive_idx: usize,
+    /// Inside a `/*nixfmt:disable*/` region: drop output until the matching
+    /// `End`. The verbatim text replaces everything in between.
+    suppress: bool,
 }
 
 /// Snapshot of the mutable parts of `Renderer` for trial-and-rollback in
@@ -119,17 +128,24 @@ struct Checkpoint {
     out_len: usize,
     col: usize,
     indents: Vec<IndentEntry>,
+    /// Roll the directive cursor back so a re-render after a failed
+    /// priority-group attempt sees the same actions.
+    directive_idx: usize,
+    suppress: bool,
 }
 
-pub(super) fn layout_greedy(target_width: usize, indent_width: usize, doc: Doc) -> String {
+pub(super) fn layout_greedy(config: &RenderConfig, doc: Doc) -> String {
     let doc = vec![Elem::Group(GroupKind::Regular, doc.fixup())];
 
     let mut renderer = Renderer {
         out: String::new(),
         col: 0,
         indents: vec![IndentEntry { indent: 0, nest: 0 }],
-        target_width,
-        indent_width,
+        target_width: config.width,
+        indent_width: config.indent_width,
+        directive_actions: config.directive_actions.clone(),
+        directive_idx: 0,
+        suppress: false,
     };
     renderer.render_doc(&doc, &[]);
 
@@ -150,6 +166,8 @@ impl Renderer {
             out_len: self.out.len(),
             col: self.col,
             indents: self.indents.clone(),
+            directive_idx: self.directive_idx,
+            suppress: self.suppress,
         }
     }
 
@@ -157,6 +175,8 @@ impl Renderer {
         self.out.truncate(checkpoint.out_len);
         self.col = checkpoint.col;
         self.indents.clone_from(&checkpoint.indents);
+        self.directive_idx = checkpoint.directive_idx;
+        self.suppress = checkpoint.suppress;
     }
 
     /// Nesting level of the current line (top of the indent stack).
@@ -187,6 +207,17 @@ impl Renderer {
     }
 
     fn render_elem(&mut self, elem: &Elem, lookahead: Look<'_>) {
+        // Always examine directive markers — they toggle suppression.
+        if let Elem::Text(nest, offset, TextKind::Directive(_), t) = elem {
+            self.render_directive(*nest, *offset, t);
+            return;
+        }
+        // Drop suppressed output but keep recursing into groups so the
+        // matching `End` marker is found.
+        if self.suppress && !matches!(elem, Elem::Group(..)) {
+            return;
+        }
+
         let at_line_start = self.col == 0;
 
         match elem {
@@ -337,6 +368,12 @@ impl Renderer {
         if grp.iter().all(|s| s.is_empty()) {
             return true;
         }
+        if self.suppress {
+            // Output is dropped, so the group always "fits"; render through
+            // the suppress-aware path so the matching `End` is still found.
+            self.render_chain(grp, lookahead);
+            return true;
+        }
 
         if self.col == 0 {
             // At start of line a leading spacing is meaningless (the next
@@ -419,8 +456,37 @@ impl Renderer {
         }
     }
 
+    fn render_directive(&mut self, nest: usize, offset: usize, literal: &str) {
+        let action = self.directive_actions.get(self.directive_idx);
+        self.directive_idx += 1;
+        match action {
+            Some(DirectiveAction::Begin(region)) => {
+                if self.col != 0 {
+                    self.out.push('\n');
+                }
+                self.out.push_str(region);
+                // Mark mid-line so the following hardline is not dropped by
+                // the at-line-start spacing rule.
+                self.col = 1;
+                self.suppress = true;
+            }
+            // The verbatim text already includes the `/*nixfmt:enable*/` line.
+            Some(DirectiveAction::End) => self.suppress = false,
+            Some(DirectiveAction::Inert) | None => {
+                if !self.suppress {
+                    self.render_text(nest, offset, literal);
+                }
+            }
+        }
+    }
+
     /// Render a group (try compact first, then expand).
     fn render_group(&mut self, ann: GroupKind, body: &[Elem], lookahead: Look<'_>) {
+        if self.suppress {
+            // Skip compaction (would write to `out`); just recurse for markers.
+            self.render_doc(body, lookahead);
+            return;
+        }
         if self.try_render_group(&[body], lookahead) {
             return;
         }
