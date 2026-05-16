@@ -380,3 +380,11 @@ fn format_directive_unclosed_in_interpolation_demoted() {
 fn format_directive_in_priority_group_post_segment() {
     test_format!("z{\n/*nixfmt:disable*/\n}c");
 }
+
+/// Hoisting the head's trail comment must not pull a `/* lang */` annotation
+/// off the string it labels, or pass 2 demotes it to `# c`. Found by
+/// `fuzz_idempotent`.
+#[test]
+fn format_language_annotation_with_trail_comment() {
+    test_format!("/*c*/''''#}\nA");
+}
