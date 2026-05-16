@@ -192,8 +192,7 @@ impl Parser {
                     && !self.has_preceding_whitespace()
             }
 
-            // ./ or ../ — the tail must follow without whitespace; otherwise
-            // `.\n/c` would be lexed as `./c`, dropping the trivia in between.
+            // ./ or ../ (no space before the tail, else `.\n/c` becomes `./c`)
             Token::Dot if !self.has_preceding_whitespace() => {
                 match (self.lexer.peek(), self.lexer.peek_ahead(1)) {
                     (Some('/'), _) => self.is_path_content_at(1), // ./
