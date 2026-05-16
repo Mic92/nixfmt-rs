@@ -85,6 +85,10 @@ pub enum TextKind {
     TrailingComment,
     /// Trailing text (only rendered in expanded groups)
     Trailing,
+    /// `/*nixfmt:disable*/` / `/*nixfmt:enable*/` marker, always between hard
+    /// line breaks. The renderer replaces disabled regions with the original
+    /// source at these markers; see `Lexer::take_directive_regions`.
+    Directive(crate::ast::Directive),
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

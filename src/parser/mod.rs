@@ -51,6 +51,11 @@ impl Parser {
         Ok(Self { lexer, current })
     }
 
+    /// See [`Lexer::take_directive_regions`].
+    pub(crate) fn take_directive_regions(&mut self) -> Vec<crate::lexer::DirectiveAction> {
+        self.lexer.take_directive_regions()
+    }
+
     /// Parse a complete Nix file
     pub(crate) fn parse_file(&mut self) -> Result<File> {
         let expr = self.parse_expression()?;

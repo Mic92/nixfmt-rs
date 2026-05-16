@@ -274,16 +274,16 @@ impl Dump for TriviaPiece {
             LineComment(text) => [text],
             BlockComment(is_doc, lines) => [is_doc, lines],
             LanguageAnnotation(text) => [text],
+            Directive(d) => [d],
         });
     }
 
     fn is_simple(&self) -> bool {
-        // In Haskell: constructor applications with simple args can be simple
-        // BlockComment True ["doc"] → all arguments simple → renders inline
-        // BlockComment True ["a","b","c"] → Vec with 3 elements NOT simple → renders multiline
         match self {
-            // Nullary constructor / single string arg are simple.
-            Self::EmptyLine | Self::LineComment(_) | Self::LanguageAnnotation(_) => true,
+            Self::EmptyLine
+            | Self::LineComment(_)
+            | Self::LanguageAnnotation(_)
+            | Self::Directive(_) => true,
             Self::BlockComment(_is_doc, lines) => lines.is_simple(),
         }
     }
@@ -293,6 +293,23 @@ impl Dump for TriviaPiece {
         // EmptyLine → Other "EmptyLine" → atomic
         // LineComment "x" → Other "LineComment " + StringLit → not atomic
         matches!(self, Self::EmptyLine)
+    }
+}
+
+impl Dump for crate::ast::Directive {
+    fn dump<W: Writer>(&self, w: &mut W) {
+        dump_enum!(self, w, {
+            Disable => [],
+            Enable => [],
+        });
+    }
+
+    fn is_simple(&self) -> bool {
+        true
+    }
+
+    fn is_atomic(&self) -> bool {
+        true
     }
 }
 

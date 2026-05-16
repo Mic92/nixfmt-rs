@@ -10,8 +10,42 @@
 //! including star alignment removal and indentation fixing.
 
 use super::{Lexer, RawTrivia};
+use crate::ast::Directive;
 
 impl Lexer {
+    /// Try to parse a `/*nixfmt:<verb>*/` directive. Fails (without consuming)
+    /// unless the comment is alone on its line; unknown verbs fall through to
+    /// block-comment parsing. Region pairing and verbatim capture happen after
+    /// parsing in [`Lexer::take_directive_regions`].
+    pub(super) fn try_parse_format_directive(&mut self) -> Option<RawTrivia> {
+        if !self.at_line_start() {
+            return None;
+        }
+        self.try_with_cursor(|this| {
+            if !this.eat_str("/*nixfmt:") {
+                return None;
+            }
+            let verb_start = this.byte_pos;
+            let _ = this.take_ascii_while(|b| b.is_ascii_alphanumeric() || b == b'-');
+            let verb_end = this.byte_pos;
+            if !this.eat_str("*/") {
+                return None;
+            }
+            // Directives must be alone on their line.
+            if !this
+                .peek_to_eol()
+                .bytes()
+                .all(|b| matches!(b, b' ' | b'\t'))
+            {
+                return None;
+            }
+            match &this.source[verb_start..verb_end] {
+                "disable" => Some(RawTrivia::Directive(Directive::Disable)),
+                "enable" => Some(RawTrivia::Directive(Directive::Enable)),
+                _ => None,
+            }
+        })
+    }
     /// Parse a line comment starting with '#'
     pub(super) fn parse_line_comment(&mut self) -> RawTrivia {
         let col = self.column;

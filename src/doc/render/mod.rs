@@ -65,7 +65,7 @@ impl<'a> Iterator for LookIter<'a> {
 
 impl Doc {
     pub fn render(self, config: &RenderConfig) -> String {
-        layout::layout_greedy(config.width, config.indent_width, self)
+        layout::layout_greedy(config, self)
     }
 
     /// Normalise a freshly built document for rendering: lift hard spacings

@@ -36,6 +36,17 @@ impl Doc {
         self.text_with(TextKind::Trailing, s)
     }
 
+    pub fn directive(&mut self, d: crate::ast::Directive) -> &mut Self {
+        use crate::ast::Directive::{Disable, Enable};
+        self.text_with(
+            TextKind::Directive(d),
+            match d {
+                Disable => "/*nixfmt:disable*/",
+                Enable => "/*nixfmt:enable*/",
+            },
+        )
+    }
+
     pub fn group(&mut self, f: impl FnOnce(&mut Self)) -> &mut Self {
         self.group_with(GroupKind::Regular, f)
     }

@@ -1,0 +1,11 @@
+---
+source: src/regression_tests/format.rs
+description: "{\n  a   =   1;\n/*nixfmt:disable*/\n  b    =    2;\n/*nixfmt:enable*/\n  c   =   3;\n}\n"
+---
+{
+  a = 1;
+/*nixfmt:disable*/
+  b    =    2;
+/*nixfmt:enable*/
+  c = 3;
+}

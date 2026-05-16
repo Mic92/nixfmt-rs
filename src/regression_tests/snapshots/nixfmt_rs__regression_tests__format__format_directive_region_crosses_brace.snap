@@ -1,0 +1,9 @@
+---
+source: src/regression_tests/format.rs
+description: "{\n  foo   =   1;\n/*nixfmt:disable*/\n  bar    =    2;\n}\n"
+---
+{
+  foo = 1;
+/*nixfmt:disable*/
+  bar    =    2;
+}
