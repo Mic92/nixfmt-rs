@@ -300,6 +300,15 @@ fn regression_comparison_chain_should_fail() {
     assert_parse_rejected("a == b == c");
 }
 
+/// Incomplete `<path>` forms lex as `Less` and are then rejected by the
+/// parser, as in Nix and Haskell nixfmt.
+#[test]
+fn regression_incomplete_env_path_rejected() {
+    assert_parse_rejected("[ a <b ]");
+    assert_parse_rejected("<a//b>");
+    assert_parse_rejected("<>");
+}
+
 #[test]
 fn regression_path_trailing_slash_current() {
     assert_parse_rejected("./");

@@ -227,6 +227,18 @@ fn format_interp_inline_short_forced_compact() {
     test_ir_format!("''\n  prefix ${lib.makeBinPath [ gdb ]} suffix\n''");
 }
 
+/// `<` lexes as a search path only when the full Nix SPATH pattern
+/// `<{PATH_CHAR}+(/{PATH_CHAR}+)*>` matches; otherwise it is `Less`.
+/// <https://github.com/Mic92/nixfmt-rs/issues/88>
+#[test]
+fn format_less_than_without_space_not_env_path() {
+    test_format!("let a = 1; b = 2; in a<b");
+    // `a<b>c` is `a <b> c` (SPATH wins), not a comparison chain.
+    test_format!("a<b>c");
+    test_format!("<foo+bar/baz.nix>");
+    test_format!("<.foo>");
+}
+
 /// Non-chainable comparison operators (`<`, `>`, `<=`, `>=`, `==`, `!=`) use
 /// `softline` before the operator and `hardspace` after, with no extra `nest`
 /// on the RHS, so a short RHS stays on the LHS's last line even when the LHS
