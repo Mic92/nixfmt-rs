@@ -36,7 +36,6 @@ mod format;
 mod lexer;
 mod normalize;
 mod parser;
-mod postprocess;
 
 pub use error::ParseError;
 
@@ -107,15 +106,18 @@ pub fn format(source: &str) -> Result<String> {
 /// # Errors
 /// See [`parse`].
 pub fn format_with(source: &str, opts: &Options) -> Result<String> {
-    let ast = parse(source)?;
+    let mut parser = parser::Parser::new(source)?;
+    let ast = parser.parse_file()?;
+    let directive_actions = parser.take_directive_regions();
     let mut doc = doc::Doc::new();
     ast.emit(&mut doc);
     let config = RenderConfig {
         width: opts.width,
         indent_width: opts.indent,
+        directive_actions,
     };
-    let formatted = doc.render(&config);
-    Ok(postprocess::apply_directives(source, &formatted))
+    let output = doc.render(&config);
+    Ok(output)
 }
 
 #[cfg(any(test, feature = "debug-dump"))]

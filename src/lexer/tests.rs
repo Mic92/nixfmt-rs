@@ -197,3 +197,111 @@ fn test_lexeme_preserves_trivia() {
             .any(|t| matches!(t, TriviaPiece::EmptyLine))
     );
 }
+
+// --- /*nixfmt:disable*/ / /*nixfmt:enable*/ directives --------------------
+//
+// Driven through `Parser`, not bare `lexeme()` loops: directive recognition
+// is correct only under the parser's control flow (string bodies are lexed
+// by dedicated string functions that never touch the trivia path). Behaviour
+// tests that care about the formatted output live in
+// `regression_tests/format.rs`.
+
+use crate::lexer::DirectiveAction;
+
+/// Parse `src` and return the captured verbatim regions (`Begin` actions only).
+fn regions(src: &str) -> Vec<Box<str>> {
+    let mut p = crate::parser::Parser::new(src).expect("lexer init");
+    p.parse_file().expect("parse");
+    p.take_directive_regions()
+        .into_iter()
+        .filter_map(|a| match a {
+            DirectiveAction::Begin(text) => Some(text),
+            DirectiveAction::End | DirectiveAction::Inert => None,
+        })
+        .collect()
+}
+
+#[test]
+fn directive_basic_region() {
+    let src = "{\n/*nixfmt:disable*/\n  a   =   1;\n/*nixfmt:enable*/\n  x = 1;\n}";
+    assert_eq!(
+        regions(src),
+        vec!["/*nixfmt:disable*/\n  a   =   1;\n/*nixfmt:enable*/".into()],
+    );
+}
+
+#[test]
+fn directive_unclosed_extends_to_eof() {
+    let src = "{ x = 1; }\n/*nixfmt:disable*/\ntrailing\ngarbage\n";
+    assert_eq!(
+        regions(src),
+        vec!["/*nixfmt:disable*/\ntrailing\ngarbage".into()],
+    );
+}
+
+#[test]
+fn directive_preserves_leading_indent() {
+    let src = "{\n  /*nixfmt:disable*/\n  a = 1;\n  /*nixfmt:enable*/\n}";
+    assert_eq!(
+        regions(src),
+        vec!["  /*nixfmt:disable*/\n  a = 1;\n  /*nixfmt:enable*/".into()],
+    );
+}
+
+#[test]
+fn directive_not_at_line_start_no_region() {
+    // Block comment, not a directive: no unclosed disable region.
+    assert!(regions("{ a = 1; /*nixfmt:disable*/ }").is_empty());
+}
+
+#[test]
+fn directive_with_trailing_text_no_region() {
+    // Trailing text after `*/` on the same line: not a directive.
+    assert!(regions("{\n/*nixfmt:disable*/ # not a directive\na = 1;\n}").is_empty());
+}
+
+#[test]
+fn directive_unknown_verb_no_region() {
+    assert!(regions("{\n/*nixfmt:bogus*/\na = 1;\n}").is_empty());
+}
+
+#[test]
+fn directive_lone_enable_no_region() {
+    assert!(regions("{\n/*nixfmt:enable*/\na = 1;\n}").is_empty());
+}
+
+#[test]
+fn directive_nested_disable_inert() {
+    // Inner disable is inert; only the outer pair forms a single region.
+    let src = "{\n/*nixfmt:disable*/\n/*nixfmt:disable*/\na = 1;\n/*nixfmt:enable*/\n}";
+    assert_eq!(
+        regions(src),
+        vec!["/*nixfmt:disable*/\n/*nixfmt:disable*/\na = 1;\n/*nixfmt:enable*/".into()],
+    );
+}
+
+#[test]
+fn directive_enable_inside_string_does_not_close() {
+    // The parser lexes string bodies through dedicated string functions that
+    // never run the trivia path, so directive-like text inside a string is
+    // not recognised. The region runs through to the real `/*nixfmt:enable*/`
+    // after the string.
+    let src =
+        "{\n/*nixfmt:disable*/\n  a = ''\n/*nixfmt:enable*/\n  '';\n/*nixfmt:enable*/\n  b = 1;\n}";
+    assert_eq!(
+        regions(src),
+        vec!["/*nixfmt:disable*/\n  a = ''\n/*nixfmt:enable*/\n  '';\n/*nixfmt:enable*/".into()],
+    );
+}
+
+#[test]
+fn directive_two_regions() {
+    let src = "{\n/*nixfmt:disable*/\na = 1;\n/*nixfmt:enable*/\nb = 1;\n/*nixfmt:disable*/\nc = 1;\n/*nixfmt:enable*/\n}";
+    assert_eq!(
+        regions(src),
+        vec![
+            "/*nixfmt:disable*/\na = 1;\n/*nixfmt:enable*/".into(),
+            "/*nixfmt:disable*/\nc = 1;\n/*nixfmt:enable*/".into(),
+        ],
+    );
+}

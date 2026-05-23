@@ -48,11 +48,23 @@ fn absorb_inner(doc: &mut Doc, arg: &Expression) {
     arg.emit(doc);
 }
 
+/// Leading `/* lang */` annotations are not hoisted: they must stay next to
+/// the string they label, see `strip_first_comment`.
+const fn is_lang_annot(p: &TriviaPiece) -> bool {
+    matches!(p, TriviaPiece::LanguageAnnotation(_))
+}
+
 /// Collect the leading trivia that would precede `expr`'s first token if its
 /// trailing comment were hoisted into `pre_trivia`, without mutating `expr`.
 fn first_token_comment(expr: &Expression) -> Trivia {
     let slot = expr.first_token();
-    let mut t = slot.pre_trivia.clone();
+    let mut t = Trivia::new();
+    t.extend(
+        slot.pre_trivia
+            .iter()
+            .skip_while(|p| is_lang_annot(p))
+            .cloned(),
+    );
     if let Some(tc) = slot.trail_comment {
         t.push(tc.into());
     }
@@ -64,7 +76,14 @@ fn first_token_comment(expr: &Expression) -> Trivia {
 fn strip_first_comment(expr: &Expression) -> Expression {
     let mut e = expr.clone();
     let slot = e.first_token_mut();
-    *slot.pre_trivia = Trivia::new();
+    let mut kept = Trivia::new();
+    kept.extend(
+        slot.pre_trivia
+            .iter()
+            .take_while(|p| is_lang_annot(p))
+            .cloned(),
+    );
+    *slot.pre_trivia = kept;
     *slot.trail_comment = None;
     e
 }
@@ -258,15 +277,7 @@ pub(super) fn emit_app_parts(
     a: &Expression,
     head: Option<&Expression>,
 ) {
-    let mut comment = first_token_comment(head.unwrap_or(f));
-
-    // A lone /* lang */ renders inline with no leading separator; hoisting it
-    // would place it directly after the caller's preceding token (re-lexing
-    // `a /` + `/* sh */` as the `//` operator). Leave it on the term so
-    // `ctx.pre` lands first (patch 0003).
-    if let [TriviaPiece::LanguageAnnotation(_)] = &*comment {
-        comment = Trivia::new();
-    }
+    let comment = first_token_comment(head.unwrap_or(f));
 
     let post_hardline = |doc: &mut Doc| {
         if ctx.has_post && !comment.is_empty() {

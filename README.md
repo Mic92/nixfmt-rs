@@ -105,9 +105,7 @@ verbatim, e.g. for hand-aligned tables:
 ```
 
 Each directive must be on its own line (only whitespace around it). An
-unclosed `/*nixfmt:disable*/` extends to the end of the file. Directives
-inside string literals are ignored; directives inside `${}` interpolations
-are honored, since interpolations contain real Nix code.
+unclosed `/*nixfmt:disable*/` extends to the end of the file.
 
 ## treefmt
 

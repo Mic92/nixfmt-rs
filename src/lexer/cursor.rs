@@ -97,11 +97,10 @@ impl Lexer {
     }
 
     /// Consume `s` if it matches at the current position, advancing the cursor.
-    /// All characters in `s` must be ASCII (single-byte).
+    /// `s` must be ASCII with no newlines (single byte == single column).
     #[inline]
     pub(super) fn eat_str(&mut self, s: &str) -> bool {
         if self.at(s) {
-            // All directive strings are pure ASCII, so byte len == char count.
             self.byte_pos += s.len();
             self.column += s.len();
             true
@@ -118,6 +117,22 @@ impl Lexer {
         let end =
             memchr::memchr2(b'\n', b'\r', &bytes[start..]).map_or(bytes.len(), |off| start + off);
         &self.source[start..end]
+    }
+
+    /// Byte offset of the start of the current line (after the preceding `\n`
+    /// or `\r`, or 0 at the start of the file).
+    #[inline]
+    pub(super) fn line_start(&self) -> usize {
+        let bytes = &self.source.as_bytes()[..self.byte_pos];
+        memchr::memrchr2(b'\n', b'\r', bytes).map_or(0, |i| i + 1)
+    }
+
+    /// True when only horizontal whitespace precedes the cursor on this line.
+    #[inline]
+    pub(super) fn at_line_start(&self) -> bool {
+        self.source.as_bytes()[self.line_start()..self.byte_pos]
+            .iter()
+            .all(|b| matches!(b, b' ' | b'\t'))
     }
 
     /// Run `f`; on `None`, rewind cursor (`byte_pos/line/column`) only.

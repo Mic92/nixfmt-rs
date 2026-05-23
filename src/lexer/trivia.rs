@@ -11,7 +11,7 @@ use crate::ast::{TrailingComment, Trivia, TriviaPiece};
 /// Check if a `RawTrivia` should be classified as trailing
 const fn is_trailing(pt: &RawTrivia) -> bool {
     match pt {
-        RawTrivia::LineComment { .. } | RawTrivia::FormatDirective(_) => true,
+        RawTrivia::LineComment { .. } => true,
         RawTrivia::BlockComment(false, lines) => lines.len() <= 1,
         _ => false,
     }
@@ -26,8 +26,6 @@ fn convert_trailing(pts: &[RawTrivia]) -> Option<TrailingComment> {
             RawTrivia::BlockComment(false, lines) if lines.len() == 1 => {
                 Some(lines[0].trim().to_string())
             }
-            RawTrivia::FormatDirective(true) => Some("nixfmt:disable".to_string()),
-            RawTrivia::FormatDirective(false) => Some("nixfmt:enable".to_string()),
             _ => None,
         })
         .filter(|s| !s.is_empty())
@@ -77,8 +75,8 @@ pub(super) fn convert_leading(pts: &[RawTrivia]) -> Trivia {
                                 text.clone().into_boxed_str(),
                             ));
                         }
-                        RawTrivia::FormatDirective(is_disable) => {
-                            acc.push(TriviaPiece::FormatDirective(*is_disable));
+                        RawTrivia::Directive(d) => {
+                            acc.push(TriviaPiece::Directive(*d));
                         }
                         RawTrivia::Newlines(_) => unreachable!(),
                     }

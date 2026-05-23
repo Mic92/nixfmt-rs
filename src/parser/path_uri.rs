@@ -192,18 +192,24 @@ impl Parser {
                     && !self.has_preceding_whitespace()
             }
 
-            // ./ or ../
-            Token::Dot => match (self.lexer.peek(), self.lexer.peek_ahead(1)) {
-                (Some('/'), _) => self.is_path_content_at(1), // ./
-                (Some('.'), Some('/')) => self.is_path_content_at(2), // ../
-                _ => false,
-            },
+            // ./ or ../ (no space before the tail, else `.\n/c` becomes `./c`)
+            Token::Dot if !self.has_preceding_whitespace() => {
+                match (self.lexer.peek(), self.lexer.peek_ahead(1)) {
+                    (Some('/'), _) => self.is_path_content_at(1), // ./
+                    (Some('.'), Some('/')) => self.is_path_content_at(2), // ../
+                    _ => false,
+                }
+            }
 
             // /path → path (no space before), expr /path → division (space before)
             Token::Div => self.is_path_content_at(0) && !self.has_preceding_whitespace(),
 
             // ~/
-            Token::Tilde => self.lexer.peek() == Some('/') && self.is_path_content_at(1),
+            Token::Tilde => {
+                self.lexer.peek() == Some('/')
+                    && self.is_path_content_at(1)
+                    && !self.has_preceding_whitespace()
+            }
 
             _ => false,
         }

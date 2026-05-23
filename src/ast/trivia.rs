@@ -1,5 +1,16 @@
 //! Comments and whitespace attached to tokens.
 
+/// A `/*nixfmt:<verb>*/` formatter directive, recognised only when the
+/// comment is alone on its line. The region between a `Disable` and the
+/// matching `Enable` is still parsed normally; the renderer just emits the
+/// original source verbatim instead of the formatted output. See
+/// `Lexer::take_directive_regions` for the pairing rules.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Directive {
+    Disable,
+    Enable,
+}
+
 /// A single trivia element.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum TriviaPiece {
@@ -9,10 +20,9 @@ pub enum TriviaPiece {
     /// `is_doc` = true for /** */ comments
     BlockComment(bool, Box<[Box<str>]>),
     LanguageAnnotation(Box<str>),
-    /// Format directive: `/*nixfmt:disable*/` (true) or `/*nixfmt:enable*/` (false).
-    /// Recognized as a distinct variant so they are never lifted or converted
-    /// to trailing comments.
-    FormatDirective(bool),
+    /// Distinct from `BlockComment` so directives are never lifted, merged,
+    /// or normalised like ordinary comments.
+    Directive(Directive),
 }
 
 /// Wrapper around a list of trivia items (comments/whitespace).

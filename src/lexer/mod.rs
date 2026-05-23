@@ -2,7 +2,19 @@
 //!
 //! Ports the comment normalization logic from nixfmt's Lexer.hs
 
-use crate::ast::{Token, Trivia};
+use crate::ast::{Directive, Token, Trivia};
+
+/// What the renderer does at the Nth directive marker, in document order.
+/// Computed by [`Lexer::take_directive_regions`].
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum DirectiveAction {
+    /// Emit the verbatim original source and suppress output until `End`.
+    Begin(Box<str>),
+    End,
+    /// Lone enable, nested disable, or a region that would escape its `${}`.
+    /// Pass through as a comment.
+    Inert,
+}
 
 mod comments;
 mod cursor;
@@ -24,8 +36,8 @@ pub enum RawTrivia {
     BlockComment(bool, Vec<String>),
     /// Language annotation like /* lua */
     LanguageAnnotation(String),
-    /// Format directive: `/*nixfmt:disable*/` (true) or `/*nixfmt:enable*/` (false)
-    FormatDirective(bool),
+    /// `/*nixfmt:<verb>*/` directive on its own line.
+    Directive(Directive),
 }
 
 /// Cursor-only snapshot of the lexer (no heap state).
@@ -45,6 +57,9 @@ pub struct LexerState {
     trivia_buffer: Trivia,
     recent_newlines: usize,
     recent_hspace: usize,
+    /// `directive_offsets` length at save time, truncated on restore.
+    directive_offsets_len: usize,
+    interp_depth: u32,
 }
 
 pub struct Lexer {
@@ -67,6 +82,12 @@ pub struct Lexer {
     /// Scratch buffer reused by `parse_trivia` so the per-token trivia list
     /// does not allocate on every call.
     trivia_scratch: Vec<RawTrivia>,
+    /// `/*nixfmt:*/` directives seen so far: `(line_start, line_end,
+    /// is_disable, interp_depth)`. Paired up in [`Self::take_directive_regions`].
+    directive_offsets: Vec<(usize, usize, bool, u32)>,
+    /// `${}` nesting depth, maintained by the parser via
+    /// [`Self::enter_interp`] / [`Self::exit_interp`].
+    interp_depth: u32,
 }
 
 impl Lexer {
@@ -81,7 +102,60 @@ impl Lexer {
             recent_hspace: 0,
             trivia_start: None,
             trivia_scratch: Vec::new(),
+            directive_offsets: Vec::new(),
+            interp_depth: 0,
         }
+    }
+
+    pub(crate) const fn enter_interp(&mut self) {
+        self.interp_depth += 1;
+    }
+
+    pub(crate) const fn exit_interp(&mut self) {
+        self.interp_depth = self.interp_depth.saturating_sub(1);
+    }
+
+    /// Pair recorded directives in document order. A `disable` opens a region
+    /// only with a matching `enable` at the same `${}` depth, or EOF at depth
+    /// 0; otherwise it is demoted to `Inert` because the verbatim splice would
+    /// partially overlap a `''…''` body and make its indent stripping diverge
+    /// across passes. The renderer replays the same pairing over the markers
+    /// it sees, so the action list and the document stay aligned.
+    pub(crate) fn take_directive_regions(&mut self) -> Vec<DirectiveAction> {
+        let mut offsets = std::mem::take(&mut self.directive_offsets);
+        if offsets.is_empty() {
+            return Vec::new();
+        }
+        // Backtracking parses can record a directive, rewind, and record it
+        // again; offsets are unique per directive so dedup-by-start is exact.
+        offsets.sort_unstable_by_key(|&(start, ..)| start);
+        offsets.dedup_by_key(|&mut (start, ..)| start);
+
+        let mut actions = vec![DirectiveAction::Inert; offsets.len()];
+        // (action index, line start, interp depth) of the currently open disable.
+        let mut open: Option<(usize, usize, u32)> = None;
+        for (n, &(line_start, line_end, is_disable, depth)) in offsets.iter().enumerate() {
+            match (is_disable, open) {
+                (true, None) => open = Some((n, line_start, depth)),
+                // Matching enable at the same `${}` nesting depth closes the region.
+                (false, Some((begin_n, start, open_depth))) if depth == open_depth => {
+                    actions[begin_n] = DirectiveAction::Begin(self.source[start..line_end].into());
+                    actions[n] = DirectiveAction::End;
+                    open = None;
+                }
+                // Nested disable / lone enable / depth-mismatched enable: inert.
+                _ => {}
+            }
+        }
+        // Unclosed disable: only valid at top level (extends to end of file).
+        // Inside a `${}` it would escape the interpolation, so leave it Inert.
+        if let Some((begin_n, start, 0)) = open {
+            // Trim a trailing newline so the verbatim splice does not double
+            // the final break.
+            actions[begin_n] =
+                DirectiveAction::Begin(self.source[start..].trim_end_matches(['\n', '\r']).into());
+        }
+        actions
     }
 
     /// Save current state for backtracking
@@ -93,6 +167,8 @@ impl Lexer {
             trivia_buffer: self.trivia_buffer.clone(),
             recent_newlines: self.recent_newlines,
             recent_hspace: self.recent_hspace,
+            directive_offsets_len: self.directive_offsets.len(),
+            interp_depth: self.interp_depth,
         }
     }
 
@@ -104,6 +180,8 @@ impl Lexer {
         self.trivia_buffer = state.trivia_buffer;
         self.recent_newlines = state.recent_newlines;
         self.recent_hspace = state.recent_hspace;
+        self.directive_offsets.truncate(state.directive_offsets_len);
+        self.interp_depth = state.interp_depth;
     }
 
     /// Parse a lexeme (token with trivia annotations)
@@ -273,7 +351,19 @@ impl Lexer {
                     self.trivia_scratch.push(c);
                 }
                 Some('/') if self.at("/*") => {
+                    // try_parse_* helpers restore state on failure, so no
+                    // outer save/restore is needed here.
+                    let line_start = self.line_start();
                     if let Some(directive) = self.try_parse_format_directive() {
+                        let line_end = self.byte_pos + self.peek_to_eol().len();
+                        let is_disable =
+                            matches!(&directive, RawTrivia::Directive(Directive::Disable));
+                        self.directive_offsets.push((
+                            line_start,
+                            line_end,
+                            is_disable,
+                            self.interp_depth,
+                        ));
                         self.trivia_scratch.push(directive);
                     } else if let Some(lang_annot) = self.try_parse_language_annotation() {
                         self.trivia_scratch.push(lang_annot);

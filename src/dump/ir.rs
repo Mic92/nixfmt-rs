@@ -77,6 +77,8 @@ impl Dump for TextKind {
             Self::Comment => "Comment",
             Self::TrailingComment => "TrailingComment",
             Self::Trailing => "Trailing",
+            Self::Directive(crate::ast::Directive::Disable) => "DirectiveDisable",
+            Self::Directive(crate::ast::Directive::Enable) => "DirectiveEnable",
         });
     }
 
