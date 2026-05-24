@@ -308,7 +308,22 @@ fn regression_unclosed_block_comment_rejected() {
     // Properly closed is fine
     assert!(crate::parse("t /* b */").is_ok());
 }
-
+/// `or` is a soft keyword in Nix: it cannot be used as a lambda parameter
+/// or set-pattern formal, but works in attribute paths and binding names.
+#[test]
+fn regression_or_rejected_as_lambda_param() {
+    assert_parse_rejected("or: or");
+    assert_parse_rejected("{ or }: or");
+    assert_parse_rejected("{ or ? 1 }: or");
+    // `or` in binding/attrpath position is valid
+    assert!(crate::parse("{ or = 1; }").is_ok());
+    assert!(crate::parse("{ or = 1; }.or").is_ok());
+    assert!(crate::parse("x.a or 1").is_ok());
+    // TODO: Nix also rejects `or` in expression position (e.g. `[ or ]`,
+    // `let or = 1; in or`), but we still accept it.  Fixing this requires
+    // changes to term parsing that may interact with the deprecated
+    // or-as-identifier support.
+}
 /// Integer literals that overflow signed 64-bit are rejected at lex time,
 /// matching `nix-instantiate --parse` behaviour.
 #[test]

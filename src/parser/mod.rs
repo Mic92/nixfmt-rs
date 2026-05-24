@@ -93,7 +93,7 @@ impl Parser {
     fn parse_abstraction_or_operation(&mut self) -> Result<Expression> {
         match &self.current.value {
             Token::BraceOpen => self.parse_set_parameter_or_literal(),
-            Token::Identifier(_) => {
+            Token::Identifier(name) if name.as_str() != "or" => {
                 // URI check must precede the lambda-parameter check: both look for `:`.
                 if self.looks_like_uri() {
                     return self.parse_operation_or_lambda();
