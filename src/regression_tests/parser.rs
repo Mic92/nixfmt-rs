@@ -325,6 +325,29 @@ fn regression_or_rejected_as_lambda_param() {
     // or-as-identifier support.
 }
 
+/// Nix lexes `ident.<pathchars>/` as a path (e.g. `a.b/c`, `pkg.org/x`).
+/// Without special handling, the parser consumed `a.b` as an attrpath
+/// and treated `/c` as division.
+#[test]
+fn regression_ident_dot_path() {
+    assert!(crate::parse("a.b/c").is_ok());
+    assert!(crate::parse("x.y.z/w").is_ok());
+    assert!(crate::parse("ple.org/a").is_ok());
+    // Space breaks the path: `a` is a separate identifier
+    // (.b/c is still a valid path on its own, so the whole
+    // expression parses as function application)
+    assert!(crate::parse("a .b/c").is_ok());
+}
+
+/// `//` in the middle of a path terminates the path; Nix treats `//`
+/// as the update operator.
+#[test]
+fn regression_double_slash_ends_path() {
+    // a/b is a path, a//b is `a // b` (update)
+    assert!(crate::parse("a/b").is_ok());
+    assert!(crate::parse("a/b//c").is_ok()); // path `a/b` then `// c`
+}
+
 /// Nix treats `.<pathchars>/` as a relative path, not just `./` and `../`.
 #[test]
 fn regression_dot_pathchars_slash_is_path() {

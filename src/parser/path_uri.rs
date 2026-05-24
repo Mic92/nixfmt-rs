@@ -100,7 +100,7 @@ impl Parser {
                     Some(ch) if ch.is_alphanumeric() || matches!(ch, '.' | '_' | '-' | '+') => {
                         push_path_text(&mut parts, &p.parse_path_part());
                     }
-                    Some('/') => {
+                    Some('/') if !p.lexer.at("//") => {
                         p.lexer.advance();
                         push_path_text(&mut parts, "/");
                     }
@@ -187,12 +187,23 @@ impl Parser {
     pub(super) fn looks_like_path(&self) -> bool {
         match &self.current.value {
             // identifier/ → path (no space), identifier /path → application (space before /)
-            Token::Identifier(_) => {
-                self.lexer.peek() == Some('/')
-                    && !self.lexer.at("//")
-                    && self.is_path_content_at(1)
-                    && !self.has_preceding_whitespace()
-            }
+            Token::Identifier(_) if !self.has_preceding_whitespace() => match self.lexer.peek() {
+                Some('/') => !self.lexer.at("//") && self.is_path_content_at(1),
+                Some('.') => {
+                    let mut off = 1;
+                    while self
+                        .lexer
+                        .peek_ahead(off)
+                        .is_some_and(|c| c == '.' || is_path_char(c))
+                    {
+                        off += 1;
+                    }
+                    off > 1
+                        && self.lexer.peek_ahead(off) == Some('/')
+                        && self.is_path_content_at(off + 1)
+                }
+                _ => false,
+            },
 
             // ./ or ..<pathchars>/ (no space before the tail, else
             // `.\n/c` becomes `./c`).  Nix treats `.foo/bar` as a

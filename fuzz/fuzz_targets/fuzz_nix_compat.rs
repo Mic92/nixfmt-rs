@@ -70,11 +70,6 @@ fuzz_target!(|data: &[u8]| {
         if stderr.contains("unexpected 'or'") {
             return;
         }
-        // TODO: Nix lexes `ident.ident/path` as a path; we see attrpath + division
-        if stderr.contains("end of path") {
-            return;
-        }
-
         panic!(
             "we accept but nix-instantiate rejects\n--- input ({} bytes) ---\n{src}\n--- stderr ---\n{stderr}",
             src.len()
