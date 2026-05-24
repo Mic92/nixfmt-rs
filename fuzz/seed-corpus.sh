@@ -5,7 +5,7 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
-targets=(fuzz_parse fuzz_roundtrip fuzz_idempotent fuzz_debug_dumps)
+targets=(fuzz_parse fuzz_roundtrip fuzz_idempotent fuzz_debug_dumps fuzz_nix_compat)
 for target in "${targets[@]}"; do
 	mkdir -p "fuzz/corpus/$target"
 done

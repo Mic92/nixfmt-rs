@@ -42,3 +42,10 @@ path = "fuzz_targets/fuzz_debug_dumps.rs"
 test = false
 doc = false
 bench = false
+
+[[bin]]
+name = "fuzz_nix_compat"
+path = "fuzz_targets/fuzz_nix_compat.rs"
+test = false
+doc = false
+bench = false
