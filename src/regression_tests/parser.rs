@@ -372,6 +372,16 @@ fn regression_ellipsis_requires_comma() {
     assert!(crate::parse("{ ... }: 1").is_ok());
 }
 
+/// A dot-path after a term must not be consumed as postfix selection.
+/// `"f:l" .o/b` is application of string to path, not `("f:l").o / b`.
+#[test]
+fn regression_dot_path_not_selection() {
+    let src = "\"f:l\" .o/b";
+    let first = crate::format(src).unwrap();
+    let second = crate::format(&first).unwrap();
+    assert_eq!(first, second, "not idempotent: {first:?} vs {second:?}");
+}
+
 /// Integer literals that overflow signed 64-bit are rejected at lex time,
 /// matching `nix-instantiate --parse` behaviour.
 #[test]
