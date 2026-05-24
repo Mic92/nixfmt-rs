@@ -325,6 +325,16 @@ fn regression_or_rejected_as_lambda_param() {
     // or-as-identifier support.
 }
 
+/// Nix treats `.<pathchars>/` as a relative path, not just `./` and `../`.
+#[test]
+fn regression_dot_pathchars_slash_is_path() {
+    assert!(crate::parse(".foo/bar").is_ok());
+    assert!(crate::parse(".lceif/nix").is_ok());
+    assert!(crate::parse(".123/x").is_ok());
+    // Bare `.a` without `/` is not a path
+    assert_parse_rejected(".a");
+}
+
 /// `~` is only valid at the start of a path (`~/...`), not in the middle.
 #[test]
 fn regression_tilde_not_path_char() {
