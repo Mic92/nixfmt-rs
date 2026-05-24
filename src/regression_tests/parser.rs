@@ -305,7 +305,6 @@ fn regression_comparison_chain_should_fail() {
 fn regression_unclosed_block_comment_rejected() {
     assert_parse_rejected("t /*b*");
     assert_parse_rejected("/* unclosed");
-    // Properly closed is fine
     assert!(crate::parse("t /* b */").is_ok());
 }
 /// `or` is a soft keyword in Nix: it cannot be used as a lambda parameter
@@ -315,7 +314,6 @@ fn regression_or_rejected_as_lambda_param() {
     assert_parse_rejected("or: or");
     assert_parse_rejected("{ or }: or");
     assert_parse_rejected("{ or ? 1 }: or");
-    // `or` in binding/attrpath position is valid
     assert!(crate::parse("{ or = 1; }").is_ok());
     assert!(crate::parse("{ or = 1; }.or").is_ok());
     assert!(crate::parse("x.a or 1").is_ok());

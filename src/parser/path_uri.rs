@@ -205,10 +205,8 @@ impl Parser {
                 _ => false,
             },
 
-            // ./ or ..<pathchars>/ (no space before the tail, else
-            // `.\n/c` becomes `./c`).  Nix treats `.foo/bar` as a
-            // relative path just like `./foo/bar`; `../bar` is the
-            // special case where the path chars are a single `.`.
+            // ./ or .<pathchars>/ — Nix treats `.foo/bar` the same as
+            // `./foo/bar`; `../` is the case where the path char is `.`.
             Token::Dot if !self.has_preceding_whitespace() => match self.lexer.peek() {
                 Some('/') => self.is_path_content_at(1),
                 Some(c) if is_path_char(c) => {
