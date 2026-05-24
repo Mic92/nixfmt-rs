@@ -11,6 +11,7 @@ Coverage-guided fuzzing for the parser and formatter via
 | `fuzz_roundtrip`   | `parse → format → parse` succeeds and yields the same AST modulo trivia.  |
 | `fuzz_idempotent`  | `format` is idempotent: `format(format(x)) == format(x)` (and `format(x)` reparses). |
 | `fuzz_debug_dumps` | `format_ast()` / `format_ir()` (the `--ast`/`--ir` debug renderers) never panic on parseable input. |
+| `fuzz_nix_compat`  | Our parser accepts/rejects the same inputs as `nix-instantiate --parse` (oracle test). |
 
 All targets are seeded from `tests/fixtures/nixfmt/` plus `fuzz/seeds/`. Run
 `./fuzz/seed-corpus.sh` once to populate `fuzz/corpus/<target>/`. The files in
@@ -29,6 +30,7 @@ cargo fuzz run -s none fuzz_parse       -- -max_total_time=300 -timeout=10
 cargo fuzz run -s none fuzz_roundtrip   -- -max_total_time=300 -timeout=10
 cargo fuzz run -s none fuzz_idempotent  -- -max_total_time=300 -timeout=10
 cargo fuzz run -s none fuzz_debug_dumps -- -max_total_time=300 -timeout=10
+cargo fuzz run -s none fuzz_nix_compat  -- -max_total_time=600 -timeout=30
 ```
 
 `-s none` is required: nixpkgs rustc does not ship the sanitizer runtimes, so
