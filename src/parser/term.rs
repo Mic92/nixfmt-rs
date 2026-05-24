@@ -132,7 +132,7 @@ impl Parser {
     pub(super) fn parse_postfix_selection(&mut self, base_term: Term) -> Result<Term> {
         let mut selectors = Vec::new();
 
-        while matches!(self.current.value, Token::Dot) {
+        while matches!(self.current.value, Token::Dot) && !self.looks_like_path() {
             let saved_state = self.save_state();
 
             self.advance()?;
