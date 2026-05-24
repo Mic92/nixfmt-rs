@@ -14,5 +14,5 @@ crate-type = ["cdylib", "rlib"]
 nixfmt_rs = { path = "..", default-features = false }
 # Pinned: wasm-bindgen schema must match the wasm-bindgen-cli shipped by
 # nixpkgs exactly. Bump in lockstep with the CLI version there.
-wasm-bindgen = "=0.2.117"
+wasm-bindgen = "=0.2.121"
 js-sys = "0.3"
