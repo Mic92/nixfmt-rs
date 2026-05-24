@@ -92,7 +92,7 @@ impl Lexer {
                     self.err_unexpected(&["'${'"], "'$'")
                 }
             }
-            '0'..='9' => Ok(self.parse_number()),
+            '0'..='9' => self.parse_number(),
             '~' => Ok(self.single(Token::Tilde)),
             _ => {
                 // `ch` was derived from a single byte; for the error message

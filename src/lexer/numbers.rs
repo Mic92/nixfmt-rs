@@ -12,10 +12,12 @@
 
 use super::Lexer;
 use crate::ast::Token;
+use crate::error::{self, ParseError};
 
 impl Lexer {
     /// Parse a number literal (integer or float)
-    pub(super) fn parse_number(&mut self) -> Token {
+    pub(super) fn parse_number(&mut self) -> error::Result<Token> {
+        let start = self.current_pos();
         let mut num = self.consume_digits();
         let mut is_float = false;
 
@@ -41,10 +43,22 @@ impl Lexer {
             if let Some(exp) = self.parse_exponent() {
                 num.push_str(&exp);
             }
-            return Token::Float(num.into());
+            return Ok(Token::Float(num.into()));
         }
 
-        Token::Integer(num.into())
+        // Nix integers are signed 64-bit; reject literals that overflow.
+        if num.parse::<i64>().is_err() {
+            return Err(ParseError::invalid(
+                start,
+                format!("invalid integer '{num}'"),
+                Some(format!(
+                    "integer literals must fit in a signed 64-bit range (0 to {})",
+                    i64::MAX
+                )),
+            ));
+        }
+
+        Ok(Token::Integer(num.into()))
     }
 
     /// Parse scientific notation exponent (e.g., `e10`, `E-5`, `e+3`)
