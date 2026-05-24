@@ -194,14 +194,21 @@ impl Parser {
                     && !self.has_preceding_whitespace()
             }
 
-            // ./ or ../ (no space before the tail, else `.\n/c` becomes `./c`)
-            Token::Dot if !self.has_preceding_whitespace() => {
-                match (self.lexer.peek(), self.lexer.peek_ahead(1)) {
-                    (Some('/'), _) => self.is_path_content_at(1), // ./
-                    (Some('.'), Some('/')) => self.is_path_content_at(2), // ../
-                    _ => false,
+            // ./ or ..<pathchars>/ (no space before the tail, else
+            // `.\n/c` becomes `./c`).  Nix treats `.foo/bar` as a
+            // relative path just like `./foo/bar`; `../bar` is the
+            // special case where the path chars are a single `.`.
+            Token::Dot if !self.has_preceding_whitespace() => match self.lexer.peek() {
+                Some('/') => self.is_path_content_at(1),
+                Some(c) if is_path_char(c) => {
+                    let mut off = 1;
+                    while self.lexer.peek_ahead(off).is_some_and(is_path_char) {
+                        off += 1;
+                    }
+                    self.lexer.peek_ahead(off) == Some('/') && self.is_path_content_at(off + 1)
                 }
-            }
+                _ => false,
+            },
 
             // /path → path (no space before), expr /path → division (space before)
             Token::Div => self.is_path_content_at(0) && !self.has_preceding_whitespace(),
