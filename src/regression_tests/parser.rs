@@ -300,6 +300,19 @@ fn regression_comparison_chain_should_fail() {
     assert_parse_rejected("a == b == c");
 }
 
+/// Integer literals that overflow signed 64-bit are rejected at lex time,
+/// matching `nix-instantiate --parse` behaviour.
+#[test]
+fn regression_integer_overflow_rejected() {
+    // i64::MAX is fine
+    assert!(crate::parse("9223372036854775807").is_ok());
+    // i64::MAX + 1 overflows
+    assert_parse_rejected("9223372036854775808");
+    // Clearly out of range
+    assert_parse_rejected("55555555555555555555555555555");
+    // Leading zeros still overflow if the value does
+    assert_parse_rejected("00009223372036854775808");
+}
 /// Incomplete `<path>` forms lex as `Less` and are then rejected by the
 /// parser, as in Nix and Haskell nixfmt.
 #[test]
