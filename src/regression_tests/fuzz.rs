@@ -67,7 +67,8 @@ fn fuzz_indented_string_blank_line_preserves_excess() {
 /// multi-line and stay in block form. Upstream Haskell nixfmt has the same bug.
 #[test]
 fn fuzz_block_comment_with_cr_reparses() {
-    roundtrip("2/*\0\r\0");
+    // Unterminated block comments are now rejected.
+    assert!(crate::parse("2/*\0\r\0").is_err());
     roundtrip("/*a\r\0*/3");
     roundtrip("/*a\rb*/3");
     roundtrip("2 /* x\r */\n");

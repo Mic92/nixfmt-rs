@@ -300,6 +300,15 @@ fn regression_comparison_chain_should_fail() {
     assert_parse_rejected("a == b == c");
 }
 
+/// Unterminated block comments are rejected, matching Nix.
+#[test]
+fn regression_unclosed_block_comment_rejected() {
+    assert_parse_rejected("t /*b*");
+    assert_parse_rejected("/* unclosed");
+    // Properly closed is fine
+    assert!(crate::parse("t /* b */").is_ok());
+}
+
 /// Integer literals that overflow signed 64-bit are rejected at lex time,
 /// matching `nix-instantiate --parse` behaviour.
 #[test]
