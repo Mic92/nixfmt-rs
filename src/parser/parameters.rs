@@ -110,10 +110,15 @@ impl Parser {
                 }
                 break; // Ellipsis must be last
             } else if matches!(self.current.value, Token::Identifier(_)) {
+                // `or` in formal position signals "not a parameter list",
+                // same as `=` / `.` after an identifier.
+                if matches!(&self.current.value, Token::Identifier(n) if n.as_str() == "or") {
+                    return Ok(None);
+                }
+
                 let name = self.take_and_advance()?;
 
                 if matches!(self.current.value, Token::Assign | Token::Dot) {
-                    // This is a binding (a = ...), not a parameter!
                     return Ok(None);
                 }
 
