@@ -136,10 +136,7 @@ impl Parser {
                     .transpose()?;
 
                 let needs_break = comma.is_none()
-                    && !matches!(
-                        self.current.value,
-                        Token::BraceClose | Token::Ellipsis | Token::Sof
-                    );
+                    && !matches!(self.current.value, Token::BraceClose | Token::Sof);
 
                 attrs.push(ParamAttr::Attr {
                     name,

@@ -363,6 +363,15 @@ fn regression_tilde_not_path_char() {
     assert!(crate::parse("~/a").is_ok());
 }
 
+/// Ellipsis after a formal requires a preceding comma.
+#[test]
+fn regression_ellipsis_requires_comma() {
+    assert_parse_rejected("{ a ... }: a");
+    assert_parse_rejected("{ b ? 1 ... }: b");
+    assert!(crate::parse("{ a, ... }: a").is_ok());
+    assert!(crate::parse("{ ... }: 1").is_ok());
+}
+
 /// Integer literals that overflow signed 64-bit are rejected at lex time,
 /// matching `nix-instantiate --parse` behaviour.
 #[test]
