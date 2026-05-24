@@ -43,8 +43,10 @@ impl Lexer {
             '*' => Ok(self.single(Token::Mul)),
             '/' => Ok(self.try_two_char('/', Token::Update, Token::Div)),
             '!' => Ok(self.try_two_char('=', Token::Unequal, Token::Not)),
-            '<' if self.peek_ahead(1).is_some_and(char::is_alphanumeric) => self.parse_env_path(),
             '<' => {
+                if let Some(tok) = self.try_env_path() {
+                    return Ok(tok);
+                }
                 self.advance();
                 Ok(match self.peek() {
                     Some('=') => self.single(Token::LessEqual),
@@ -148,40 +150,34 @@ impl Lexer {
         }
     }
 
-    /// Parse angle bracket path: <nixpkgs>
-    fn parse_env_path(&mut self) -> crate::error::Result<Token> {
-        let opening_span = self.current_pos();
-        self.advance(); // consume '<'
-
-        let mut path = String::new();
-        while let Some(ch) = self.peek() {
-            match ch {
-                '>' => {
-                    self.advance();
-                    return Ok(Token::EnvPath(path.into()));
-                }
-                _ if ch.is_alphanumeric() || matches!(ch, '_' | '-' | '/' | '.') => {
-                    path.push(self.advance().unwrap());
-                }
-                _ => {
-                    return Err(crate::error::ParseError {
-                        span: self.current_pos(),
-                        kind: crate::error::ErrorKind::InvalidSyntax {
-                            description: format!("invalid character '{ch}' in path"),
-                            hint: Some("paths can only contain alphanumeric characters, '.', '_', '-', and '/'".to_string()),
-                        },
-                    });
-                }
+    /// Lex a search path (`<nixpkgs/lib>`) only if the full Nix SPATH pattern
+    /// `<{PATH_CHAR}+(/{PATH_CHAR}+)*>` matches at the cursor; otherwise
+    /// consume nothing so `<` lexes as `Less`, matching the Nix lexer's
+    /// maximal-munch behaviour (`a<b` is a comparison).
+    fn try_env_path(&mut self) -> Option<Token> {
+        let is_path_char =
+            |b: u8| b.is_ascii_alphanumeric() || matches!(b, b'.' | b'_' | b'-' | b'+');
+        let bytes = &self.source.as_bytes()[self.byte_pos + 1..];
+        let mut i = 0;
+        loop {
+            let seg_start = i;
+            while i < bytes.len() && is_path_char(bytes[i]) {
+                i += 1;
+            }
+            if i == seg_start {
+                return None; // empty segment, e.g. `<>` or `<a//b>`
+            }
+            match bytes.get(i) {
+                Some(b'>') => break,
+                Some(b'/') => i += 1,
+                _ => return None,
             }
         }
-
-        Err(crate::error::ParseError {
-            span: self.current_pos(),
-            kind: crate::error::ErrorKind::UnclosedDelimiter {
-                delimiter: '<',
-                opening_span,
-            },
-        })
+        let path = &self.source[self.byte_pos + 1..self.byte_pos + 1 + i];
+        let tok = Token::EnvPath(path.into());
+        // `<` + path + `>` is all ASCII with no newlines.
+        self.advance_bytes_no_newline(i + 2);
+        Some(tok)
     }
 
     /// Build an `UnexpectedToken` error at the current cursor.
