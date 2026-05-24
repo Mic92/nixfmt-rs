@@ -110,8 +110,6 @@ impl Parser {
                 }
                 break; // Ellipsis must be last
             } else if matches!(self.current.value, Token::Identifier(_)) {
-                // `or` in formal position signals "not a parameter list",
-                // same as `=` / `.` after an identifier.
                 if matches!(&self.current.value, Token::Identifier(n) if n.as_str() == "or") {
                     return Ok(None);
                 }

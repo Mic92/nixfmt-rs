@@ -87,7 +87,7 @@ impl Lexer {
             }
         };
         self.seek_to(body_end);
-        self.advance_by(2); // `*/`
+        self.advance_by(2);
         let body = &self.source[body_start..body_end];
 
         let lines = split_lines(body);

@@ -103,6 +103,10 @@ impl Parser {
                     return self.parse_operation_or_lambda();
                 }
 
+                if self.looks_like_path() {
+                    return self.parse_operation_or_lambda();
+                }
+
                 let ident = self.take_and_advance()?;
 
                 match self.finish_abstraction(Parameter::Id(ident))? {

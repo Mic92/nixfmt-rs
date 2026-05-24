@@ -490,6 +490,7 @@ version = "0.0.0"
 dependencies = [
  "libfuzzer-sys",
  "nixfmt_rs",
+ "tempfile",
 ]
 
 [[package]]

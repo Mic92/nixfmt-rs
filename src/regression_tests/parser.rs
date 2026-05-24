@@ -305,7 +305,6 @@ fn regression_comparison_chain_should_fail() {
 fn regression_unclosed_block_comment_rejected() {
     assert_parse_rejected("t /*b*");
     assert_parse_rejected("/* unclosed");
-    // Properly closed is fine
     assert!(crate::parse("t /* b */").is_ok());
 }
 /// `or` is a soft keyword in Nix: it cannot be used as a lambda parameter
@@ -315,7 +314,6 @@ fn regression_or_rejected_as_lambda_param() {
     assert_parse_rejected("or: or");
     assert_parse_rejected("{ or }: or");
     assert_parse_rejected("{ or ? 1 }: or");
-    // `or` in binding/attrpath position is valid
     assert!(crate::parse("{ or = 1; }").is_ok());
     assert!(crate::parse("{ or = 1; }.or").is_ok());
     assert!(crate::parse("x.a or 1").is_ok());
@@ -323,6 +321,29 @@ fn regression_or_rejected_as_lambda_param() {
     // `let or = 1; in or`), but we still accept it.  Fixing this requires
     // changes to term parsing that may interact with the deprecated
     // or-as-identifier support.
+}
+
+/// Nix lexes `ident.<pathchars>/` as a path (e.g. `a.b/c`, `pkg.org/x`).
+/// Without special handling, the parser consumed `a.b` as an attrpath
+/// and treated `/c` as division.
+#[test]
+fn regression_ident_dot_path() {
+    assert!(crate::parse("a.b/c").is_ok());
+    assert!(crate::parse("x.y.z/w").is_ok());
+    assert!(crate::parse("ple.org/a").is_ok());
+    // Space breaks the path: `a` is a separate identifier
+    // (.b/c is still a valid path on its own, so the whole
+    // expression parses as function application)
+    assert!(crate::parse("a .b/c").is_ok());
+}
+
+/// `//` in the middle of a path terminates the path; Nix treats `//`
+/// as the update operator.
+#[test]
+fn regression_double_slash_ends_path() {
+    // a/b is a path, a//b is `a // b` (update)
+    assert!(crate::parse("a/b").is_ok());
+    assert!(crate::parse("a/b//c").is_ok()); // path `a/b` then `// c`
 }
 
 /// Nix treats `.<pathchars>/` as a relative path, not just `./` and `../`.
