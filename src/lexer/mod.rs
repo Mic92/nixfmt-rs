@@ -196,7 +196,7 @@ impl Lexer {
         // body token. There is no preceding Nix token here, so treat all of it
         // as leading trivia rather than splitting off a discarded "trailing".
         if matches!(self.peek_byte(), Some(b'\n' | b'\r' | b'#' | b'/')) {
-            self.parse_trivia();
+            self.parse_trivia()?;
             leading_trivia.extend(trivia::convert_leading(&self.trivia_scratch));
             let _ = self.skip_hspace();
         }
@@ -227,7 +227,7 @@ impl Lexer {
                 Trivia::new()
             };
         } else {
-            self.parse_trivia();
+            self.parse_trivia()?;
             let (tc, next) =
                 trivia::convert_trivia(&self.trivia_scratch, end_line > start_line, self.column);
             trailing_comment = tc;
@@ -243,8 +243,8 @@ impl Lexer {
     }
 
     /// Parse a whole file (expression + final trivia)
-    pub(crate) fn start_parse(&mut self) {
-        self.parse_trivia();
+    pub(crate) fn start_parse(&mut self) -> crate::error::Result<()> {
+        self.parse_trivia()?;
         let mut leading: Vec<_> = trivia::convert_leading(&self.trivia_scratch).into();
         // Leading blank lines never reach the output but make `is_simple` false
         // on the file's first term, which flips `prettyApp`'s layout between
@@ -255,6 +255,7 @@ impl Lexer {
             .count();
         leading.drain(..n);
         self.trivia_buffer = leading.into();
+        Ok(())
     }
 
     /// Parse trivia and classify it into `(trailing, next_leading)` so the
@@ -262,9 +263,13 @@ impl Lexer {
     pub(crate) fn parse_and_convert_trivia(
         &mut self,
         prev_multiline: bool,
-    ) -> (Option<crate::ast::TrailingComment>, Trivia) {
-        self.parse_trivia();
-        trivia::convert_trivia(&self.trivia_scratch, prev_multiline, self.column)
+    ) -> crate::error::Result<(Option<crate::ast::TrailingComment>, Trivia)> {
+        self.parse_trivia()?;
+        Ok(trivia::convert_trivia(
+            &self.trivia_scratch,
+            prev_multiline,
+            self.column,
+        ))
     }
 
     /// Get current position as a zero-length span (in byte offsets)
@@ -324,7 +329,7 @@ impl Lexer {
     }
 
     /// Parse trivia (comments and whitespace) into `self.trivia_scratch`.
-    fn parse_trivia(&mut self) {
+    fn parse_trivia(&mut self) -> crate::error::Result<()> {
         // Save position before parsing trivia, so we can rewind if needed
         self.trivia_start = Some(self.mark());
 
@@ -368,13 +373,14 @@ impl Lexer {
                     } else if let Some(lang_annot) = self.try_parse_language_annotation() {
                         self.trivia_scratch.push(lang_annot);
                     } else {
-                        let c = self.parse_block_comment();
+                        let c = self.parse_block_comment()?;
                         self.trivia_scratch.push(c);
                     }
                 }
                 _ => break,
             }
         }
+        Ok(())
     }
 
     /// Parse consecutive newlines, return count

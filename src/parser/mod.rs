@@ -46,7 +46,7 @@ struct ParserState {
 impl Parser {
     pub(crate) fn new(source: &str) -> Result<Self> {
         let mut lexer = Lexer::new(source);
-        lexer.start_parse();
+        lexer.start_parse()?;
         let current = lexer.lexeme()?;
         Ok(Self { lexer, current })
     }
@@ -302,7 +302,7 @@ impl Parser {
         &mut self,
         prev_multiline: bool,
     ) -> Result<Option<crate::ast::TrailingComment>> {
-        let (trail_comment, next_leading) = self.lexer.parse_and_convert_trivia(prev_multiline);
+        let (trail_comment, next_leading) = self.lexer.parse_and_convert_trivia(prev_multiline)?;
 
         self.lexer.trivia_buffer = next_leading;
         self.current = self.lexer.lexeme()?;

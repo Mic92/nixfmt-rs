@@ -59,7 +59,8 @@ impl Lexer {
     }
 
     /// Parse block comment /* ... */
-    pub(super) fn parse_block_comment(&mut self) -> RawTrivia {
+    pub(super) fn parse_block_comment(&mut self) -> crate::error::Result<RawTrivia> {
+        let opening_span = self.current_pos();
         let start_col = self.column;
         self.advance(); // consume '/'
         self.advance(); // consume '*'
@@ -74,14 +75,19 @@ impl Lexer {
         let bytes = self.source.as_bytes();
         let body_end = loop {
             match memchr::memchr(b'*', &bytes[scan..]) {
-                // Unterminated: consume to EOF.
-                None => break bytes.len(),
+                None => {
+                    return Err(crate::error::ParseError::unclosed(
+                        self.current_pos(),
+                        '/',
+                        opening_span,
+                    ));
+                }
                 Some(off) if bytes.get(scan + off + 1) == Some(&b'/') => break scan + off,
                 Some(off) => scan += off + 1,
             }
         };
         self.seek_to(body_end);
-        self.advance_by(2); // `*/` (no-op at EOF)
+        self.advance_by(2); // `*/`
         let body = &self.source[body_start..body_end];
 
         let lines = split_lines(body);
@@ -90,13 +96,13 @@ impl Lexer {
         let lines = drop_while_empty_start(lines);
         let lines = drop_while_empty_end(lines);
 
-        RawTrivia::BlockComment(is_doc, lines)
+        Ok(RawTrivia::BlockComment(is_doc, lines))
     }
 
     /// Try to parse a language annotation like /* lua */
     pub(super) fn try_parse_language_annotation(&mut self) -> Option<RawTrivia> {
         self.try_with_cursor(|this| {
-            let pt = this.parse_block_comment();
+            let pt = this.parse_block_comment().ok()?;
 
             if let RawTrivia::BlockComment(false, lines) = &pt
                 && lines.len() == 1
