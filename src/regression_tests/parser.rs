@@ -324,6 +324,14 @@ fn regression_or_rejected_as_lambda_param() {
     // changes to term parsing that may interact with the deprecated
     // or-as-identifier support.
 }
+
+/// `~` is only valid at the start of a path (`~/...`), not in the middle.
+#[test]
+fn regression_tilde_not_path_char() {
+    assert_parse_rejected("./a~b");
+    assert!(crate::parse("~/a").is_ok());
+}
+
 /// Integer literals that overflow signed 64-bit are rejected at lex time,
 /// matching `nix-instantiate --parse` behaviour.
 #[test]
@@ -337,6 +345,7 @@ fn regression_integer_overflow_rejected() {
     // Leading zeros still overflow if the value does
     assert_parse_rejected("00009223372036854775808");
 }
+
 /// Incomplete `<path>` forms lex as `Less` and are then rejected by the
 /// parser, as in Nix and Haskell nixfmt.
 #[test]

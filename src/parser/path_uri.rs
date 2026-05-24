@@ -29,9 +29,11 @@ fn is_uri_char(c: char) -> bool {
     c.is_alphanumeric() || URI_SPECIAL_CHARS.contains(&c)
 }
 
-/// nixfmt `pathChar`: "._-+~" + alphanumeric
+/// nixfmt `pathChar`: "._-+" + alphanumeric
+/// Nix `pathChar`: "._-+" + alphanumeric.  `~` is NOT a path character;
+/// it is only valid as the leading `~/` prefix, handled by `looks_like_path`.
 fn is_path_char(c: char) -> bool {
-    c.is_alphanumeric() || matches!(c, '.' | '_' | '-' | '+' | '~')
+    c.is_alphanumeric() || matches!(c, '.' | '_' | '-' | '+')
 }
 
 /// Append `s` to a trailing `TextPart`, or push a new one. Paths are built
