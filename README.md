@@ -87,6 +87,8 @@ echo '{a=1;}' | nixfmt --ir
 
 ### Disabling formatting for a region
 
+**Technical preview** This might change based on how this feature will be implemented in nixfmt: https://github.com/NixOS/nixfmt/pull/388
+
 Wrap a region in `/*nixfmt:disable*/` and `/*nixfmt:enable*/` to keep it
 verbatim, e.g. for hand-aligned tables:
 
