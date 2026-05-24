@@ -133,17 +133,26 @@ impl Parser {
                     None
                 };
 
-                let comma = if matches!(self.current.value, Token::Comma) {
-                    Some(self.take_and_advance()?)
-                } else {
-                    None
-                };
+                let comma = matches!(self.current.value, Token::Comma)
+                    .then(|| self.take_and_advance())
+                    .transpose()?;
+
+                let needs_break = comma.is_none()
+                    && !matches!(
+                        self.current.value,
+                        Token::BraceClose | Token::Ellipsis | Token::Sof
+                    );
 
                 attrs.push(ParamAttr::Attr {
                     name,
                     default,
                     comma,
                 });
+
+                // Without a comma only `}` or `...` may follow.
+                if needs_break {
+                    break;
+                }
             } else {
                 break;
             }
