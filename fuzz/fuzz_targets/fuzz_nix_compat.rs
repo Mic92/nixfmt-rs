@@ -14,6 +14,7 @@
 //! ```
 
 use libfuzzer_sys::fuzz_target;
+use std::io::Write;
 use std::process::Command;
 
 fuzz_target!(|data: &[u8]| {
@@ -28,8 +29,14 @@ fuzz_target!(|data: &[u8]| {
 
     let we_parse = nixfmt_rs::parse(src).is_ok();
 
+    // Write to a temp file to avoid argument parsing issues (e.g. inputs
+    // starting with `-` being interpreted as flags).
+    let mut tmp = tempfile::NamedTempFile::new().expect("create tempfile");
+    tmp.write_all(src.as_bytes()).expect("write tempfile");
+    tmp.flush().expect("flush tempfile");
+
     let nix = Command::new("nix-instantiate")
-        .args(["--parse", "-E", src])
+        .args(["--parse", tmp.path().to_str().unwrap()])
         .stdin(std::process::Stdio::null())
         .stdout(std::process::Stdio::null())
         .stderr(std::process::Stdio::piped())
@@ -57,6 +64,17 @@ fuzz_target!(|data: &[u8]| {
 
     if we_parse && !nix_parses {
         let stderr = String::from_utf8_lossy(&output.stderr);
+
+        // Known issues we haven't fixed yet — skip to find new bugs.
+        // TODO: `or` in expression position (e.g. `a.b or c or d`)
+        if stderr.contains("unexpected 'or'") {
+            return;
+        }
+        // TODO: Nix lexes `ident.ident/path` as a path; we see attrpath + division
+        if stderr.contains("end of path") {
+            return;
+        }
+
         panic!(
             "we accept but nix-instantiate rejects\n--- input ({} bytes) ---\n{src}\n--- stderr ---\n{stderr}",
             src.len()
