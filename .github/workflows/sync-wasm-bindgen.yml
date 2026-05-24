@@ -1,0 +1,37 @@
+name: Sync wasm-bindgen pin with nixpkgs
+
+# wasm-bindgen crate and wasm-bindgen-cli must be the same version.
+# Nixpkgs bumps the CLI; this keeps the crate pin in sync.
+
+on:
+  pull_request_target:
+    paths:
+      - "flake.lock"
+
+permissions:
+  contents: write
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    if: github.actor == 'dependabot[bot]'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.head_ref }}
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - uses: NixOS/nix-installer-action@main
+
+      - name: Sync wasm-bindgen version
+        env:
+          GIT_AUTHOR_NAME: github-actions[bot]
+          GIT_AUTHOR_EMAIL: 41898282+github-actions[bot]@users.noreply.github.com
+          GIT_COMMITTER_NAME: github-actions[bot]
+          GIT_COMMITTER_EMAIL: 41898282+github-actions[bot]@users.noreply.github.com
+        run: |
+          ./scripts/sync-wasm-bindgen.sh
+          git diff --quiet && exit 0
+          git add wasm/Cargo.toml Cargo.lock
+          git commit -m "wasm: sync wasm-bindgen pin to $(sed -n 's/^wasm-bindgen = "=\(.*\)"/\1/p' wasm/Cargo.toml)"
+          git push
