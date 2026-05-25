@@ -393,6 +393,17 @@ fn format_directive_in_priority_group_post_segment() {
     test_format!("z{\n/*nixfmt:disable*/\n}c");
 }
 
+/// `moveTrailingCommentUp` must be applied to chained binary operators
+/// (`+`, `++`, `//`) so that a trailing comment on the operator is rendered
+/// as a line comment *before* the operator line, matching Haskell nixfmt.
+/// Found via `diff_sweep` on nixpkgs (issue #88).
+#[test]
+fn format_operator_trailing_comment_hoisted() {
+    test_format!("\"a\" +  # comment\n\"b\"");
+    test_format!("x ++ # comment\ny");
+    test_format!("a // # comment\nb");
+}
+
 /// Hoisting the head's trail comment must not pull a `/* lang */` annotation
 /// off the string it labels, or pass 2 demotes it to `# c`. Found by
 /// `fuzz_idempotent`.

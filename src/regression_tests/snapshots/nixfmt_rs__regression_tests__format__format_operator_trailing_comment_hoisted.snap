@@ -1,0 +1,7 @@
+---
+source: src/regression_tests/format.rs
+description: "\"a\" +  # comment\n\"b\""
+---
+"a"
+# comment
++ "b"
