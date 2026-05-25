@@ -110,7 +110,7 @@ pub(super) fn emit_operation_chain(
                 },
                 Some(op_leaf) => {
                     group_doc.line();
-                    op_leaf.emit(group_doc);
+                    op_leaf.move_trailing_comment_up().emit(group_doc);
                     group_doc.nested(|nested| {
                         absorb_operation(nested, expr);
                     });
