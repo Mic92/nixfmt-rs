@@ -382,6 +382,14 @@ fn regression_dot_path_not_selection() {
     assert_eq!(first, second, "not idempotent: {first:?} vs {second:?}");
 }
 
+/// `/*` inside a string after an interpolation must not be parsed as
+/// a block comment start.
+#[test]
+fn regression_slash_star_in_string_after_interp() {
+    assert!(crate::parse(r"''${x}/*.tar''").is_ok());
+    assert!(crate::parse(r#""${x}/*foo""#).is_ok());
+}
+
 /// Integer literals that overflow signed 64-bit are rejected at lex time,
 /// matching `nix-instantiate --parse` behaviour.
 #[test]
