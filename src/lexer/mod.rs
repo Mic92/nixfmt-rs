@@ -211,13 +211,16 @@ impl Lexer {
         let end_line = self.line;
         let token_span = crate::ast::Span::with_lines(token_start, token_end, start_line, end_line);
 
-        // String/path delimiters: defer trivia so the parser sees raw source content.
-        let skip_trivia = matches!(token, Token::DoubleQuote | Token::DoubleSingleQuote);
+        // Defer trivia when returning to string content so `/*` is not
+        // misinterpreted as a block comment.
+        let skip_trivia = matches!(token, Token::DoubleQuote | Token::DoubleSingleQuote)
+            || (matches!(token, Token::BraceClose) && self.interp_depth > 0);
 
         let trailing_comment;
         if skip_trivia {
             trailing_comment = None;
             self.trivia_buffer = Trivia::new();
+            self.trivia_start = Some(self.mark());
         } else if let Some(newlines) = self.fast_ws_trivia() {
             // Fast path hit: only whitespace between this token and the next.
             trailing_comment = None;
