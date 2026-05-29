@@ -2,7 +2,7 @@
   description = "nixfmt-rs: Rust implementation of nixfmt";
 
   inputs = {
-    nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
+    nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable-small";
     treefmt-nix.url = "github:numtide/treefmt-nix";
   };
 
