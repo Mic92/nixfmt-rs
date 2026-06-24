@@ -34,7 +34,7 @@ jobs:
             asset: nixfmt-wasm.tar.gz
     runs-on: ${{ matrix.runner }}
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       - uses: NixOS/nix-installer-action@main
       - name: Build
         run: |
