@@ -15,7 +15,7 @@ jobs:
       contents: read
       id-token: write # OIDC token exchange with crates.io
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
 
       - uses: dtolnay/rust-toolchain@stable
 
@@ -45,7 +45,7 @@ jobs:
       contents: read
       id-token: write # npm provenance / trusted publishing
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       - uses: NixOS/nix-installer-action@main
       - run: nix build -L .#wasm
       - uses: actions/setup-node@v6
