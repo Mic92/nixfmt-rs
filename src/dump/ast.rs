@@ -531,20 +531,28 @@ impl<T: Dump> Dump for [T] {
     }
 }
 
-impl<T: Dump> Dump for Vec<T> {
-    fn dump<W: Writer>(&self, w: &mut W) {
-        <[T] as Dump>::dump(self, w);
-    }
-    fn is_simple(&self) -> bool {
-        <[T] as Dump>::is_simple(self)
-    }
-    fn has_delimiters(&self) -> bool {
-        true
-    }
-    fn is_empty(&self) -> bool {
-        <[T]>::is_empty(self)
-    }
+/// Slice-backed containers render like `[T]`.
+macro_rules! dump_as_slice {
+    ($ty:ty) => {
+        impl<T: Dump> Dump for $ty {
+            fn dump<W: Writer>(&self, w: &mut W) {
+                <[T] as Dump>::dump(self, w);
+            }
+            fn is_simple(&self) -> bool {
+                <[T] as Dump>::is_simple(self)
+            }
+            fn has_delimiters(&self) -> bool {
+                true
+            }
+            fn is_empty(&self) -> bool {
+                <[T]>::is_empty(self)
+            }
+        }
+    };
 }
+
+dump_as_slice!(Vec<T>);
+dump_as_slice!(Box<[T]>);
 
 /// Generic `Dump` for Option<T>
 /// Based on Haskell's Show instance for Maybe
@@ -574,22 +582,6 @@ impl<A: Dump, B: Dump> Dump for (A, B) {
 
     fn has_delimiters(&self) -> bool {
         true
-    }
-}
-
-/// `Dump` for `Box<[T]>` — renders like a slice.
-impl<T: Dump> Dump for Box<[T]> {
-    fn dump<W: Writer>(&self, w: &mut W) {
-        <[T] as Dump>::dump(self, w);
-    }
-    fn is_simple(&self) -> bool {
-        <[T] as Dump>::is_simple(self)
-    }
-    fn has_delimiters(&self) -> bool {
-        true
-    }
-    fn is_empty(&self) -> bool {
-        <[T]>::is_empty(self)
     }
 }
 
