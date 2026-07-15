@@ -41,7 +41,7 @@ sweep = ["dep:rayon", "dep:walkdir"]
 
 [dependencies]
 memchr = "2"
-compact_str = "0.9"
+compact_str = "0.10"
 criterion = { version = "0.8", optional = true }
 rayon = { version = "1", optional = true }
 walkdir = { version = "2", optional = true }
