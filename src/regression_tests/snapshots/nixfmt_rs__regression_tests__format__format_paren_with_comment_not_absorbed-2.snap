@@ -1,0 +1,12 @@
+---
+source: src/regression_tests/format.rs
+description: "{ o = (\n # c\n ''\n \"\n ''); }"
+---
+{
+  o = (
+    # c
+    ''
+      "
+    ''
+  );
+}

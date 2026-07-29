@@ -3,6 +3,11 @@ use crate::ast::{
 };
 use crate::doc::{Doc, Elem, Emit, hardspace, line};
 
+/// Haskell `isLangAnnotation` (Pretty.hs).
+const fn is_lang_annot(p: &crate::ast::TriviaPiece) -> bool {
+    matches!(p, crate::ast::TriviaPiece::LanguageAnnotation(_))
+}
+
 use super::Width;
 use super::app::{AppCtx, emit_app};
 use super::op::emit_operation_chain;
@@ -17,10 +22,12 @@ impl Term {
                 open, items, close, ..
             } => is_absorbable_braces(open, items, close),
             Self::List { open, items, close } => is_absorbable_braces(open, items, close),
-            // `open` trivia is hoisted before `(` so never affects body
-            // absorption; checking it flipped this between passes (patch 0005).
-            Self::Parenthesized { expr, .. } => {
-                matches!(&**expr, Expression::Term(t) if t.is_absorbable())
+            // Comments on `(` or the inner term prevent absorption,
+            // except `/* lang */` annotations.
+            Self::Parenthesized { open, expr, .. } => {
+                !open.has_trivia()
+                    && matches!(&**expr, Expression::Term(t)
+                        if t.first_token().pre_trivia.iter().all(is_lang_annot) && t.is_absorbable())
             }
             _ => false,
         }
