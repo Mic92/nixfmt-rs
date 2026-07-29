@@ -433,3 +433,11 @@ fn format_chained_presence_checks() {
     );
     test_format!("a  # one\n  ? b # two\n  ? c");
 }
+
+/// A `/* lang */` annotation preceded by other trivia in a list stays attached
+/// to the string that follows it. Haskell: `Nixfmt.Pretty.prettyItems`.
+#[test]
+fn format_language_annotation_after_trivia_stays_attached() {
+    test_format!("[ # x\n /* sh */ \"ls\"\n]");
+    test_format!("{ list = [\n # x\n\n /* py */ ''print(1)''\n ]; }");
+}

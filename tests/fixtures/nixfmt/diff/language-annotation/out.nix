@@ -165,4 +165,36 @@
     /* bash */ ''
       echo "Hello"
     '';
+
+  # Division followed by block comment must not merge into `//`
+  divLangAnnotation = a / /* sh */ "" p;
+
+  # Language annotation after other trivia must not split from string
+  annotationAfterTrivia = [
+    # x
+    /* sh */ "ls"
+  ];
+
+  # Trailing comment between annotated string and application argument;
+  # the hoisted comment must not land between the annotation and its string
+  # (string application is semantically invalid but syntactically legal)
+  trailingCommentApp =
+    # trailing comment
+    /* bash */ "echo lang annotation with trail comment" A;
+
+  # Same shape with a block comment instead of a line comment
+  trailingBlockCommentApp =
+    # trailing comment
+    /* bash */ "echo hi" A;
+
+  # Same shape with the annotated string as a middle argument must stay stable
+  trailingCommentArg =
+    runCommand /* bash */ "echo hi" # trailing comment
+      A;
+
+  # Language annotation on the subject of a chained member check
+  memberCheckSubject = /* lua */ "print(1)" ? foo ? bar;
+
+  # Language annotations before quoted selectors in a chained member check
+  memberCheckSelector = a ? b."c" ? /* json */ "d".e ? /* sh */ "f";
 }

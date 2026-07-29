@@ -83,12 +83,10 @@ fn take_last_trail_comment_expr(expr: &mut Expression) -> Option<TrailingComment
         | Expression::Negation { expr: body, .. }
         | Expression::Not { expr: body, .. } => take_last_trail_comment_expr(body),
         // `parse_presence_checks` always pushes at least one check with ≥1 selector.
-        Expression::HasAttr { checks, .. } => sel(
-            checks
-                .last_mut()
-                .and_then(|(_, path)| path.last_mut())
-                .expect("≥1 selector"),
-        ),
+        Expression::HasAttr { checks, .. } => sel(checks
+            .last_mut()
+            .and_then(|(_, path)| path.last_mut())
+            .expect("≥1 selector")),
     }
 }
 
