@@ -10,6 +10,15 @@
     ]
   )
 ]
+  # Trailing comment in paren in assignment RHS must be idempotent
+  {
+    o = (
+      # c
+      ''
+        "
+      ''
+    );
+  }
   (
     (
       # test
