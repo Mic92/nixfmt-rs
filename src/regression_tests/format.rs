@@ -434,10 +434,19 @@ fn format_chained_presence_checks() {
     test_format!("a  # one\n  ? b # two\n  ? c");
 }
 
-/// A `/* lang */` annotation preceded by other trivia in a list stays attached
-/// to the string that follows it. Haskell: `Nixfmt.Pretty.prettyItems`.
+/// A `/* lang */` annotation after other trivia stays attached to its item.
+/// Haskell: `Nixfmt.Pretty.prettyItems`.
 #[test]
 fn format_language_annotation_after_trivia_stays_attached() {
     test_format!("[ # x\n /* sh */ \"ls\"\n]");
     test_format!("{ list = [\n # x\n\n /* py */ ''print(1)''\n ]; }");
+}
+
+/// Parens with a comment on `(` or the inner term expand instead of being
+/// absorbed. Haskell: `Nixfmt.Pretty.isAbsorbable` for `Parenthesized`.
+#[test]
+fn format_paren_with_comment_not_absorbed() {
+    test_format!("{ o = ( # c\n ''\n \"\n ''); }");
+    test_format!("{ o = (\n # c\n ''\n \"\n ''); }");
+    test_format!("{ o = (/* lua */ ''print(1)\nx''); }");
 }
