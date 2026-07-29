@@ -412,14 +412,24 @@ fn format_language_annotation_with_trail_comment() {
     test_format!("/*c*/''''#}\nA");
 }
 
-/// Pipe chains with more than three operands always break onto separate
-/// lines, even when they would fit within the line width.
-/// Haskell: `Nixfmt.Pretty.prettyOp` (`sep = hardline` for pipe operators).
-/// Fixture: `tests/fixtures/nixfmt/diff/operation/`.
+/// Pipe chains with 4+ operands always break, even when they would fit.
+/// Haskell: `Nixfmt.Pretty.prettyOp` (`sep = hardline` for pipes).
 #[test]
 fn format_pipe_chain_forces_newlines() {
     test_format!("a |> b |> c");
     test_format!("c <| b <| a");
     test_format!("x |> f |> g |> h");
     test_format!("{ pipeExample = 1 |> (n: n + 1) |> (n: n + 1) |> (n: n + 1); }");
+}
+
+/// Chained presence checks: one line if they fit, otherwise break before
+/// every `?`. Haskell: `Nixfmt.Pretty` `MemberCheck` clause.
+#[test]
+fn format_chained_presence_checks() {
+    test_format!("{ } ? foo ? bar");
+    test_format!("a ? b.c.d ? e.\"f\".${g} ? h.i");
+    test_format!(
+        "aaaaaaaaaaaaaaaaaaaaaaaaaa ? bbbbbbbbbbbbbbbbbb ? cccccccccccccccccc ? dddddddddddddddddd ? eeeeeeeeeeeeeeeeee"
+    );
+    test_format!("a  # one\n  ? b # two\n  ? c");
 }

@@ -123,18 +123,20 @@ impl Emit for Expression {
             } => {
                 emit_operation(doc, self, left, op, right);
             }
-            Self::HasAttr {
-                lhs: expr,
-                question,
-                path: selectors,
-            } => {
-                expr.emit(doc);
-                doc.softline();
-                question.emit(doc);
-                doc.hardspace();
-                for sel in selectors {
-                    sel.emit(doc);
-                }
+            Self::HasAttr { lhs: expr, checks } => {
+                doc.group(|g| {
+                    expr.emit(g);
+                    g.nested(|nested| {
+                        for (question, selectors) in checks {
+                            nested.line();
+                            question.move_trailing_comment_up().emit(nested);
+                            nested.hardspace();
+                            for sel in selectors {
+                                sel.emit(nested);
+                            }
+                        }
+                    });
+                });
             }
             Self::Negation { minus, expr } => {
                 minus.emit(doc);

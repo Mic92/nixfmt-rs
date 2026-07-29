@@ -2,7 +2,7 @@
 //! tables that drive it.
 
 use super::Parser;
-use crate::ast::{Expression, Token};
+use crate::ast::{Expression, Leaf, Selector, Token};
 use crate::error::{ParseError, Result};
 
 /// Check if a token is a comparison operator
@@ -44,6 +44,17 @@ impl Parser {
         }
     }
 
+    /// Parse one or more `? selector.path` presence checks (`a ? b ? c`).
+    pub(super) fn parse_presence_checks(&mut self) -> Result<Vec<(Leaf, Vec<Selector>)>> {
+        let mut checks = Vec::new();
+        while matches!(self.current.value, Token::Question) {
+            let question = self.take_and_advance()?;
+            let selectors = self.parse_selector_path()?;
+            checks.push((question, selectors));
+        }
+        Ok(checks)
+    }
+
     /// Parse binary operation if present, otherwise return expression as-is
     pub(super) fn maybe_parse_binary_operation(&mut self, expr: Expression) -> Result<Expression> {
         if self.is_binary_op() {
@@ -56,12 +67,9 @@ impl Parser {
     /// Continue parsing operation from a given left expression
     pub(super) fn continue_operation_from(&mut self, expr: Expression) -> Result<Expression> {
         let expr = if matches!(self.current.value, Token::Question) {
-            let question = self.take_and_advance()?;
-            let selectors = self.parse_selector_path()?;
             Expression::HasAttr {
                 lhs: Box::new(expr),
-                question,
-                path: selectors,
+                checks: self.parse_presence_checks()?,
             }
         } else if self.is_term_start() {
             let mut app_expr = expr;
