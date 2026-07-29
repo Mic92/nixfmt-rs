@@ -32,9 +32,9 @@ fn fuzz_or_without_selectors_dropped() {
 fn fuzz_integer_selection_relex_as_float() {
     roundtrip("1\n.a");
     assert_eq!(format("1 .a").unwrap(), "1 .a\n");
-    // Floats need no protective space; guard the fix against over-application.
-    test_format!("1.5.x");
-    test_format!("1..x");
+    // Floats keep the space too (upstream 77845f6).
+    assert_eq!(format("1.5.x").unwrap(), "1.5 .x\n");
+    assert_eq!(format("1..x").unwrap(), "1. .x\n");
 }
 
 /// `''\` followed by a newline must not swallow the newline into the text
