@@ -76,9 +76,9 @@ impl Emit for Term {
                 // `.` chain is desirable.
                 match &**term {
                     // `1.a` would re-lex as float `1.` applied to `a`; keep a
-                    // space. Diverges from Haskell nixfmt, which has this bug.
+                    // space (Haskell nixfmt: `prettyTerm` Selection, 77845f6).
                     Self::Token(Annotated {
-                        value: Token::Integer(_),
+                        value: Token::Integer(_) | Token::Float(_),
                         ..
                     }) if !selectors.is_empty() => {
                         doc.hardspace();
