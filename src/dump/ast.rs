@@ -117,12 +117,8 @@ impl Dump for Expression {
             Self::Operation { lhs, op, rhs } => {
                 format_constructor!(w, "Operation", [&**lhs, op, &**rhs]);
             }
-            Self::HasAttr {
-                lhs,
-                question,
-                path,
-            } => {
-                format_constructor!(w, "MemberCheck", [&**lhs, question, path]);
+            Self::HasAttr { lhs, checks } => {
+                format_constructor!(w, "MemberCheck", [&**lhs, &PresenceChecks(checks)]);
             }
             Self::Negation { minus, expr } => {
                 format_constructor!(w, "Negation", [minus, &**expr]);
@@ -434,6 +430,71 @@ impl Dump for Token {
     }
 
     fn is_simple(&self) -> bool {
+        true
+    }
+}
+
+/// One `(question, selectorPath)` presence check, shown as a Haskell tuple.
+#[derive(Debug)]
+struct PresenceCheck<'a>(&'a (crate::ast::Leaf, Vec<Selector>));
+
+impl Dump for PresenceCheck<'_> {
+    fn dump<W: Writer>(&self, w: &mut W) {
+        let (question, path) = self.0;
+        super::with_brackets(w, "(", ")", false, |w, color| {
+            w.write_plain(" ");
+            question.dump(w);
+            w.newline();
+            w.write_colored(",", color);
+            super::dump_delimited(w, path);
+            w.newline();
+        });
+    }
+
+    fn has_delimiters(&self) -> bool {
+        true
+    }
+}
+
+/// The `NonEmpty` chain of presence checks of a `MemberCheck`, shown as
+/// `(head :| [tail...])` like Haskell's `Show` for `NonEmpty`.
+#[derive(Debug)]
+struct PresenceChecks<'a>(&'a [(crate::ast::Leaf, Vec<Selector>)]);
+
+impl Dump for PresenceChecks<'_> {
+    fn dump<W: Writer>(&self, w: &mut W) {
+        super::with_brackets(w, "(", ")", true, |w, _| {
+            w.with_depth(|w| {
+                w.newline();
+                PresenceCheck(&self.0[0]).dump(w);
+            });
+            w.write_plain(" :|");
+            let tail = &self.0[1..];
+            if tail.is_empty() {
+                w.write_plain(" ");
+                super::with_brackets(w, "[", "]", false, |_, _| {});
+            } else {
+                w.with_depth(|w| {
+                    w.newline();
+                    super::with_brackets(w, "[", "]", false, |w, color| {
+                        for (i, check) in tail.iter().enumerate() {
+                            if i > 0 {
+                                w.newline();
+                                w.write_colored(",", color);
+                            }
+                            w.with_depth(|w| {
+                                super::dump_delimited(w, &PresenceCheck(check));
+                            });
+                        }
+                        w.newline();
+                    });
+                });
+            }
+            w.newline();
+        });
+    }
+
+    fn has_delimiters(&self) -> bool {
         true
     }
 }

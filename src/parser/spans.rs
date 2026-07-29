@@ -21,10 +21,9 @@ impl Expression {
             | Self::Operation { rhs: expr, .. }
             | Self::Negation { expr, .. }
             | Self::Not { expr, .. } => expr.end_span(),
-            Self::HasAttr {
-                path: selectors, ..
-            } => selectors
+            Self::HasAttr { checks, .. } => checks
                 .last()
+                .and_then(|(_, selectors)| selectors.last())
                 // No selectors - shouldn't happen for a parsed HasAttr.
                 .map_or(Span::point(0), |last| last.selector.end_span()),
         }

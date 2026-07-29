@@ -1,0 +1,7 @@
+---
+source: src/regression_tests/format.rs
+description: "a  # one\n  ? b # two\n  ? c"
+---
+a  # one
+  ? b # two
+  ? c

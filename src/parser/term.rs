@@ -44,12 +44,9 @@ impl Parser {
         // Postfix `?` has higher precedence than prefix `!`/`-`; checking it here ensures
         // `!a ? b` parses as `!(a ? b)`, not `(!a) ? b`.
         if matches!(self.current.value, Token::Question) {
-            let question = self.take_and_advance()?;
-            let selectors = self.parse_selector_path()?;
             expr = Expression::HasAttr {
                 lhs: Box::new(expr),
-                question,
-                path: selectors,
+                checks: self.parse_presence_checks()?,
             };
         }
 

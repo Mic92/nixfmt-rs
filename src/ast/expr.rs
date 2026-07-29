@@ -232,11 +232,10 @@ pub enum Expression {
         op: Leaf,
         rhs: Box<Self>,
     },
-    /// `lhs ? path`
+    /// `lhs ? path ? path ...` (non-empty chain of presence checks)
     HasAttr {
         lhs: Box<Self>,
-        question: Leaf,
-        path: Vec<Selector>,
+        checks: Vec<(Leaf, Vec<Selector>)>,
     },
     /// `- expr` (negation)
     Negation {
