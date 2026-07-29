@@ -99,6 +99,9 @@ pub(super) fn emit_operation_chain(
     let mut parts: Vec<(Option<&Leaf>, &Expression)> = Vec::new();
     flatten_operation_chain(op, operation, None, &mut parts);
 
+    let force_break =
+        matches!(op.value, Token::PipeForward | Token::PipeBackward) && parts.len() > 3;
+
     doc.group(|group_doc| {
         for (maybe_op, expr) in &parts {
             match maybe_op {
@@ -109,7 +112,11 @@ pub(super) fn emit_operation_chain(
                     _ => expr.emit(group_doc),
                 },
                 Some(op_leaf) => {
-                    group_doc.line();
+                    if force_break {
+                        group_doc.hardline();
+                    } else {
+                        group_doc.line();
+                    }
                     op_leaf.move_trailing_comment_up().emit(group_doc);
                     group_doc.nested(|nested| {
                         absorb_operation(nested, expr);

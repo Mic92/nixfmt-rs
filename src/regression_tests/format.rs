@@ -411,3 +411,15 @@ fn format_operator_trailing_comment_hoisted() {
 fn format_language_annotation_with_trail_comment() {
     test_format!("/*c*/''''#}\nA");
 }
+
+/// Pipe chains with more than three operands always break onto separate
+/// lines, even when they would fit within the line width.
+/// Haskell: `Nixfmt.Pretty.prettyOp` (`sep = hardline` for pipe operators).
+/// Fixture: `tests/fixtures/nixfmt/diff/operation/`.
+#[test]
+fn format_pipe_chain_forces_newlines() {
+    test_format!("a |> b |> c");
+    test_format!("c <| b <| a");
+    test_format!("x |> f |> g |> h");
+    test_format!("{ pipeExample = 1 |> (n: n + 1) |> (n: n + 1) |> (n: n + 1); }");
+}
