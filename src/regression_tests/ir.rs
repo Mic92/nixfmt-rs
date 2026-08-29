@@ -119,7 +119,7 @@ oracle_tests! {
         "(x: [ a ])",
     ],
 
-    /// Set-pattern abstraction with an absorbable body wraps the body in
-    /// `group (prettyTermWide t)`. Haskell: `Nixfmt.Pretty` `Abstraction` clause.
+    /// Flattenable set-pattern abstraction absorbs its body as
+    /// `hardspace <> group' Priority`. Haskell: `Nixfmt.Pretty` `Abstraction` clause.
     test_set_param_abstraction_absorbs_body => ["{ lib }: { a = 1; }"],
 }

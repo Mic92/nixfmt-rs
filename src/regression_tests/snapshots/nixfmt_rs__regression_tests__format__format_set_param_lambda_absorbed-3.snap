@@ -1,0 +1,15 @@
+---
+source: src/regression_tests/format.rs
+description: "{ f = { a, b, c }: { x = 1; }; }"
+---
+{
+  f =
+    {
+      a,
+      b,
+      c,
+    }:
+    {
+      x = 1;
+    };
+}
