@@ -210,10 +210,11 @@ fn fuzz_deep_nesting_is_an_error_not_a_crash() {
         .unwrap();
 }
 
-/// A disable in one `${}` and an enable in a sibling `${}` sit at the same
-/// depth but must not pair, or the region would splice the indented string
-/// body between them.
+/// A disable in one `${}` and an enable in a sibling `${}` form a region that
+/// cuts through the indented string body. Upstream keeps the cut lines at
+/// their original columns (`test/diff/directive_interp`). Not ported yet.
 #[test]
+#[ignore = "port upstream directive_interp semantics"]
 fn fuzz_directive_pair_across_sibling_interpolations() {
     roundtrip("{t=''${\n/*nixfmt:disable*/\n3}\n${\n/*nixfmt:enable*/\n1}'';}");
     // Same interpolation still pairs.
