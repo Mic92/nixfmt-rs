@@ -12,7 +12,7 @@
 //! dispatchers that fan out into those submodules.
 
 use crate::ast::{Annotated, Expression, Term, Token};
-use crate::doc::{Doc, Emit, line};
+use crate::doc::{Doc, Emit};
 
 mod absorb;
 mod app;
@@ -108,24 +108,14 @@ impl Emit for Term {
 }
 
 impl Emit for Expression {
-    // Single shallow match over every Expression variant.
-    #[allow(clippy::too_many_lines)]
     fn emit(&self, doc: &mut Doc) {
         match self {
             Self::Term(t) => t.emit(doc),
-            Self::Apply { .. } => {
-                emit_app(doc, AppCtx::default(), self);
-            }
-            Self::Operation {
-                lhs: left,
-                op,
-                rhs: right,
-            } => {
-                emit_operation(doc, self, left, op, right);
-            }
-            Self::HasAttr { lhs: expr, checks } => {
+            Self::Apply { .. } => emit_app(doc, AppCtx::default(), self),
+            Self::Operation { lhs, op, rhs } => emit_operation(doc, self, lhs, op, rhs),
+            Self::HasAttr { lhs, checks } => {
                 doc.group(|g| {
-                    expr.emit(g);
+                    lhs.emit(g);
                     g.nested(|nested| {
                         for (question, selectors) in checks {
                             nested.line();
@@ -147,65 +137,41 @@ impl Emit for Expression {
                 expr.emit(doc);
             }
             Self::Let {
-                kw_let: let_kw,
-                bindings: binders,
-                kw_in: in_kw,
-                body: expr,
-            } => {
-                emit_let(doc, let_kw, binders, in_kw, expr);
-            }
-            Self::If {
-                kw_if,
-                cond,
-                kw_then,
-                then_branch,
-                kw_else,
-                else_branch,
-            } => {
-                doc.group(|g| {
-                    // Only the outermost `if` keyword has its trailing comment
-                    // hoisted; nested `else if` keywords keep theirs in place.
-                    emit_if(
-                        g,
-                        line(),
-                        &kw_if.move_trailing_comment_up(),
-                        cond,
-                        kw_then,
-                        then_branch,
-                        kw_else,
-                        else_branch,
-                    );
-                });
+                kw_let,
+                bindings,
+                kw_in,
+                body,
+            } => emit_let(doc, kw_let, bindings, kw_in, body),
+            Self::If { .. } => {
+                doc.group(|g| emit_if(g, self, false));
             }
             Self::Assert {
-                kw_assert: assert_kw,
+                kw_assert,
                 cond,
-                semi: semicolon,
-                body: expr,
+                semi,
+                body,
             } => {
                 // group $ prettyApp False mempty False (insertIntoApp (Term (Token assert)) cond)
                 //       <> ";" <> hardline <> pretty expr
                 doc.group(|g| {
-                    let assert_term = Self::Term(Term::Token(assert_kw.clone()));
+                    let head = Self::Term(Term::Token(kw_assert.clone()));
                     match &**cond {
                         Self::Apply { func, arg } => {
-                            emit_app_parts(g, AppCtx::default(), func, arg, Some(&assert_term));
+                            emit_app_parts(g, AppCtx::default(), func, arg, Some(&head));
                         }
-                        a => emit_app_parts(g, AppCtx::default(), &assert_term, a, None),
+                        a => emit_app_parts(g, AppCtx::default(), &head, a, None),
                     }
-                    semicolon.emit(g);
+                    semi.emit(g);
                     g.hardline();
-                    expr.emit(g);
+                    body.emit(g);
                 });
             }
             Self::With {
-                kw_with: with_kw,
-                scope: env,
-                semi: semicolon,
-                body: expr,
-            } => {
-                emit_with(doc, with_kw, env, semicolon, expr);
-            }
+                kw_with,
+                scope,
+                semi,
+                body,
+            } => emit_with(doc, kw_with, scope, semi, body),
             Self::Lambda { param, colon, body } => emit_lambda(doc, param, colon, body),
         }
     }
