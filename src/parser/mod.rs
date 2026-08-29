@@ -23,7 +23,11 @@ pub struct Parser {
     lexer: Lexer,
     /// Current token
     current: Annotated<Token>,
+    /// Open recursive constructs. Bounded so hostile input cannot overflow the stack.
+    depth: u32,
 }
+
+const MAX_DEPTH: u32 = 512;
 
 /// Outcome of `finish_abstraction`: either a full lambda was parsed, or no
 /// `:`/`@` followed and the tentative parameter is handed back so the caller
@@ -48,7 +52,26 @@ impl Parser {
         let mut lexer = Lexer::new(source);
         lexer.start_parse()?;
         let current = lexer.lexeme()?;
-        Ok(Self { lexer, current })
+        Ok(Self {
+            lexer,
+            current,
+            depth: 0,
+        })
+    }
+
+    /// Run `f` one nesting level deeper, failing once `MAX_DEPTH` is exceeded.
+    pub(super) fn nested<T>(&mut self, f: impl FnOnce(&mut Self) -> Result<T>) -> Result<T> {
+        if self.depth >= MAX_DEPTH {
+            return Err(ParseError::invalid(
+                self.current.span,
+                format!("expression nested more than {MAX_DEPTH} levels deep"),
+                None,
+            ));
+        }
+        self.depth += 1;
+        let r = f(self);
+        self.depth -= 1;
+        r
     }
 
     /// See [`Lexer::take_directive_regions`].
@@ -72,6 +95,10 @@ impl Parser {
 
     /// Parse an expression (top-level)
     fn parse_expression(&mut self) -> Result<Expression> {
+        self.nested(Self::parse_expression_inner)
+    }
+
+    fn parse_expression_inner(&mut self) -> Result<Expression> {
         // Match Haskell's order: try operation, then abstraction, then keywords
         match &self.current.value {
             Token::Let => {
