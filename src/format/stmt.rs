@@ -3,8 +3,47 @@ use crate::doc::{Doc, Elem, Emit, hardline, line};
 
 use super::Width;
 
+/// Haskell `sourceLine tok == firstTokenLine expr`.
+pub(super) fn starts_on_line_of(expr: &Expression, tok: &Leaf) -> bool {
+    expr.first_token().span.start_line() == tok.span.start_line()
+}
+
+/// `instance Pretty Expression` clauses for `Abstraction` (Pretty.hs).
+pub(super) fn emit_lambda(doc: &mut Doc, param: &Parameter, colon: &Leaf, body: &Expression) {
+    if let Parameter::Id(id) = param {
+        doc.group(|g| {
+            g.linebreak();
+            id.emit(g);
+            colon.emit(g);
+            body.absorb_lambda(g, 1);
+        });
+        return;
+    }
+    param.emit(doc);
+    colon.emit(doc);
+    let same_line = starts_on_line_of(body, colon);
+    match body {
+        _ if same_line && param.is_flat_set() && body.is_absorbable() => {
+            doc.hardspace();
+            doc.priority_group(|g| body.emit(g));
+        }
+        _ if matches!(param, Parameter::Set { .. }) && !same_line => {
+            doc.hardline();
+            body.emit(doc);
+        }
+        Expression::Term(t) if t.is_absorbable() => {
+            doc.line();
+            doc.group(|g| t.emit_wide(g));
+        }
+        _ => {
+            doc.line();
+            body.emit(doc);
+        }
+    }
+}
+
 impl Expression {
-    pub(in crate::format) fn absorb_lambda(&self, doc: &mut Doc, depth: usize) {
+    fn absorb_lambda(&self, doc: &mut Doc, depth: usize) {
         match self {
             Self::Lambda {
                 param: Parameter::Id(param),

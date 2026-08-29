@@ -11,14 +11,7 @@ const fn is_lang_annot(p: &crate::ast::TriviaPiece) -> bool {
 use super::Width;
 use super::app::{AppCtx, emit_app};
 use super::op::emit_operation_chain;
-use super::params::can_flatten_attrs;
-
-impl Expression {
-    /// Haskell `sourceLine colon == firstTokenLine body`.
-    pub(super) fn body_on_colon_line(colon: &Annotated<Token>, body: &Self) -> bool {
-        colon.span.start_line() == body.first_token().span.start_line()
-    }
-}
+use super::stmt::starts_on_line_of;
 
 impl Term {
     /// Haskell `isAbsorbable` / `isAbsorbableTerm` (Pretty.hs).
@@ -72,13 +65,13 @@ impl Expression {
                 _ => false,
             },
             Self::Lambda {
-                param: Parameter::Set { open, attrs, close },
+                param: param @ Parameter::Set { open, .. },
                 colon,
                 body,
             } => {
-                can_flatten_attrs(open, attrs, close)
+                param.is_flat_set()
                     && !open.has_trivia()
-                    && Self::body_on_colon_line(colon, body)
+                    && starts_on_line_of(body, colon)
                     && body.is_absorbable()
             }
             _ => false,

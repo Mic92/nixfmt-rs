@@ -2,7 +2,7 @@ use crate::ast::{
     Annotated, Expression, Leaf, ParamAttr, ParamDefault, Parameter, Selector, SimpleSelector,
     Term, Token, TrailingComment, Trivia,
 };
-use crate::doc::{Doc, Elem, Emit, hardline, line};
+use crate::doc::{Doc, Emit, hardline, line};
 
 use super::term::empty_brackets;
 
@@ -170,16 +170,10 @@ fn move_params_comments(attrs: &[ParamAttr]) -> Vec<ParamAttr> {
 
 /// Haskell `canFlattenAttrs` (Pretty.hs): braces on one source line, no
 /// comments, and at most two plain attrs optionally followed by `...`.
-pub(super) fn can_flatten_attrs(open: &Leaf, attrs: &[ParamAttr], close: &Leaf) -> bool {
-    let attr_has_trivia = |a: &ParamAttr| match a {
-        ParamAttr::Attr { name, comma, .. } => {
-            name.has_trivia() || comma.as_ref().is_some_and(Annotated::has_trivia)
-        }
-        ParamAttr::Ellipsis(dots) => dots.has_trivia(),
-    };
+fn can_flatten_attrs(open: &Leaf, attrs: &[ParamAttr], close: &Leaf) -> bool {
     if open.span.start_line() != close.span.start_line()
         || close.has_trivia()
-        || attrs.iter().any(attr_has_trivia)
+        || attrs.iter().any(ParamAttr::has_trivia)
     {
         return false;
     }
@@ -190,11 +184,10 @@ pub(super) fn can_flatten_attrs(open: &Leaf, attrs: &[ParamAttr], close: &Leaf) 
     plain.len() <= 2 && plain.iter().all(ParamAttr::has_no_default)
 }
 
-fn parameter_separator(open: &Leaf, attrs: &[ParamAttr], close: &Leaf) -> Elem {
-    if can_flatten_attrs(open, attrs, close) {
-        line()
-    } else {
-        hardline()
+impl Parameter {
+    /// A `{ ... }` parameter that may stay on one line.
+    pub(super) fn is_flat_set(&self) -> bool {
+        matches!(self, Self::Set { open, attrs, close } if can_flatten_attrs(open, attrs, close))
     }
 }
 
@@ -242,7 +235,11 @@ impl Emit for Parameter {
                     return;
                 }
 
-                let sep = parameter_separator(&open, attrs, close);
+                let sep = if self.is_flat_set() {
+                    line()
+                } else {
+                    hardline()
+                };
                 let sep_doc = [sep.clone()];
 
                 doc.group(|doc| {
