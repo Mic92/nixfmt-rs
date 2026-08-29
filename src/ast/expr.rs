@@ -162,6 +162,15 @@ impl ParamAttr {
     pub const fn is_ellipsis(&self) -> bool {
         matches!(self, Self::Ellipsis(_))
     }
+
+    pub fn has_trivia(&self) -> bool {
+        match self {
+            Self::Attr { name, comma, .. } => {
+                name.has_trivia() || comma.as_ref().is_some_and(Annotated::has_trivia)
+            }
+            Self::Ellipsis(dots) => dots.has_trivia(),
+        }
+    }
 }
 
 /// Lambda parameter
