@@ -123,11 +123,11 @@ impl Parser {
 
     /// Parse string interpolation: ${expr}
     pub(super) fn parse_string_interpolation(&mut self) -> Result<StringPart> {
-        // Bracket the body with enter/exit so directive recognition knows its
-        // `${}` depth. On `Err` the parse is abandoned anyway.
-        self.lexer.enter_interp();
+        // Bracket the body so directive recognition knows which `${}` it
+        // is in. On `Err` the parse is abandoned anyway.
+        let outer = self.lexer.enter_interp();
         let result = self.parse_string_interpolation_inner();
-        self.lexer.exit_interp();
+        self.lexer.exit_interp(outer);
         result
     }
 
