@@ -39,56 +39,46 @@ fn convert_trailing(pts: &[RawTrivia]) -> Option<TrailingComment> {
     }
 }
 
-/// Convert leading trivia to Trivia
-/// Merges consecutive Newlines (matching Haskell's `some (preLexeme eol)` behavior)
-/// and converts to final [`TriviaPiece`] entries in a single pass to avoid intermediate allocations.
+/// Convert leading trivia to Trivia. Runs of newlines collapse into at most
+/// one `EmptyLine` (Haskell `some (preLexeme eol)`).
 pub(super) fn convert_leading(pts: &[RawTrivia]) -> Trivia {
-    // State: (result_vec, accumulated_newline_count)
-    let (mut result, pending_newlines) =
-        pts.iter()
-            .fold((Vec::new(), 0), |(mut acc, newline_count), pt| match pt {
-                RawTrivia::Newlines(count) => (acc, newline_count + count),
-                other => {
-                    // Flush pending newlines first (single newlines are discarded)
-                    if newline_count > 1 {
-                        acc.push(TriviaPiece::EmptyLine);
-                    }
-
-                    match other {
-                        RawTrivia::LineComment { text, .. } => {
-                            acc.push(TriviaPiece::LineComment(text.clone().into_boxed_str()));
-                        }
-                        RawTrivia::BlockComment(_, lines) if lines.is_empty() => {}
-                        RawTrivia::BlockComment(false, lines) if lines.len() == 1 => {
-                            acc.push(TriviaPiece::LineComment(
-                                format!(" {}", lines[0].trim()).into_boxed_str(),
-                            ));
-                        }
-                        RawTrivia::BlockComment(is_doc, lines) => {
-                            acc.push(TriviaPiece::BlockComment(
-                                *is_doc,
-                                lines.iter().cloned().map(String::into_boxed_str).collect(),
-                            ));
-                        }
-                        RawTrivia::LanguageAnnotation(text) => {
-                            acc.push(TriviaPiece::LanguageAnnotation(
-                                text.clone().into_boxed_str(),
-                            ));
-                        }
-                        RawTrivia::Directive(d) => {
-                            acc.push(TriviaPiece::Directive(*d));
-                        }
-                        RawTrivia::Newlines(_) => unreachable!(),
-                    }
-
-                    (acc, 0)
-                }
-            });
-
-    if pending_newlines > 1 {
+    let mut result = Vec::new();
+    let mut newlines = 0;
+    for pt in pts {
+        if let RawTrivia::Newlines(count) = pt {
+            newlines += count;
+            continue;
+        }
+        if newlines > 1 {
+            result.push(TriviaPiece::EmptyLine);
+        }
+        newlines = 0;
+        match pt {
+            RawTrivia::Newlines(_) => {}
+            RawTrivia::LineComment { text, .. } => {
+                result.push(TriviaPiece::LineComment(text.as_str().into()));
+            }
+            RawTrivia::BlockComment(_, lines) if lines.is_empty() => {}
+            RawTrivia::BlockComment(false, lines) if lines.len() == 1 => {
+                result.push(TriviaPiece::LineComment(
+                    format!(" {}", lines[0].trim()).into_boxed_str(),
+                ));
+            }
+            RawTrivia::BlockComment(is_doc, lines) => {
+                result.push(TriviaPiece::BlockComment(
+                    *is_doc,
+                    lines.iter().map(|l| l.as_str().into()).collect(),
+                ));
+            }
+            RawTrivia::LanguageAnnotation(text) => {
+                result.push(TriviaPiece::LanguageAnnotation(text.as_str().into()));
+            }
+            RawTrivia::Directive(d) => result.push(TriviaPiece::Directive(*d)),
+        }
+    }
+    if newlines > 1 {
         result.push(TriviaPiece::EmptyLine);
     }
-
     result.into()
 }
 
