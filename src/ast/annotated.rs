@@ -44,6 +44,7 @@ impl<T: Clone> Annotated<T> {
 pub struct TriviaSlot<'a> {
     pub pre_trivia: &'a Trivia,
     pub trail_comment: &'a Option<TrailingComment>,
+    pub span: Span,
 }
 
 /// Mutable counterpart of [`TriviaSlot`].
@@ -57,6 +58,7 @@ impl<'a, T> From<&'a Annotated<T>> for TriviaSlot<'a> {
         TriviaSlot {
             pre_trivia: &a.pre_trivia,
             trail_comment: &a.trail_comment,
+            span: a.span,
         }
     }
 }

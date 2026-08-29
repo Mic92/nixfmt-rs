@@ -25,6 +25,7 @@ mod term;
 
 use app::{AppCtx, emit_app, emit_app_parts};
 use op::emit_operation;
+use params::can_flatten_attrs;
 use stmt::{emit_if, emit_let, emit_with};
 use string::{emit_indented_string, emit_simple_string};
 use term::{emit_list, emit_paren, emit_set};
@@ -221,6 +222,19 @@ impl Emit for Expression {
             Self::Lambda { param, colon, body } => {
                 param.emit(doc);
                 colon.emit(doc);
+                if let Parameter::Set { open, attrs, close } = param {
+                    let same_line = Self::body_on_colon_line(colon, body);
+                    if same_line && can_flatten_attrs(open, attrs, close) && body.is_absorbable() {
+                        doc.hardspace();
+                        doc.priority_group(|g| body.emit(g));
+                        return;
+                    }
+                    if !same_line {
+                        doc.hardline();
+                        body.emit(doc);
+                        return;
+                    }
+                }
                 doc.line();
                 // Haskell `Abstraction` (set-param) clause: absorbable body
                 // gets `group (prettyTermWide t)`.

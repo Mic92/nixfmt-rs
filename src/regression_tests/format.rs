@@ -450,3 +450,17 @@ fn format_paren_with_comment_not_absorbed() {
     test_format!("{ o = (\n # c\n ''\n \"\n ''); }");
     test_format!("{ o = (/* lua */ ''print(1)\nx''); }");
 }
+
+/// Simple set-parameter lambdas absorb their body onto the colon line when
+/// the source had it there, and keep a line break otherwise (nixfmt-rs#131).
+/// Haskell: `Nixfmt.Pretty.canFlattenAttrs` and the `SetParameter` clauses of
+/// `isAbsorbableExpr` / `instance Pretty Expression`.
+#[test]
+fn format_set_param_lambda_absorbed() {
+    test_format!("{ machine = { pkgs, ... }: { x = 1; }; }");
+    test_format!("{ machine = { pkgs, ... }:\n  { x = 1; }; }");
+    test_format!("{ f = { a, b, c }: { x = 1; }; }");
+    test_format!("{ f = { a ? 1 }: { x = 1; }; }");
+    test_format!("f (\n  { file, test }:\n  \'\'sub \"${file}\" \"${test}\"\'\'\n) tests");
+    test_format!("{ ... }: {\n  name = \"lix\";\n}");
+}

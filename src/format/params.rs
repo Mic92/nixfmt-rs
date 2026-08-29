@@ -168,17 +168,30 @@ fn move_params_comments(attrs: &[ParamAttr]) -> Vec<ParamAttr> {
     out
 }
 
-fn parameter_separator(open: &Leaf, attrs: &[ParamAttr], close: &Leaf) -> Elem {
-    if open.span.start_line() != close.span.start_line() {
-        return hardline();
+/// Haskell `canFlattenAttrs` (Pretty.hs): braces on one source line, no
+/// comments, and at most two plain attrs optionally followed by `...`.
+pub(super) fn can_flatten_attrs(open: &Leaf, attrs: &[ParamAttr], close: &Leaf) -> bool {
+    let attr_has_trivia = |a: &ParamAttr| match a {
+        ParamAttr::Attr { name, comma, .. } => {
+            name.has_trivia() || comma.as_ref().is_some_and(Annotated::has_trivia)
+        }
+        ParamAttr::Ellipsis(dots) => dots.has_trivia(),
+    };
+    if open.span.start_line() != close.span.start_line()
+        || close.has_trivia()
+        || attrs.iter().any(attr_has_trivia)
+    {
+        return false;
     }
-    // Allow a compact `{ a, b, ... }` only for at most two plain attrs
-    // optionally followed by `...`.
     let plain = match attrs.split_last() {
         Some((last, init)) if last.is_ellipsis() => init,
         _ => attrs,
     };
-    if plain.len() <= 2 && plain.iter().all(ParamAttr::has_no_default) {
+    plain.len() <= 2 && plain.iter().all(ParamAttr::has_no_default)
+}
+
+fn parameter_separator(open: &Leaf, attrs: &[ParamAttr], close: &Leaf) -> Elem {
+    if can_flatten_attrs(open, attrs, close) {
         line()
     } else {
         hardline()

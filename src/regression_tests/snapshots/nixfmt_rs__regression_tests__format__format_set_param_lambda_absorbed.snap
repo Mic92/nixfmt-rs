@@ -1,0 +1,5 @@
+---
+source: src/regression_tests/format.rs
+description: "{ machine = { pkgs, ... }: { x = 1; }; }"
+---
+{ machine = { pkgs, ... }: { x = 1; }; }

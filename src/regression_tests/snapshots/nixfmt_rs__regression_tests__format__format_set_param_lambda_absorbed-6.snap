@@ -1,0 +1,7 @@
+---
+source: src/regression_tests/format.rs
+description: "{ ... }: {\n  name = \"lix\";\n}"
+---
+{ ... }: {
+  name = "lix";
+}
