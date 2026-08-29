@@ -111,16 +111,29 @@ fn parse_args() -> Result<Opts, lexopt::Error> {
     Ok(o)
 }
 
+impl Opts {
+    /// Print to stderr unless `--quiet`.
+    fn say(&self, msg: impl std::fmt::Display) {
+        if !self.quiet {
+            eprintln!("{msg}");
+        }
+    }
+
+    fn report(&self, file: Option<&str>, severity: &str, msg: &str) {
+        self.say(render_msg(self, file, severity, msg));
+    }
+
+    fn report_parse(&self, source: &str, name: &str, e: &nixfmt_rs::ParseError) {
+        self.say(render_err(self, source, name, e));
+    }
+}
+
 fn render_err(o: &Opts, source: &str, name: &str, e: &nixfmt_rs::ParseError) -> String {
     if o.json_diagnostics {
         json_diag::parse_error(source, name, e)
     } else {
         nixfmt_rs::format_error(source, Some(name), e)
     }
-}
-
-fn report(o: &Opts, file: Option<&str>, severity: &str, msg: &str) {
-    eprintln!("{}", render_msg(o, file, severity, msg));
 }
 
 fn try_format(o: &Opts, name: &str, source: &str) -> Result<String, String> {
@@ -161,9 +174,7 @@ fn process(o: &Opts, name: &str, source: &str, in_place: bool) -> bool {
         return match nixfmt_rs::parse(source) {
             Ok(_) => true,
             Err(e) => {
-                if !o.quiet {
-                    eprintln!("{}", render_err(o, source, name, &e));
-                }
+                o.report_parse(source, name, &e);
                 false
             }
         };
@@ -178,10 +189,7 @@ fn process(o: &Opts, name: &str, source: &str, in_place: bool) -> bool {
         };
         match res {
             Ok(s) => eprint!("{s}"),
-            Err(e) if !o.quiet => {
-                eprintln!("{}", render_err(o, source, name, &e));
-            }
-            Err(_) => {}
+            Err(e) => o.report_parse(source, name, &e),
         }
         return false;
     }
@@ -189,18 +197,14 @@ fn process(o: &Opts, name: &str, source: &str, in_place: bool) -> bool {
     let out = match try_format(o, name, source) {
         Ok(s) => s,
         Err(msg) => {
-            if !o.quiet {
-                eprintln!("{msg}");
-            }
+            o.say(msg);
             return false;
         }
     };
 
     if o.check {
         if out != source {
-            if !o.quiet {
-                report(o, Some(name), "warning", "not formatted");
-            }
+            o.report(Some(name), "warning", "not formatted");
             return false;
         }
         return true;
@@ -211,9 +215,7 @@ fn process(o: &Opts, name: &str, source: &str, in_place: bool) -> bool {
         if out != source
             && let Err(e) = std::fs::write(name, &out)
         {
-            if !o.quiet {
-                report(o, Some(name), "error", &e.to_string());
-            }
+            o.report(Some(name), "error", &e.to_string());
             return false;
         }
     } else {
@@ -269,9 +271,7 @@ fn process_path(o: &Opts, path: &Path) -> bool {
     match std::fs::read_to_string(path) {
         Ok(source) => process(o, &name, &source, true),
         Err(e) => {
-            if !o.quiet {
-                report(o, Some(&name), "error", &e.to_string());
-            }
+            o.report(Some(&name), "error", &e.to_string());
             false
         }
     }
@@ -301,9 +301,7 @@ fn walk_and_process(o: &Opts, parallel: bool) -> bool {
             Ok(e) if want(&e) => process_path(o, e.path()),
             Ok(_) => true,
             Err(e) => {
-                if !o.quiet {
-                    report(o, None, "error", &e.to_string());
-                }
+                o.report(None, "error", &e.to_string());
                 false
             }
         }
@@ -332,11 +330,9 @@ fn run_mergetool(o: &Opts) -> bool {
     let [base, local, remote, merged] = if let [b, l, r, m] = o.files.as_slice() {
         [b.as_str(), l.as_str(), r.as_str(), m.as_str()]
     } else {
-        if !o.quiet {
-            eprintln!(
-                "--mergetool mode expects exactly 4 file arguments ($BASE, $LOCAL, $REMOTE, $MERGED)"
-            );
-        }
+        o.say(
+            "--mergetool mode expects exactly 4 file arguments ($BASE, $LOCAL, $REMOTE, $MERGED)",
+        );
         return false;
     };
 
@@ -344,9 +340,7 @@ fn run_mergetool(o: &Opts) -> bool {
         .extension()
         .is_none_or(|ext| !ext.eq_ignore_ascii_case("nix"))
     {
-        if !o.quiet {
-            eprintln!("Skipping non-Nix file {merged}");
-        }
+        o.say(format!("Skipping non-Nix file {merged}"));
         return false;
     }
 
@@ -354,9 +348,7 @@ fn run_mergetool(o: &Opts) -> bool {
         if process_path(o, Path::new(path)) {
             return true;
         }
-        if !o.quiet {
-            eprintln!("pre-formatting the {label} version failed");
-        }
+        o.say(format!("pre-formatting the {label} version failed"));
         false
     };
 
@@ -375,16 +367,12 @@ fn run_mergetool(o: &Opts) -> bool {
     {
         Ok(s) => s,
         Err(e) => {
-            if !o.quiet {
-                eprintln!("failed to run git merge-file: {e}");
-            }
+            o.say(format!("failed to run git merge-file: {e}"));
             return false;
         }
     };
     if status.code().is_none() {
-        if !o.quiet {
-            eprintln!("git merge-file terminated by signal");
-        }
+        o.say("git merge-file terminated by signal");
         return false;
     }
 
@@ -393,9 +381,7 @@ fn run_mergetool(o: &Opts) -> bool {
     }
 
     if let Err(e) = std::fs::rename(local, merged) {
-        if !o.quiet {
-            eprintln!("failed to move {local} to {merged}: {e}");
-        }
+        o.say(format!("failed to move {local} to {merged}: {e}"));
         return false;
     }
 
