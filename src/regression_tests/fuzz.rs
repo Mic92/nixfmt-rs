@@ -185,3 +185,27 @@ fn fuzz_let_in_trail_comment_app_width() {
     roundtrip(&format!("with p;#c\n f {long} g"));
     roundtrip(&format!("let in\n#c\nf {long} g"));
 }
+
+/// Deeply nested input must yield a parse error instead of overflowing the
+/// stack. Debug builds need far more stack per level than release, hence 32 MiB.
+#[test]
+fn fuzz_deep_nesting_is_an_error_not_a_crash() {
+    std::thread::Builder::new()
+        .stack_size(32 << 20)
+        .spawn(|| {
+            let n = 100_000;
+            for src in [
+                format!("{}1", "-".repeat(n)),
+                format!("{}a", "!".repeat(n)),
+                format!("{}1{}", "(".repeat(n), ")".repeat(n)),
+                format!("{}1{}", "[".repeat(n), "]".repeat(n)),
+                format!("{}1;{}", "{a=".repeat(n), "}".repeat(n)),
+                format!("{}a", "a: ".repeat(n)),
+            ] {
+                assert!(crate::parse(&src).is_err(), "{}", &src[..20]);
+            }
+        })
+        .unwrap()
+        .join()
+        .unwrap();
+}

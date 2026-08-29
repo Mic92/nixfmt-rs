@@ -12,7 +12,7 @@ impl Parser {
         match &self.current.value {
             Token::Minus => {
                 let op = self.take_and_advance()?;
-                let inner = self.parse_application()?;
+                let inner = self.nested(Self::parse_application)?;
                 return Ok(Expression::Negation {
                     minus: op,
                     expr: Box::new(inner),
@@ -20,7 +20,7 @@ impl Parser {
             }
             Token::Not => {
                 let op = self.take_and_advance()?;
-                let inner = self.parse_application()?;
+                let inner = self.nested(Self::parse_application)?;
                 return Ok(Expression::Not {
                     bang: op,
                     expr: Box::new(inner),
@@ -91,6 +91,10 @@ impl Parser {
 
     /// Parse a term (atom), including postfix selection
     pub(super) fn parse_term(&mut self) -> Result<Term> {
+        self.nested(Self::parse_term_inner)
+    }
+
+    fn parse_term_inner(&mut self) -> Result<Term> {
         if self.looks_like_uri() {
             return self.parse_uri();
         }

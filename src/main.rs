@@ -225,6 +225,12 @@ fn process(o: &Opts, name: &str, source: &str, in_place: bool) -> bool {
 }
 
 fn main() {
+    // Walker threads need as much stack as the main thread so the parser's
+    // nesting limit is reached before the stack is.
+    if std::env::var_os("RUST_MIN_STACK").is_none() {
+        // SAFETY: no other threads exist yet.
+        unsafe { std::env::set_var("RUST_MIN_STACK", (8usize << 20).to_string()) };
+    }
     let o = match parse_args() {
         Ok(o) => o,
         Err(e) => {
