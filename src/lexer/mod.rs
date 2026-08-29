@@ -59,7 +59,7 @@ pub struct LexerState {
     recent_hspace: usize,
     /// `directive_offsets` length at save time, truncated on restore.
     directive_offsets_len: usize,
-    interp_depth: u32,
+    interp_id: u32,
 }
 
 pub struct Lexer {
@@ -83,11 +83,13 @@ pub struct Lexer {
     /// does not allocate on every call.
     trivia_scratch: Vec<RawTrivia>,
     /// `/*nixfmt:*/` directives seen so far: `(line_start, line_end,
-    /// is_disable, interp_depth)`. Paired up in [`Self::take_directive_regions`].
+    /// is_disable, interp_id)`. Paired up in [`Self::take_directive_regions`].
     directive_offsets: Vec<(usize, usize, bool, u32)>,
-    /// `${}` nesting depth, maintained by the parser via
-    /// [`Self::enter_interp`] / [`Self::exit_interp`].
-    interp_depth: u32,
+    /// Unique id of the enclosing `${}`, 0 at top level. Maintained by the
+    /// parser via [`Self::enter_interp`] / [`Self::exit_interp`].
+    interp_id: u32,
+    /// Last id handed out by `enter_interp`. Never rewound so ids stay unique.
+    interp_counter: u32,
 }
 
 impl Lexer {
@@ -103,23 +105,26 @@ impl Lexer {
             trivia_start: None,
             trivia_scratch: Vec::new(),
             directive_offsets: Vec::new(),
-            interp_depth: 0,
+            interp_id: 0,
+            interp_counter: 0,
         }
     }
 
-    pub(crate) const fn enter_interp(&mut self) {
-        self.interp_depth += 1;
+    /// Returns the outer id to hand back to [`Self::exit_interp`].
+    pub(crate) const fn enter_interp(&mut self) -> u32 {
+        self.interp_counter += 1;
+        std::mem::replace(&mut self.interp_id, self.interp_counter)
     }
 
-    pub(crate) const fn exit_interp(&mut self) {
-        self.interp_depth = self.interp_depth.saturating_sub(1);
+    pub(crate) const fn exit_interp(&mut self, outer: u32) {
+        self.interp_id = outer;
     }
 
     /// Pair recorded directives in document order. A `disable` opens a region
-    /// only with a matching `enable` at the same `${}` depth, or EOF at depth
-    /// 0; otherwise it is demoted to `Inert` because the verbatim splice would
-    /// partially overlap a `''…''` body and make its indent stripping diverge
-    /// across passes. The renderer replays the same pairing over the markers
+    /// only with a matching `enable` in the same `${}` (or both at top level),
+    /// or EOF at top level. Otherwise it is demoted to `Inert` because the
+    /// verbatim splice would partially overlap a `''…''` body and make its
+    /// indent stripping diverge across passes. The renderer replays the same pairing over the markers
     /// it sees, so the action list and the document stay aligned.
     pub(crate) fn take_directive_regions(&mut self) -> Vec<DirectiveAction> {
         let mut offsets = std::mem::take(&mut self.directive_offsets);
@@ -132,18 +137,18 @@ impl Lexer {
         offsets.dedup_by_key(|&mut (start, ..)| start);
 
         let mut actions = vec![DirectiveAction::Inert; offsets.len()];
-        // (action index, line start, interp depth) of the currently open disable.
+        // (action index, line start, interp id) of the currently open disable.
         let mut open: Option<(usize, usize, u32)> = None;
-        for (n, &(line_start, line_end, is_disable, depth)) in offsets.iter().enumerate() {
+        for (n, &(line_start, line_end, is_disable, id)) in offsets.iter().enumerate() {
             match (is_disable, open) {
-                (true, None) => open = Some((n, line_start, depth)),
-                // Matching enable at the same `${}` nesting depth closes the region.
-                (false, Some((begin_n, start, open_depth))) if depth == open_depth => {
+                (true, None) => open = Some((n, line_start, id)),
+                // Matching enable in the same `${}` closes the region.
+                (false, Some((begin_n, start, open_id))) if id == open_id => {
                     actions[begin_n] = DirectiveAction::Begin(self.source[start..line_end].into());
                     actions[n] = DirectiveAction::End;
                     open = None;
                 }
-                // Nested disable / lone enable / depth-mismatched enable: inert.
+                // Nested disable, lone enable, or enable in another `${}`: inert.
                 _ => {}
             }
         }
@@ -168,7 +173,7 @@ impl Lexer {
             recent_newlines: self.recent_newlines,
             recent_hspace: self.recent_hspace,
             directive_offsets_len: self.directive_offsets.len(),
-            interp_depth: self.interp_depth,
+            interp_id: self.interp_id,
         }
     }
 
@@ -181,7 +186,7 @@ impl Lexer {
         self.recent_newlines = state.recent_newlines;
         self.recent_hspace = state.recent_hspace;
         self.directive_offsets.truncate(state.directive_offsets_len);
-        self.interp_depth = state.interp_depth;
+        self.interp_id = state.interp_id;
     }
 
     /// Parse a lexeme (token with trivia annotations)
@@ -214,7 +219,7 @@ impl Lexer {
         // Defer trivia when returning to string content so `/*` is not
         // misinterpreted as a block comment.
         let skip_trivia = matches!(token, Token::DoubleQuote | Token::DoubleSingleQuote)
-            || (matches!(token, Token::BraceClose) && self.interp_depth > 0);
+            || (matches!(token, Token::BraceClose) && self.interp_id > 0);
 
         let trailing_comment;
         if skip_trivia {
@@ -370,7 +375,7 @@ impl Lexer {
                             line_start,
                             line_end,
                             is_disable,
-                            self.interp_depth,
+                            self.interp_id,
                         ));
                         self.trivia_scratch.push(directive);
                     } else if let Some(lang_annot) = self.try_parse_language_annotation() {
