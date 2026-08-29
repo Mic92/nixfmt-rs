@@ -194,20 +194,14 @@ pub(super) fn emit_set(
     items: &Items<Binder>,
     close: &Annotated<Token>,
 ) {
-    if items.0.is_empty() && !open.has_trivia() && close.pre_trivia.is_empty() {
-        if let Some(rec) = rec {
-            rec.emit(doc);
-            doc.hardspace();
-        }
-        empty_brackets(doc, open, close);
-        return;
-    }
-
     if let Some(rec) = rec {
         rec.emit(doc);
         doc.hardspace();
     }
-
+    if items.0.is_empty() && !open.has_trivia() && close.pre_trivia.is_empty() {
+        empty_brackets(doc, open, close);
+        return;
+    }
     open.emit_head(doc);
 
     let starts_with_emptyline = match items.0.first() {
