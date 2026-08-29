@@ -1,5 +1,7 @@
+use std::borrow::Cow;
+
 use crate::ast::{Binder, Expression, FirstToken, Items, Leaf, Parameter};
-use crate::doc::{Doc, Elem, Emit, hardline, line};
+use crate::doc::{Doc, Emit, hardline, line};
 
 use super::Width;
 
@@ -128,56 +130,43 @@ pub(super) fn emit_with(
     expr1.emit(doc);
 }
 
-/// Recursive renderer for `if`/`else if` chains.
-/// Mirrors Haskell `prettyIf` (Pretty.hs, inside the `If` clause).
-#[allow(clippy::too_many_arguments)]
-pub(super) fn emit_if(
-    doc: &mut Doc,
-    sep: Elem,
-    if_kw: &Leaf,
-    cond: &Expression,
-    then_kw: &Leaf,
-    then_branch: &Expression,
-    else_kw: &Leaf,
-    else_branch: &Expression,
-) {
+/// Recursive renderer for `if`/`else if` chains; `nested` is set for the
+/// `else if` continuation. Mirrors Haskell `prettyIf` (Pretty.hs).
+pub(super) fn emit_if(doc: &mut Doc, expr: &Expression, nested: bool) {
+    let Expression::If {
+        kw_if,
+        cond,
+        kw_then,
+        then_branch,
+        kw_else,
+        else_branch,
+    } = expr
+    else {
+        doc.line();
+        doc.nested(|n| {
+            n.group(|g| expr.emit(g));
+        });
+        return;
+    };
+    // Only the outermost `if` has its trailing comment hoisted.
+    let (kw_if, sep) = if nested {
+        (Cow::Borrowed(kw_if), hardline())
+    } else {
+        (Cow::Owned(kw_if.move_trailing_comment_up()), line())
+    };
     doc.group(|g| {
-        if_kw.emit(g);
+        kw_if.emit(g);
         g.line();
         g.nested(|n| cond.emit(n));
         g.line();
-        then_kw.emit(g);
+        kw_then.emit(g);
     });
     doc.surrounded(&[sep], |d| {
         d.nested(|n| {
             n.group(|g| then_branch.emit(g));
         });
     });
-    else_kw.move_trailing_comment_up().emit(doc);
+    kw_else.move_trailing_comment_up().emit(doc);
     doc.hardspace();
-    match else_branch {
-        Expression::If {
-            kw_if,
-            cond,
-            kw_then,
-            then_branch,
-            kw_else,
-            else_branch,
-        } => emit_if(
-            doc,
-            hardline(),
-            kw_if,
-            cond,
-            kw_then,
-            then_branch,
-            kw_else,
-            else_branch,
-        ),
-        x => {
-            doc.line();
-            doc.nested(|n| {
-                n.group(|g| x.emit(g));
-            });
-        }
-    }
+    emit_if(doc, else_branch, true);
 }
