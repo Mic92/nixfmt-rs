@@ -14,9 +14,7 @@ oracle_tests! {
 
     regression_or_as_identifier => ["or"],
 
-    // A `?` check binds to the whole application: `f x ? a` is `(f x) ? a`,
-    // which nix accepts. The operator path tested for `?` before consuming
-    // the argument terms, so only a parenthesised lhs survived.
+    // `f x ? a` is `(f x) ? a`; the ident-head path used to drop the `?`.
     regression_has_attr_after_application => [
         "f x ? a",
         "f x y ? a.b",

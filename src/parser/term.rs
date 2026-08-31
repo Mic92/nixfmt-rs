@@ -29,10 +29,15 @@ impl Parser {
             _ => {}
         }
 
-        let mut expr = Expression::Term(self.parse_term()?);
+        let head = Expression::Term(self.parse_term()?);
+        self.parse_application_tail(head)
+    }
 
-        // Keep applying while we see more TERMS (not unary ops)
-        // IMPORTANT: Don't treat binary operators as term starts even if they could start paths
+    /// Apply following argument terms to `head`, then any postfix `?` checks.
+    /// Postfix `?` binds tighter than prefix `!`/`-` but looser than
+    /// application: `!f x ? a` is `!((f x) ? a)`.
+    pub(super) fn parse_application_tail(&mut self, head: Expression) -> Result<Expression> {
+        let mut expr = head;
         while self.is_term_start() && !self.is_binary_op() && !self.is_expression_end() {
             let arg = Expression::Term(self.parse_term()?);
             expr = Expression::Apply {
@@ -40,16 +45,12 @@ impl Parser {
                 arg: Box::new(arg),
             };
         }
-
-        // Postfix `?` has higher precedence than prefix `!`/`-`; checking it here ensures
-        // `!a ? b` parses as `!(a ? b)`, not `(!a) ? b`.
         if matches!(self.current.value, Token::Question) {
             expr = Expression::HasAttr {
                 lhs: Box::new(expr),
                 checks: self.parse_presence_checks()?,
             };
         }
-
         Ok(expr)
     }
 
