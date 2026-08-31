@@ -22,10 +22,12 @@ fn run(program: &str, args: &[&str], stdin: Option<&str>) -> Output {
         .spawn()
         .unwrap_or_else(|e| panic!("spawn {program}: {e}"));
     if let Some(s) = stdin {
-        child.stdin.take().unwrap().write_all(s.as_bytes()).unwrap();
-    } else {
-        drop(child.stdin.take());
+        // EPIPE is expected when the child rejects its args and exits without reading.
+        if let Err(e) = child.stdin.take().unwrap().write_all(s.as_bytes()) {
+            assert_eq!(e.kind(), std::io::ErrorKind::BrokenPipe, "write stdin: {e}");
+        }
     }
+    drop(child.stdin.take());
     child.wait_with_output().unwrap()
 }
 
