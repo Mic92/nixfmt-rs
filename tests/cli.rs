@@ -22,17 +22,12 @@ fn run(program: &str, args: &[&str], stdin: Option<&str>) -> Output {
         .spawn()
         .unwrap_or_else(|e| panic!("spawn {program}: {e}"));
     if let Some(s) = stdin {
-        // A child that rejects its arguments exits before reading stdin, so this write
-        // races with the child's exit and fails with EPIPE. That is not a test failure:
-        // the assertions that matter are on the exit code and stderr.
-        let mut sin = child.stdin.take().unwrap();
-        if let Err(e) = sin.write_all(s.as_bytes()) {
+        // EPIPE is expected when the child rejects its args and exits without reading.
+        if let Err(e) = child.stdin.take().unwrap().write_all(s.as_bytes()) {
             assert_eq!(e.kind(), std::io::ErrorKind::BrokenPipe, "write stdin: {e}");
         }
-        drop(sin);
-    } else {
-        drop(child.stdin.take());
     }
+    drop(child.stdin.take());
     child.wait_with_output().unwrap()
 }
 
