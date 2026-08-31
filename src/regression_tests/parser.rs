@@ -14,6 +14,15 @@ oracle_tests! {
 
     regression_or_as_identifier => ["or"],
 
+    // `f x ? a` is `(f x) ? a`; the ident-head path used to drop the `?`.
+    regression_has_attr_after_application => [
+        "f x ? a",
+        "f x y ? a.b",
+        "lib.functionArgs (import ./x) ? muster",
+        "f x ? a ? b",
+        "(f x) ? a",
+    ],
+
     // nixfmt a061bd5: a `/* lang */` block comment is only a language
     // annotation when at most one newline separates it from the string.
     // LanguageAnnotation must be wrapped in brackets in --ast output.

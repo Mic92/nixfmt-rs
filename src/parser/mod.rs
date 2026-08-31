@@ -317,8 +317,6 @@ impl Parser {
     fn parse_operation_or_lambda(&mut self) -> Result<Expression> {
         let expr = self.parse_application()?;
 
-        // Member check (?) is handled in parse_application so that `?` binds tighter than prefix `!`/`-`.
-
         if matches!(self.current.value, Token::Colon | Token::At) {
             return Err(Self::reject_non_parameter_expr(&expr));
         }

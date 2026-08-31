@@ -66,25 +66,7 @@ impl Parser {
 
     /// Continue parsing operation from a given left expression
     pub(super) fn continue_operation_from(&mut self, expr: Expression) -> Result<Expression> {
-        let expr = if matches!(self.current.value, Token::Question) {
-            Expression::HasAttr {
-                lhs: Box::new(expr),
-                checks: self.parse_presence_checks()?,
-            }
-        } else if self.is_term_start() {
-            let mut app_expr = expr;
-            while self.is_term_start() && !self.is_expression_end() {
-                let arg = Expression::Term(self.parse_term()?);
-                app_expr = Expression::Apply {
-                    func: Box::new(app_expr),
-                    arg: Box::new(arg),
-                };
-            }
-            app_expr
-        } else {
-            expr
-        };
-
+        let expr = self.parse_application_tail(expr)?;
         self.maybe_parse_binary_operation(expr)
     }
 
