@@ -28,6 +28,7 @@ Common flags:
                         'git merge-file', format and move result to MERGED
   -q --quiet            Do not report errors
   -s --strict           Enable a stricter formatting mode (accepted, currently no-op)
+     --follow-symlinks  Format the file a symlink points at (accepted, always on)
   -v --verify           Apply sanity checks on the output after formatting
   -a --ast              Pretty print the internal AST to stderr (debug)
   -f --filename=ITEM    Filename to display when input is read from stdin
@@ -86,6 +87,8 @@ fn parse_args() -> Result<Opts, lexopt::Error> {
             Short('c') | Long("check") => o.check = true,
             Short('q') | Long("quiet") => o.quiet = true,
             Short('s') | Long("strict") => o.strict = true,
+            // In-place writes go through the path, so this is always on.
+            Long("follow-symlinks") => {}
             Short('v') | Long("verify") => o.verify = true,
             Short('a') | Long("ast") => o.ast = true,
             Long("ir") => o.ir = true,

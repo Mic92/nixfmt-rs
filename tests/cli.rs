@@ -408,3 +408,27 @@ fn unknown_flag_exits_1() {
         "stderr={stderr:?}"
     );
 }
+
+#[test]
+#[cfg(unix)]
+fn symlink_target_is_formatted_and_link_preserved() {
+    let dir = tempfile::tempdir().unwrap();
+    let target = tmpfile(&dir, "real.nix", UNFORMATTED);
+    let link = dir.path().join("link.nix");
+    std::os::unix::fs::symlink("real.nix", &link).unwrap();
+
+    // --follow-symlinks is a no-op: following is unconditional.
+    for args in [
+        vec![link.to_str().unwrap()],
+        vec!["--follow-symlinks", link.to_str().unwrap()],
+    ] {
+        std::fs::write(&target, UNFORMATTED).unwrap();
+        let out = ours(&args, None);
+        assert_eq!(out.status.code(), Some(0));
+        assert!(
+            std::fs::symlink_metadata(&link).unwrap().is_symlink(),
+            "link was replaced by a regular file"
+        );
+        assert_eq!(std::fs::read_to_string(&target).unwrap(), FORMATTED);
+    }
+}
